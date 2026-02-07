@@ -268,6 +268,51 @@ Contribuições são bem-vindas! Para contribuir:
 - [ ] Machine Learning para aprendizado de padrões
 - [ ] Dashboard web
 - [ ] Integração com smart home
+- [ ] 
+## 🎓 Modo Tutor de Conteúdo
+
+APEX agora inclui um tutor inteligente de conteúdo que utiliza IA para:
+
+- **Explicar Conceitos**: Explicações claras e didáticas
+- **Resumir Textos**: Gera resumos concisos de qualquer tamanho
+- **Gerar Exercícios**: Cria exercícios práticos para consolidação
+- **Responder Dúvidas**: Contexto inteligente para duvidas de alunos
+
+### Exemplo de Uso
+
+```python
+from apex_tutor_conteudo import TutorConteudo
+from apex_llm_client import APEXLLMClient
+
+llm = APEXLLMClient()
+tutor = TutorConteudo(llm)
+
+# Explicar um conceito
+explicacao = tutor.explicar_conteudo(
+    "Fotossíntese é o processo...",
+    nivel="iniciante"
+)
+
+# Gerar exercícios
+exercicos = tutor.gerar_exercicios("Fotossíntese", quantidade=3)
+```
+
+## 🌍 Modo Tutor de Idiomas
+
+Aprenda idiomas com IA:
+
+- **Inglés**, **Alemão**, **Espanhol**, **Francês**
+- Gramática, pronunciação, diálogos
+- Correção de frases com feedback explicativo
+
+## 💻 Modo Tutor de Programação
+
+Aprenda a programar:
+
+- **Explicar Conceitos**: For, While, Classes, etc.
+- **Revisar Código**: Sugestões de melhoria e performance
+- **Debugar**: Ajuda a encontrar e corrigir erros
+- **Exercícios**: Desafios práticos de programação
 
 ## 📄 Licença
 
