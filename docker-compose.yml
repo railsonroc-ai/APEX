@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  apex:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: apex-automation
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/app
+      - apex-data:/app/data
+    restart: unless-stopped
+    networks:
+      - apex-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: apex-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - apex-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  apex-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  apex-network:
+    driver: bridge
