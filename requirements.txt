@@ -34,4 +34,25 @@ colorama>=0.4.4
 
 # Opcional: NLP Avançado
 # spacy>=3.0.0
+
+# Excel e Power BI
+openpyxl==3.1.2
+matplotlib==3.8.0
+powerbiclient==0.1.7
+
+# Async e Performance
+aiohttp==3.9.1
+redis==5.0.1
+
+# Machine Learning
+scikit-learn==1.3.2
+
+# Web Dashboard
+flask==3.0.0
+
+# Autenticação
+authlib==1.3.0
+
+# Criptografia
+cryptography==41.0.7
 # nltk>=3.6.0
