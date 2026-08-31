@@ -3,6 +3,11 @@ import json
 import threading
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, render_template, Response
+from dotenv import load_dotenv
+from groq import Groq
+
+# Carrega as variáveis de ambiente do arquivo .env
+load_dotenv()
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024
@@ -32,7 +37,7 @@ def _check_access():
     if request.method == "OPTIONS":
         return
     
-    public_paths = ["/", "/ads", "/estudos", "/health"]
+    public_paths = ["/", "/ads", "/estudos", "/health", "/chat/stream"]
     if request.path in public_paths or request.path.startswith("/static/"):
         return
 
@@ -48,7 +53,7 @@ def _check_access():
     if access_key:
         client_key = request.headers.get("X-Apex-Key")
         if not client_key:
-            return jsonify({"ok": False, "error": "Autenticação requerida. Chave ausente no header."}), 401
+            return jsonify({"ok": False, "error": "Autenticação requerida."}), 401
         if client_key != access_key:
             return jsonify({"ok": False, "error": "Chave de acesso inválida."}), 403
 
@@ -82,9 +87,9 @@ def handle_notes():
         area = str(data.get("area", "ads")).strip().lower()
         
         if area not in _VALID_AREAS:
-            return jsonify({"ok": False, "error": "Área de estudo inválida."}), 400
+            return jsonify({"ok": False, "error": "Área inválida."}), 400
         if not text:
-            return jsonify({"ok": False, "error": "Texto da nota vazio."}), 400
+            return jsonify({"ok": False, "error": "Texto vazio."}), 400
 
         new_note = {
             "id": int(datetime.now(timezone.utc).timestamp() * 1000),
@@ -101,6 +106,38 @@ def handle_notes():
         notes = [n for n in notes if n.get("id") != note_id]
         _save_json(notes_path, notes)
         return jsonify({"ok": True})
+
+@app.route("/chat/stream", methods=["POST"])
+def chat_stream():
+    data = request.get_json() or {}
+    user_message = data.get("message", "")
+    print(f"[DEBUG] Mensagem recebida do front: {user_message}")
+
+    def generate():
+        try:
+            api_key = os.getenv("GROQ_API_KEY")
+            if not api_key:
+                print("[ERRO] GROQ_API_KEY ausente.")
+                yield "Erro: Chave GROQ_API_KEY não configurada no .env"
+                return
+
+            client = Groq(api_key=api_key)
+            print("[DEBUG] Conectando ao Groq...")
+            response = client.chat.completions.create(
+                messages=[{"role": "user", "content": user_message}],
+                model="groq/compound",
+                stream=True
+            )
+            for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    print(f"[DEBUG CHUNK]: {content}")
+                    yield content
+        except Exception as e:
+            print(f"[ERRO NO STREAM]: {str(e)}")
+            yield f"Erro interno: {str(e)}"
+
+    return Response(generate(), mimetype="text/plain")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
