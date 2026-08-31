@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}APEX Panel{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/apex.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">APEX</div>
+    <nav class="nav">
+      <a href="/" class="{% if active_page == 'home' %}active{% endif %}">Home</a>
+      <a href="/modules" class="{% if active_page == 'modules' %}active{% endif %}">Módulos</a>
+      <a href="/intents" class="{% if active_page == 'intents' %}active{% endif %}">Intents</a>
+      <a href="/rollback" class="{% if active_page == 'rollback' %}active{% endif %}">Rollback</a>
+      <a href="/feedback" class="{% if active_page == 'feedback' %}active{% endif %}">Feedback</a>
+      <a href="/knowledge" class="{% if active_page == 'knowledge' %}active{% endif %}">Conhecimento</a>
+    </nav>
+  </header>
+
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

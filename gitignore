@@ -1,0 +1,9 @@
+.env
+*.env
+__pycache__/
+*.pyc
+*.bak
+node_modules/
+logs/
+data/memories/*.json
+data/backups/

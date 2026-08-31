@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: apex-tutor
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: ./start_apex.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: APP_ENV
+        value: production
+      - key: APEX_ACCESS_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

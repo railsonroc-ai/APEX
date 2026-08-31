@@ -1,0 +1,61 @@
+<svg width="1600" height="600" viewBox="0 0 1600 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#070B16"/>
+      <stop offset="1" stop-color="#0B1224"/>
+    </linearGradient>
+    <linearGradient id="neon" x1="180" y1="120" x2="620" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5EF2FF"/>
+      <stop offset="0.55" stop-color="#46A5FF"/>
+      <stop offset="1" stop-color="#836DFF"/>
+    </linearGradient>
+    <linearGradient id="word" x1="660" y1="190" x2="1450" y2="390" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E8F7FF"/>
+      <stop offset="1" stop-color="#9DD6FF"/>
+    </linearGradient>
+    <filter id="glow" x="90" y="60" width="560" height="520" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="hexClip">
+      <path d="M240 120H480L600 300L480 480H240L120 300L240 120Z"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1600" height="600" fill="url(#bg)"/>
+
+  <g opacity="0.2">
+    <path d="M0 510L1600 290" stroke="#2B5D8A" stroke-width="2"/>
+    <path d="M0 430L1600 210" stroke="#204B74" stroke-width="2"/>
+    <path d="M0 350L1600 130" stroke="#173F62" stroke-width="2"/>
+  </g>
+
+  <g filter="url(#glow)">
+    <path d="M240 120H480L600 300L480 480H240L120 300L240 120Z" fill="#0E1A35" stroke="url(#neon)" stroke-width="12"/>
+
+    <g clip-path="url(#hexClip)">
+      <path d="M160 420L316 170H386L230 420H160Z" fill="url(#neon)"/>
+      <path d="M312 420L468 170H538L382 420H312Z" fill="url(#neon)" opacity="0.9"/>
+      <path d="M255 315H495L462 370H222L255 315Z" fill="#7EEBFF"/>
+      <path d="M215 235H455L422 290H182L215 235Z" fill="#6EC8FF" opacity="0.9"/>
+    </g>
+
+    <path d="M240 120H480L600 300L480 480H240L120 300L240 120Z" stroke="#A6ECFF" stroke-opacity="0.35" stroke-width="2"/>
+  </g>
+
+  <g>
+    <path d="M700 410L780 190H850L930 410H860L845 365H785L770 410H700ZM802 312H828L815 271L802 312Z" fill="url(#word)"/>
+    <path d="M965 410V190H1160V248H1038V274H1148V329H1038V352H1168V410H965Z" fill="url(#word)"/>
+    <path d="M1200 410L1280 296L1210 190H1292L1320 234L1349 190H1432L1361 296L1442 410H1360L1320 353L1281 410H1200Z" fill="url(#word)"/>
+  </g>
+
+  <g opacity="0.75">
+    <path d="M697 447H1450" stroke="#3D77A8" stroke-width="3"/>
+    <path d="M700 463H1090" stroke="#2D5A83" stroke-width="3"/>
+  </g>
+
+  <text x="700" y="165" fill="#7FB7E5" font-family="Segoe UI, Arial, sans-serif" font-size="34" letter-spacing="10">AUTONOMOUS PLATFORM</text>
+</svg>

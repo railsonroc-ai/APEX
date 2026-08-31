@@ -1,0 +1,256 @@
+body {
+    background: #02040a;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    color: #7ecbff;
+    overflow-x: hidden;
+}
+
+.apex-container { display: flex; justify-content: center; padding: 50px 0; }
+
+/* CSS original do APEX SCREEN preservado */
+.apex-screen {
+    position: relative;
+    width: 600px;
+    height: 600px;
+}
+
+.module {
+    position: absolute;
+    padding: 12px 22px;
+    border: 2px solid #0abaff;
+    border-radius: 10px;
+    background: rgba(0, 50, 80, 0.3);
+    backdrop-filter: blur(4px);
+    text-align: center;
+    font-size: 18px;
+    color: #7ecbff;
+    box-shadow: 0 0 15px #0abaff;
+    transition: transform 0.2s ease;
+    z-index: 3;
+}
+
+.ensino {
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.voz {
+    bottom: 0;
+    left: 0;
+}
+
+.automacao {
+    bottom: 0;
+    right: 0;
+}
+
+.core {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200px;
+    height: 200px;
+    transform: translate(-50%, -50%);
+}
+
+.hud-layer {
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 1px dashed rgba(0, 180, 255, 0.4);
+    animation: hud-spin 12s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.hud-indicators {
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    animation: hud-indicators-spin 8s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.hud-indicators::before,
+.hud-indicators::after {
+    content: "";
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #00eaff;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #00eaff;
+}
+
+.hud-indicators::before {
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.hud-indicators::after {
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.hud-radials {
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.hud-radials::before {
+    content: "";
+    position: absolute;
+    width: 2px;
+    height: 140px;
+    background: linear-gradient(
+        rgba(0, 200, 255, 0),
+        rgba(0, 200, 255, 0.8),
+        rgba(0, 200, 255, 0)
+    );
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    animation: hud-scan 4s linear infinite;
+}
+
+.rings {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    border: 3px solid #0abaff;
+    animation: spin 6s linear infinite;
+    box-shadow: 0 0 25px #0abaff;
+    z-index: 1;
+}
+
+.rings::before,
+.rings::after {
+    content: "";
+    position: absolute;
+    inset: -15px;
+    border-radius: 50%;
+    border: 2px solid #008cff;
+    animation: spin-reverse 10s linear infinite;
+    opacity: 0.5;
+}
+
+.triangle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-left: 40px solid transparent;
+    border-right: 40px solid transparent;
+    border-bottom: 70px solid #00c8ff;
+    transform: translate(-50%, -50%);
+    animation:
+        pulse 2s ease-in-out infinite,
+        glow 3s ease-in-out infinite;
+    z-index: 3;
+}
+
+@keyframes hud-spin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes hud-indicators-spin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes hud-scan {
+    from { transform: translateX(-50%) rotate(0deg); }
+    to { transform: translateX(-50%) rotate(360deg); }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes spin-reverse {
+    from {
+        transform: rotate(360deg);
+    }
+    to {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.2);
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes glow {
+    0% { filter: drop-shadow(0 0 5px #00c8ff); }
+    50% { filter: drop-shadow(0 0 25px #00eaff); }
+    100% { filter: drop-shadow(0 0 5px #00c8ff); }
+}
+
+/* Novas seções da landing */
+.header-section, .features, .about, .cta, footer {
+    text-align: center; padding: 60px 20px; color: #7ecbff;
+}
+.header-section { background: rgba(2,4,10,0.9); }
+h1 { font-size: 4em; text-shadow: 0 0 30px #0abaff; margin: 0 0 20px; }
+h2 { font-size: 2.5em; margin-bottom: 40px; text-shadow: 0 0 15px #0abaff; }
+.cta-btn {
+    background: linear-gradient(45deg, #0abaff, #00c8ff); border: none;
+    padding: 18px 40px; border-radius: 50px; color: #02040a;
+    font-size: 20px; cursor: pointer; box-shadow: 0 0 25px #0abaff;
+    transition: all 0.3s;
+}
+.cta-btn:hover { transform: scale(1.05); box-shadow: 0 0 35px #00eaff; }
+.feature-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 30px; max-width: 1200px; margin: 0 auto;
+}
+.feature-card {
+    background: rgba(0,50,80,0.6); border: 2px solid #0abaff; border-radius: 20px;
+    padding: 30px; backdrop-filter: blur(8px); box-shadow: 0 0 25px #0abaff;
+    animation: fadeInUp 1s ease-out;
+}
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+footer { background: #02040a; border-top: 1px solid #0abaff; }
+
+/* Responsivo */
+@media (max-width: 768px) {
+    .apex-screen { width: 95vw; height: 70vh; }
+    .module { font-size: 16px; padding: 12px 18px; }
+    h1 { font-size: 2.5em; }
+}

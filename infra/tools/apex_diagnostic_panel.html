@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>APEX • Painel Visual de Diagnóstico</title>
+  <link rel="stylesheet" href="./static/apex_design_system.css" />
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 10% 5%, rgba(94, 242, 255, 0.08), transparent 28%), var(--apx-color-bg);
+      color: var(--apx-color-text);
+      font-family: var(--apx-font-family);
+    }
+
+    .diagnostic-wrap {
+      display: grid;
+      grid-template-columns: minmax(680px, 1fr) 340px;
+      gap: var(--apx-space-4);
+      width: min(1400px, calc(100% - 48px));
+      margin: 24px auto;
+    }
+
+    .header-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--apx-space-4);
+      flex-wrap: wrap;
+    }
+
+    .status-line {
+      color: var(--apx-color-text-muted);
+      font-size: var(--apx-font-size-sm);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--apx-color-border);
+      border-radius: var(--apx-radius-sm);
+      padding: 6px 10px;
+      font-size: var(--apx-font-size-xs);
+      background: var(--apx-color-bg-soft);
+    }
+
+    .mode-pill {
+      font-weight: var(--apx-font-weight-semibold);
+      color: var(--apx-color-primary);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--apx-space-3);
+      margin-top: var(--apx-space-3);
+    }
+
+    .diag-card {
+      border: 1px solid var(--apx-color-border);
+      border-radius: var(--apx-radius-md);
+      background: var(--apx-color-bg-elev);
+      padding: var(--apx-space-3);
+      box-shadow: var(--apx-shadow-sm);
+      min-height: 104px;
+    }
+
+    .diag-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+      font-weight: var(--apx-font-weight-semibold);
+      font-size: var(--apx-font-size-sm);
+    }
+
+    .diag-sub {
+      font-size: var(--apx-font-size-xs);
+      color: var(--apx-color-text-muted);
+      line-height: 1.45;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.03);
+    }
+
+    .dot.green { background: var(--apx-color-success); }
+    .dot.yellow { background: var(--apx-color-warning); }
+    .dot.red { background: var(--apx-color-danger); }
+
+    .summary {
+      margin-top: var(--apx-space-3);
+      border: 1px solid var(--apx-color-border);
+      border-radius: var(--apx-radius-md);
+      background: var(--apx-color-bg-elev);
+      padding: var(--apx-space-3);
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--apx-space-2);
+    }
+
+    .summary-item {
+      border: 1px solid var(--apx-color-border);
+      border-radius: var(--apx-radius-sm);
+      padding: 10px;
+      background: var(--apx-color-bg-soft);
+    }
+
+    .summary-label {
+      font-size: var(--apx-font-size-xs);
+      color: var(--apx-color-text-muted);
+      margin-bottom: 4px;
+    }
+
+    .summary-value {
+      font-weight: var(--apx-font-weight-bold);
+      font-size: var(--apx-font-size-md);
+    }
+
+    .lists-wrap {
+      margin-top: var(--apx-space-3);
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--apx-space-3);
+    }
+
+    .list-card {
+      border: 1px solid var(--apx-color-border);
+      border-radius: var(--apx-radius-md);
+      background: var(--apx-color-bg-elev);
+      padding: var(--apx-space-3);
+      min-height: 180px;
+    }
+
+    .list-card h3 {
+      margin: 0 0 8px;
+      font-size: var(--apx-font-size-sm);
+      font-weight: var(--apx-font-weight-semibold);
+    }
+
+    .list-card ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: var(--apx-font-size-xs);
+      color: var(--apx-color-text-muted);
+      line-height: 1.5;
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    .list-card li + li {
+      margin-top: 6px;
+    }
+
+    .sidebar {
+      border: 1px solid var(--apx-color-border);
+      border-radius: var(--apx-radius-md);
+      background: var(--apx-color-bg-elev);
+      box-shadow: var(--apx-shadow-sm);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 640px;
+    }
+
+    .sidebar-header {
+      padding: var(--apx-space-3);
+      border-bottom: 1px solid var(--apx-color-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logs {
+      margin: 0;
+      padding: var(--apx-space-3);
+      list-style: none;
+      overflow: auto;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--apx-color-text-muted);
+      flex: 1;
+      background: linear-gradient(180deg, rgba(131, 109, 255, 0.05), transparent 20%);
+    }
+
+    .logs li {
+      border-bottom: 1px dashed rgba(159, 185, 215, 0.18);
+      padding: 6px 0;
+    }
+
+    .logs .lvl-info { color: var(--apx-color-primary); }
+    .logs .lvl-warning { color: var(--apx-color-warning); }
+    .logs .lvl-error { color: var(--apx-color-danger); }
+
+    .muted {
+      color: var(--apx-color-text-muted);
+      font-size: var(--apx-font-size-xs);
+    }
+
+    @media (max-width: 1180px) {
+      .diagnostic-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        min-height: 320px;
+      }
+    }
+
+    @media (max-width: 780px) {
+      .cards-grid,
+      .lists-wrap,
+      .summary {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="diagnostic-wrap">
+    <main class="ds-stack">
+      <section class="ds-card ds-card--elevated header-card">
+        <div>
+          <h1 style="margin:0; font-size: var(--apx-font-size-lg);">Painel Visual de Diagnóstico</h1>
+          <div id="statusLine" class="status-line">Aguardando execução de diagnóstico...</div>
+        </div>
+        <div class="ds-group">
+          <button id="btnQuick" class="ds-btn ds-btn--ghost">Rodar Diagnóstico Rápido</button>
+          <button id="btnFull" class="ds-btn">Rodar Diagnóstico Completo</button>
+          <span id="modeBadge" class="status-badge"><span class="mode-pill">QUICK</span></span>
+        </div>
+      </section>
+
+      <section class="cards-grid" id="indicatorGrid"></section>
+
+      <section class="summary" id="summaryPanel"></section>
+
+      <section class="lists-wrap">
+        <article class="list-card">
+          <h3>Erros detectados</h3>
+          <ul id="errorsList"></ul>
+        </article>
+        <article class="list-card">
+          <h3>Avisos e sugestões</h3>
+          <ul id="warningsList"></ul>
+        </article>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <strong>Logs Recentes</strong>
+        <button id="btnReloadLogs" class="ds-btn ds-btn--ghost ds-btn--sm">Atualizar</button>
+      </div>
+      <ul id="logsList" class="logs"></ul>
+    </aside>
+  </div>
+
+  <script>
+    (function () {
+      const DIAGNOSTIC_REPORT_FILE = 'logs/apex_diagnostic_report_latest.json';
+      const DIAGNOSTIC_LOG_FILE = 'logs/apex_diagnostic.log';
+      const POLL_INTERVAL_MS = 12000;
+
+      const state = {
+        report: null,
+        logs: [],
+        running: false,
+        lastRunOutput: ''
+      };
+
+      const el = {
+        btnQuick: document.getElementById('btnQuick'),
+        btnFull: document.getElementById('btnFull'),
+        btnReloadLogs: document.getElementById('btnReloadLogs'),
+        statusLine: document.getElementById('statusLine'),
+        modeBadge: document.getElementById('modeBadge'),
+        indicatorGrid: document.getElementById('indicatorGrid'),
+        summaryPanel: document.getElementById('summaryPanel'),
+        errorsList: document.getElementById('errorsList'),
+        warningsList: document.getElementById('warningsList'),
+        logsList: document.getElementById('logsList')
+      };
+
+      function getProjectRootFromLocation() {
+        const pathname = decodeURIComponent(window.location.pathname || '');
+        if (!pathname) return null;
+        const clean = pathname.replace(/^\//, '');
+        const normalized = clean.replace(/\//g, '\\\\');
+        return normalized.replace(/\\[^\\]+$/, '');
+      }
+
+      function safeRequire(moduleName) {
+        try {
+          if (typeof require === 'function') {
+            return require(moduleName);
+          }
+        } catch (_error) {
+        }
+        return null;
+      }
+
+      function getBridge() {
+        if (window.apexDiagnosticBridge) {
+          return window.apexDiagnosticBridge;
+        }
+
+        if (window.electronAPI) {
+          return {
+            runDiagnostic: async (mode) => {
+              if (typeof window.electronAPI.runApexDiagnostic === 'function') {
+                return window.electronAPI.runApexDiagnostic(mode);
+              }
+              if (typeof window.electronAPI.runDiagnostic === 'function') {
+                return window.electronAPI.runDiagnostic(mode);
+              }
+              throw new Error('Bridge Electron não expõe runApexDiagnostic/runDiagnostic.');
+            },
+            readLatestReport: async () => {
+              if (typeof window.electronAPI.readApexDiagnosticReport === 'function') {
+                return window.electronAPI.readApexDiagnosticReport();
+              }
+              if (typeof window.electronAPI.readDiagnosticReport === 'function') {
+                return window.electronAPI.readDiagnosticReport();
+              }
+              throw new Error('Bridge Electron não expõe leitura de relatório.');
+            },
+            readRecentLogs: async () => {
+              if (typeof window.electronAPI.readApexDiagnosticLogs === 'function') {
+                return window.electronAPI.readApexDiagnosticLogs();
+              }
+              if (typeof window.electronAPI.readDiagnosticLogs === 'function') {
+                return window.electronAPI.readDiagnosticLogs();
+              }
+              throw new Error('Bridge Electron não expõe leitura de logs.');
+            }
+          };
+        }
+
+        const fs = safeRequire('fs');
+        const path = safeRequire('path');
+        const childProcess = safeRequire('child_process');
+        if (!fs || !path || !childProcess) {
+          return null;
+        }
+
+        const projectRoot = (typeof __dirname !== 'undefined' ? __dirname : getProjectRootFromLocation()) || '.';
+
+        const readJsonFile = (jsonPath) => {
+          if (!fs.existsSync(jsonPath)) {
+            return null;
+          }
+          const raw = fs.readFileSync(jsonPath, 'utf8');
+          return JSON.parse(raw);
+        };
+
+        const parseJsonFromOutput = (output) => {
+          const text = String(output || '');
+          const firstBrace = text.indexOf('{');
+          if (firstBrace === -1) return null;
+
+          let depth = 0;
+          for (let index = firstBrace; index < text.length; index += 1) {
+            const char = text[index];
+            if (char === '{') depth += 1;
+            if (char === '}') {
+              depth -= 1;
+              if (depth === 0) {
+                const candidate = text.slice(firstBrace, index + 1);
+                try {
+                  return JSON.parse(candidate);
+                } catch (_error) {
+                  return null;
+                }
+              }
+            }
+          }
+          return null;
+        };
+
+        return {
+          runDiagnostic: async (mode) => {
+            const full = mode === 'full';
+            const command = full ? 'npx node apex_diagnostic.js --full' : 'npx node apex_diagnostic.js';
+            return await new Promise((resolve, reject) => {
+              childProcess.exec(command, { cwd: projectRoot, windowsHide: true, maxBuffer: 1024 * 1024 * 6 }, (error, stdout, stderr) => {
+                const output = `${stdout || ''}\n${stderr || ''}`.trim();
+                const parsed = parseJsonFromOutput(output);
+                if (error && !parsed) {
+                  reject(new Error(`Falha ao executar diagnóstico: ${stderr || error.message}`));
+                  return;
+                }
+                resolve({ report: parsed, output, mode: full ? 'full' : 'quick' });
+              });
+            });
+          },
+          readLatestReport: async () => {
+            const fullPath = path.join(projectRoot, DIAGNOSTIC_REPORT_FILE);
+            return readJsonFile(fullPath);
+          },
+          readRecentLogs: async () => {
+            const fullPath = path.join(projectRoot, DIAGNOSTIC_LOG_FILE);
+            if (!fs.existsSync(fullPath)) {
+              return [];
+            }
+            const lines = fs.readFileSync(fullPath, 'utf8').split(/\r?\n/).filter(Boolean).slice(-120);
+            return lines.map((line) => {
+              try {
+                return JSON.parse(line);
+              } catch (_error) {
+                return { level: 'info', message: line, timestamp: new Date().toISOString() };
+              }
+            });
+          }
+        };
+      }
+
+      function healthColor(level) {
+        if (level === 'ok') return 'green';
+        if (level === 'warn') return 'yellow';
+        return 'red';
+      }
+
+      function countMissingDeps(report) {
+        const errors = report?.errors || [];
+        const warnings = report?.warnings || [];
+        const keyRegex = /depend[êe]ncia|m[óo]dulos?\s+ausentes|imports?\s+quebrados/i;
+        return [...errors, ...warnings].filter((item) => keyRegex.test(String(item))).length;
+      }
+
+      function extractIndicators(report) {
+        if (!report) {
+          return [
+            { key: 'backend', label: 'backend Flask', level: 'warn', detail: 'Sem dados de relatório.' },
+            { key: 'agent', label: 'agente local', level: 'warn', detail: 'Sem dados de relatório.' },
+            { key: 'node', label: 'Node/npx', level: 'warn', detail: 'Sem dados de relatório.' },
+            { key: 'python', label: 'Python/pip', level: 'warn', detail: 'Sem dados de relatório.' },
+            { key: 'electron', label: 'Electron', level: 'warn', detail: 'Sem dados de relatório.' },
+            { key: 'ports', label: 'portas ocupadas', level: 'warn', detail: 'Sem dados de relatório.' },
+            { key: 'deps', label: 'dependências faltando', level: 'warn', detail: 'Sem dados de relatório.' },
+            { key: 'errors', label: 'erros detectados', level: 'warn', detail: 'Sem dados de relatório.' }
+          ];
+        }
+
+        const env = report.environmentInfo || {};
+        const errors = report.errors || [];
+        const warnings = report.warnings || [];
+        const occupiedPorts = Object.entries(env.ports || {}).filter(([, status]) => status === 'occupied').map(([port]) => port);
+        const missingDeps = countMissingDeps(report);
+
+        const backendRunning = Boolean(env.backendFlask && env.backendFlask.running);
+        const localAgentRunning = Boolean(env.localAgent && env.localAgent.running);
+        const nodeLauncher = env.nodeLauncher || 'unavailable';
+        const pythonPresent = Boolean(env.pythonVersion);
+        const electronPresent = Boolean(env.electronVersion) && !errors.some((item) => /electron/i.test(String(item)));
+
+        return [
+          {
+            key: 'backend',
+            label: 'backend Flask',
+            level: backendRunning ? 'ok' : 'red',
+            detail: backendRunning ? `Ativo (${env.backendFlask.endpoint || '/'}).` : 'Indisponível em http://127.0.0.1:5000.'
+          },
+          {
+            key: 'agent',
+            label: 'agente local',
+            level: localAgentRunning ? 'ok' : 'red',
+            detail: localAgentRunning ? `Ativo (${env.localAgent.endpoint || '/'}).` : 'Indisponível em http://127.0.0.1:7070.'
+          },
+          {
+            key: 'node',
+            label: 'Node/npx',
+            level: nodeLauncher === 'node' ? 'ok' : (nodeLauncher === 'npx' ? 'warn' : 'red'),
+            detail: nodeLauncher === 'node' ? 'Node no PATH.' : (nodeLauncher === 'npx' ? 'Fallback npx node ativo.' : 'Node e npx indisponíveis.')
+          },
+          {
+            key: 'python',
+            label: 'Python/pip',
+            level: pythonPresent ? 'ok' : 'red',
+            detail: pythonPresent ? String(env.pythonVersion) : 'Python não detectado no PATH.'
+          },
+          {
+            key: 'electron',
+            label: 'Electron',
+            level: electronPresent ? 'ok' : 'red',
+            detail: electronPresent ? `Versão declarada: ${env.electronVersion}` : 'Dependência Electron ausente ou inválida.'
+          },
+          {
+            key: 'ports',
+            label: 'portas ocupadas',
+            level: occupiedPorts.length === 0 ? 'ok' : 'warn',
+            detail: occupiedPorts.length === 0 ? 'Sem conflitos de porta.' : `Portas em uso: ${occupiedPorts.join(', ')}`
+          },
+          {
+            key: 'deps',
+            label: 'dependências faltando',
+            level: missingDeps === 0 ? 'ok' : (missingDeps < 3 ? 'warn' : 'red'),
+            detail: missingDeps === 0 ? 'Sem dependências faltantes detectadas.' : `${missingDeps} ocorrência(s) relacionada(s) a dependências.`
+          },
+          {
+            key: 'errors',
+            label: 'erros detectados',
+            level: (errors.length === 0 ? 'ok' : 'red'),
+            detail: errors.length === 0 ? 'Nenhum erro crítico detectado.' : `${errors.length} erro(s) no relatório.`
+          }
+        ];
+      }
+
+      function setRunning(running, text) {
+        state.running = running;
+        el.btnQuick.disabled = running;
+        el.btnFull.disabled = running;
+        if (text) {
+          el.statusLine.textContent = text;
+        }
+      }
+
+      function setModeBadge(mode) {
+        const effectiveMode = mode === 'full' ? 'FULL' : 'QUICK';
+        el.modeBadge.innerHTML = `<span class="mode-pill">${effectiveMode}</span>`;
+      }
+
+      function renderIndicators(report) {
+        const indicators = extractIndicators(report);
+        el.indicatorGrid.innerHTML = indicators.map((item) => {
+          return `
+            <article class="diag-card">
+              <div class="diag-title">
+                <span>${item.label}</span>
+                <span class="dot ${healthColor(item.level)}"></span>
+              </div>
+              <div class="diag-sub">${item.detail}</div>
+            </article>
+          `;
+        }).join('');
+      }
+
+      function renderSummary(report) {
+        const errors = report?.errors?.length || 0;
+        const warnings = report?.warnings?.length || 0;
+        const suggestions = report?.suggestions?.length || 0;
+        const durationMs = report?.environmentInfo?.durationMs ?? '-';
+
+        const values = [
+          { label: 'Erros', value: errors },
+          { label: 'Avisos', value: warnings },
+          { label: 'Sugestões', value: suggestions },
+          { label: 'Duração (ms)', value: durationMs }
+        ];
+
+        el.summaryPanel.innerHTML = values.map((item) => `
+          <div class="summary-item">
+            <div class="summary-label">${item.label}</div>
+            <div class="summary-value">${item.value}</div>
+          </div>
+        `).join('');
+      }
+
+      function renderLists(report) {
+        const errors = report?.errors || [];
+        const warnings = [...(report?.warnings || []), ...(report?.suggestions || []).map((item) => `Sugestão: ${item}`)];
+
+        el.errorsList.innerHTML = errors.length
+          ? errors.map((item) => `<li>${item}</li>`).join('')
+          : '<li class="muted">Nenhum erro crítico encontrado.</li>';
+
+        el.warningsList.innerHTML = warnings.length
+          ? warnings.map((item) => `<li>${item}</li>`).join('')
+          : '<li class="muted">Sem avisos ou sugestões pendentes.</li>';
+      }
+
+      function renderLogs(logEntries) {
+        const entries = (logEntries || []).slice(-80).reverse();
+        el.logsList.innerHTML = entries.length
+          ? entries.map((entry) => {
+              const level = String(entry.level || 'info').toLowerCase();
+              const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '--:--:--';
+              const message = entry.message || '(sem mensagem)';
+              return `<li><span class="lvl-${level}">[${time}] [${level}]</span> ${message}</li>`;
+            }).join('')
+          : '<li class="muted">Sem logs recentes.</li>';
+      }
+
+      async function loadLatestReport() {
+        const bridge = getBridge();
+        if (!bridge) {
+          throw new Error('Ambiente sem bridge/Node para leitura do relatório.');
+        }
+        const result = await bridge.readLatestReport();
+        if (!result) {
+          return null;
+        }
+        if (result.report) {
+          return result.report;
+        }
+        return result;
+      }
+
+      async function readRecentLogs() {
+        const bridge = getBridge();
+        if (!bridge) {
+          return [];
+        }
+        const result = await bridge.readRecentLogs();
+        if (!Array.isArray(result)) {
+          return Array.isArray(result?.logs) ? result.logs : [];
+        }
+        return result;
+      }
+
+      function applyReport(report) {
+        state.report = report;
+        const mode = report?.environmentInfo?.scan?.mode || (report?.environmentInfo?.scan?.full ? 'full' : 'quick');
+        setModeBadge(mode);
+
+        const timestamp = report?.environmentInfo?.timestamp
+          ? new Date(report.environmentInfo.timestamp).toLocaleString()
+          : 'sem horário disponível';
+
+        el.statusLine.textContent = report
+          ? `Relatório carregado • modo: ${mode} • atualizado em ${timestamp}`
+          : 'Nenhum relatório encontrado. Execute um diagnóstico para iniciar.';
+
+        renderIndicators(report);
+        renderSummary(report);
+        renderLists(report);
+      }
+
+      async function refreshPanel() {
+        try {
+          const [report, logs] = await Promise.all([loadLatestReport(), readRecentLogs()]);
+          applyReport(report);
+          state.logs = logs;
+          renderLogs(logs);
+        } catch (error) {
+          el.statusLine.textContent = `Falha ao atualizar painel: ${error.message || String(error)}`;
+        }
+      }
+
+      async function runDiagnostic(mode) {
+        const effectiveMode = mode === 'full' ? 'full' : 'quick';
+        setRunning(true, `Executando diagnóstico ${effectiveMode}...`);
+
+        try {
+          const bridge = getBridge();
+          if (!bridge) {
+            throw new Error('Ambiente atual não permite executar diagnóstico (bridge/Node indisponível).');
+          }
+
+          const result = await bridge.runDiagnostic(effectiveMode);
+          state.lastRunOutput = result?.output || '';
+
+          const reportFromRun = result?.report || null;
+          const report = reportFromRun || await loadLatestReport();
+          const logs = await readRecentLogs();
+
+          applyReport(report);
+          state.logs = logs;
+          renderLogs(logs);
+
+          const modeLabel = report?.environmentInfo?.scan?.mode || effectiveMode;
+          el.statusLine.textContent = `Diagnóstico concluído — modo: ${modeLabel}`;
+        } catch (error) {
+          el.statusLine.textContent = `Falha ao executar diagnóstico: ${error.message || String(error)}`;
+        } finally {
+          setRunning(false);
+        }
+      }
+
+      async function runQuickDiagnostic() {
+        return runDiagnostic('quick');
+      }
+
+      async function runFullDiagnostic() {
+        return runDiagnostic('full');
+      }
+
+      function wireUi() {
+        el.btnQuick.addEventListener('click', runQuickDiagnostic);
+        el.btnFull.addEventListener('click', runFullDiagnostic);
+        el.btnReloadLogs.addEventListener('click', async () => {
+          const logs = await readRecentLogs();
+          state.logs = logs;
+          renderLogs(logs);
+        });
+      }
+
+      async function initializeDiagnosticPanel() {
+        wireUi();
+        await refreshPanel();
+        window.setInterval(() => {
+          if (!state.running) {
+            refreshPanel();
+          }
+        }, POLL_INTERVAL_MS);
+      }
+
+      window.ApexDiagnosticPanel = {
+        initializeDiagnosticPanel,
+        refreshPanel,
+        runQuickDiagnostic,
+        runFullDiagnostic,
+        loadLatestReport,
+        readRecentLogs,
+        getState: () => ({ ...state })
+      };
+
+      initializeDiagnosticPanel();
+    })();
+  </script>
+</body>
+</html>

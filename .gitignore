@@ -1,0 +1,32 @@
+# Dependências Node.js
+node_modules/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Arquivos de ambiente (contêm chaves de API — nunca versionar)
+.env
+*.env
+
+# Logs (opcional — remova as linhas abaixo se quiser versionar logs)
+# logs/
+
+# Memória persistente (dados pessoais — não versionar)
+data/memories/*.json
+
+# PID files
+pids/
+*.pid
+
+# Distribuições/builds
+dist/
+build/
+*.egg-info/
+
+logs/
+metrics/
+*.zip
+.env
