@@ -38,6 +38,10 @@ def get_db_connection():
         "PRAGMA foreign_keys = ON"
     )
 
+    connection.execute(
+        "PRAGMA synchronous = NORMAL"
+    )
+
     return connection
 
 
@@ -58,10 +62,6 @@ def init_database():
     try:
         connection.execute(
             "PRAGMA journal_mode = WAL"
-        )
-
-        connection.execute(
-            "PRAGMA synchronous = NORMAL"
         )
 
         connection.execute(
