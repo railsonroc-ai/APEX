@@ -24,6 +24,9 @@ __pycache__/
 # Memórias e dados pessoais
 data/memories/*.json
 
+# Backups locais
+data/backups/
+
 # Logs e métricas
 logs/
 metrics/
