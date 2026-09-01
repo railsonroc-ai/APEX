@@ -1,6 +1,4 @@
-import os
 import json
-import secrets
 import sqlite3
 
 from flask import (
@@ -12,64 +10,26 @@ from flask import (
     stream_with_context,
 )
 
-from dotenv import load_dotenv
 from groq import Groq
 
+from backend.config import (
+    TEMPLATE_DIR,
+    STATIC_DIR,
+    SECRET_KEY,
+    GROQ_API_KEY,
+    GROQ_MODEL,
+    MAX_CONTENT_LENGTH,
+    MAX_USER_MESSAGE_CHARS,
+)
+
+from backend.database import (
+    get_db_connection,
+    init_database,
+)
+
+from backend.security import verify_auth
+
 from backend.services.tutor_core import TutorCore
-
-
-load_dotenv()
-
-
-# ============================================================
-# CAMINHOS
-# ============================================================
-
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
-)
-
-PROJECT_ROOT = os.path.dirname(
-    BASE_DIR
-)
-
-
-def resolve_data_dir():
-    """
-    Define onde os dados persistentes do APEX serão armazenados.
-
-    Se APEX_DATA_DIR estiver configurado:
-    - caminho absoluto: usa diretamente;
-    - caminho relativo: resolve a partir da raiz do projeto.
-
-    Se não estiver configurado:
-    - usa /data na raiz do projeto.
-    """
-
-    configured_path = os.getenv(
-        "APEX_DATA_DIR",
-        "./data",
-    ).strip()
-
-    if os.path.isabs(configured_path):
-        return os.path.abspath(
-            configured_path
-        )
-
-    return os.path.abspath(
-        os.path.join(
-            PROJECT_ROOT,
-            configured_path,
-        )
-    )
-
-
-DATA_DIR = resolve_data_dir()
-
-DATABASE_PATH = os.path.join(
-    DATA_DIR,
-    "apex.db",
-)
 
 
 # ============================================================
@@ -78,152 +38,20 @@ DATABASE_PATH = os.path.join(
 
 app = Flask(
     __name__,
-    template_folder=os.path.join(
-        BASE_DIR,
-        "templates",
-    ),
-    static_folder=os.path.join(
-        BASE_DIR,
-        "static",
-    ),
+    template_folder=str(TEMPLATE_DIR),
+    static_folder=str(STATIC_DIR),
 )
 
-app.config["SECRET_KEY"] = os.getenv(
-    "SECRET_KEY",
-    "dev-secret-key",
-)
+app.config["SECRET_KEY"] = SECRET_KEY
 
 app.config["MAX_CONTENT_LENGTH"] = (
-    32 * 1024
+    MAX_CONTENT_LENGTH
 )
-
-
-# ============================================================
-# LIMITES
-# ============================================================
-
-MAX_USER_MESSAGE_CHARS = 4000
-
-
-# ============================================================
-# AMBIENTE / SEGURANÇA
-# ============================================================
-
-APP_ENV = os.getenv(
-    "APP_ENV",
-    "development",
-)
-
-APEX_ACCESS_KEY = os.getenv(
-    "APEX_ACCESS_KEY",
-    "",
-)
-
-
-def verify_auth():
-    """
-    Valida a chave enviada pelo navegador.
-
-    Em desenvolvimento:
-    - se APEX_ACCESS_KEY estiver vazia,
-      permite acesso.
-
-    Em produção:
-    - a chave é obrigatória.
-    """
-
-    if (
-        APP_ENV == "production"
-        and not APEX_ACCESS_KEY
-    ):
-        return False
-
-    if not APEX_ACCESS_KEY:
-        return True
-
-    client_key = request.headers.get(
-        "X-Apex-Key",
-        "",
-    )
-
-    return secrets.compare_digest(
-        client_key,
-        APEX_ACCESS_KEY,
-    )
 
 
 # ============================================================
 # BANCO DE DADOS
 # ============================================================
-
-def get_db_connection():
-    """
-    Abre uma nova conexão SQLite.
-
-    Cada conexão recebe:
-    - espera de até 10 segundos por locks;
-    - foreign keys habilitadas.
-    """
-
-    os.makedirs(
-        DATA_DIR,
-        exist_ok=True,
-    )
-
-    connection = sqlite3.connect(
-        DATABASE_PATH,
-        timeout=10,
-    )
-
-    connection.row_factory = sqlite3.Row
-
-    connection.execute(
-        "PRAGMA busy_timeout = 10000"
-    )
-
-    connection.execute(
-        "PRAGMA foreign_keys = ON"
-    )
-
-    return connection
-
-
-def init_database():
-    """
-    Inicializa e configura o banco.
-
-    WAL permite melhor convivência entre
-    leituras e gravações concorrentes.
-    """
-
-    connection = get_db_connection()
-
-    try:
-        connection.execute(
-            "PRAGMA journal_mode = WAL"
-        )
-
-        connection.execute(
-            "PRAGMA synchronous = NORMAL"
-        )
-
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS notes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                text TEXT NOT NULL,
-                area TEXT NOT NULL,
-                created_at TEXT NOT NULL
-                    DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-
-        connection.commit()
-
-    finally:
-        connection.close()
-
 
 init_database()
 
@@ -234,7 +62,8 @@ init_database()
 
 def sse(data):
     """
-    Converte um objeto Python para um evento SSE.
+    Converte um objeto Python para um
+    evento Server-Sent Events (SSE).
     """
 
     return (
@@ -268,11 +97,9 @@ def index():
 )
 def health():
     """
-    Health check usado pelo deploy.
-
-    Verifica:
-    - Flask;
-    - acesso ao SQLite.
+    Verifica se:
+    - o Flask está respondendo;
+    - o SQLite está acessível.
     """
 
     connection = None
@@ -325,7 +152,8 @@ def chat_stream():
     if not verify_auth():
         return jsonify(
             {
-                "error": "Não autorizado"
+                "error":
+                    "Não autorizado"
             }
         ), 401
 
@@ -380,11 +208,7 @@ def chat_stream():
 
         try:
 
-            api_key = os.getenv(
-                "GROQ_API_KEY"
-            )
-
-            if not api_key:
+            if not GROQ_API_KEY:
 
                 yield sse(
                     {
@@ -397,7 +221,7 @@ def chat_stream():
                 return
 
             client = Groq(
-                api_key=api_key
+                api_key=GROQ_API_KEY
             )
 
             messages = (
@@ -414,10 +238,7 @@ def chat_stream():
                 .completions
                 .create(
                     messages=messages,
-                    model=os.getenv(
-                        "GROQ_MODEL",
-                        "groq/compound",
-                    ),
+                    model=GROQ_MODEL,
                     stream=True,
                 )
             )
