@@ -1,3 +1,7 @@
+# ============================================================
+# APEX — ARQUIVOS IGNORADOS PELO GIT
+# ============================================================
+
 # Dependências Node.js
 node_modules/
 
@@ -7,26 +11,31 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Arquivos de ambiente (contêm chaves de API — nunca versionar)
+# Arquivos de ambiente e segredos
 .env
 *.env
+!.env.example
 
-# Logs (opcional — remova as linhas abaixo se quiser versionar logs)
-# logs/
+# Banco de dados local / dados persistentes
+*.db
+*.sqlite
+*.sqlite3
 
-# Memória persistente (dados pessoais — não versionar)
+# Memórias e dados pessoais
 data/memories/*.json
+
+# Logs e métricas
+logs/
+metrics/
 
 # PID files
 pids/
 *.pid
 
-# Distribuições/builds
+# Distribuições e builds
 dist/
 build/
 *.egg-info/
 
-logs/
-metrics/
+# Arquivos compactados locais
 *.zip
-.env

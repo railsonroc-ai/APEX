@@ -1,143 +1,589 @@
 import os
 import json
-import threading
-from datetime import datetime, timezone
-from flask import Flask, request, jsonify, render_template, Response
+import secrets
+import sqlite3
+
+from flask import (
+    Flask,
+    render_template,
+    request,
+    jsonify,
+    Response,
+    stream_with_context,
+)
+
 from dotenv import load_dotenv
 from groq import Groq
 
-# Carrega as variáveis de ambiente do arquivo .env
+from backend.services.tutor_core import TutorCore
+
+
 load_dotenv()
 
-app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 32 * 1024
 
-_WRITE_LOCK = threading.Lock()
-_VALID_AREAS = {"ads", "it"}
+# ============================================================
+# CAMINHOS
+# ============================================================
 
-def _load_json(path, default):
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return default
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
 
-def _save_json(path, data):
-    with _WRITE_LOCK:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        temp_path = path + ".tmp"
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(temp_path, path)
+PROJECT_ROOT = os.path.dirname(
+    BASE_DIR
+)
 
-@app.before_request
-def _check_access():
-    if request.method == "OPTIONS":
-        return
-    
-    public_paths = ["/", "/ads", "/estudos", "/health", "/chat/stream"]
-    if request.path in public_paths or request.path.startswith("/static/"):
-        return
 
-    access_key = os.getenv("APEX_ACCESS_KEY", "").strip()
-    app_env = os.getenv("APP_ENV", "production").lower()
+def resolve_data_dir():
+    """
+    Define onde os dados persistentes do APEX serão armazenados.
 
-    if app_env == "production" and not access_key:
-        return jsonify({
-            "ok": False, 
-            "error": "Erro crítico de segurança: APEX_ACCESS_KEY não configurada no ambiente."
-        }), 500
+    Se APEX_DATA_DIR estiver configurado:
+    - caminho absoluto: usa diretamente;
+    - caminho relativo: resolve a partir da raiz do projeto.
 
-    if access_key:
-        client_key = request.headers.get("X-Apex-Key")
-        if not client_key:
-            return jsonify({"ok": False, "error": "Autenticação requerida."}), 401
-        if client_key != access_key:
-            return jsonify({"ok": False, "error": "Chave de acesso inválida."}), 403
+    Se não estiver configurado:
+    - usa /data na raiz do projeto.
+    """
+
+    configured_path = os.getenv(
+        "APEX_DATA_DIR",
+        "./data",
+    ).strip()
+
+    if os.path.isabs(configured_path):
+        return os.path.abspath(
+            configured_path
+        )
+
+    return os.path.abspath(
+        os.path.join(
+            PROJECT_ROOT,
+            configured_path,
+        )
+    )
+
+
+DATA_DIR = resolve_data_dir()
+
+DATABASE_PATH = os.path.join(
+    DATA_DIR,
+    "apex.db",
+)
+
+
+# ============================================================
+# FLASK
+# ============================================================
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(
+        BASE_DIR,
+        "templates",
+    ),
+    static_folder=os.path.join(
+        BASE_DIR,
+        "static",
+    ),
+)
+
+app.config["SECRET_KEY"] = os.getenv(
+    "SECRET_KEY",
+    "dev-secret-key",
+)
+
+app.config["MAX_CONTENT_LENGTH"] = (
+    32 * 1024
+)
+
+
+# ============================================================
+# LIMITES
+# ============================================================
+
+MAX_USER_MESSAGE_CHARS = 4000
+
+
+# ============================================================
+# AMBIENTE / SEGURANÇA
+# ============================================================
+
+APP_ENV = os.getenv(
+    "APP_ENV",
+    "development",
+)
+
+APEX_ACCESS_KEY = os.getenv(
+    "APEX_ACCESS_KEY",
+    "",
+)
+
+
+def verify_auth():
+    """
+    Valida a chave enviada pelo navegador.
+
+    Em desenvolvimento:
+    - se APEX_ACCESS_KEY estiver vazia,
+      permite acesso.
+
+    Em produção:
+    - a chave é obrigatória.
+    """
+
+    if (
+        APP_ENV == "production"
+        and not APEX_ACCESS_KEY
+    ):
+        return False
+
+    if not APEX_ACCESS_KEY:
+        return True
+
+    client_key = request.headers.get(
+        "X-Apex-Key",
+        "",
+    )
+
+    return secrets.compare_digest(
+        client_key,
+        APEX_ACCESS_KEY,
+    )
+
+
+# ============================================================
+# BANCO DE DADOS
+# ============================================================
+
+def get_db_connection():
+    """
+    Abre uma nova conexão SQLite.
+
+    Cada conexão recebe:
+    - espera de até 10 segundos por locks;
+    - foreign keys habilitadas.
+    """
+
+    os.makedirs(
+        DATA_DIR,
+        exist_ok=True,
+    )
+
+    connection = sqlite3.connect(
+        DATABASE_PATH,
+        timeout=10,
+    )
+
+    connection.row_factory = sqlite3.Row
+
+    connection.execute(
+        "PRAGMA busy_timeout = 10000"
+    )
+
+    connection.execute(
+        "PRAGMA foreign_keys = ON"
+    )
+
+    return connection
+
+
+def init_database():
+    """
+    Inicializa e configura o banco.
+
+    WAL permite melhor convivência entre
+    leituras e gravações concorrentes.
+    """
+
+    connection = get_db_connection()
+
+    try:
+        connection.execute(
+            "PRAGMA journal_mode = WAL"
+        )
+
+        connection.execute(
+            "PRAGMA synchronous = NORMAL"
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT NOT NULL,
+                area TEXT NOT NULL,
+                created_at TEXT NOT NULL
+                    DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        connection.commit()
+
+    finally:
+        connection.close()
+
+
+init_database()
+
+
+# ============================================================
+# SSE
+# ============================================================
+
+def sse(data):
+    """
+    Converte um objeto Python para um evento SSE.
+    """
+
+    return (
+        "data: "
+        + json.dumps(
+            data,
+            ensure_ascii=False,
+        )
+        + "\n\n"
+    )
+
+
+# ============================================================
+# HOME
+# ============================================================
 
 @app.route("/")
 def index():
-    return render_template("chat.html")
+    return render_template(
+        "index.html"
+    )
 
-@app.route("/ads")
-def ads():
-    return render_template("chat.html")
 
-@app.route("/estudos")
-def estudos():
-    return render_template("estudos.html")
+# ============================================================
+# HEALTH CHECK
+# ============================================================
 
-@app.route("/health")
+@app.route(
+    "/health",
+    methods=["GET"],
+)
 def health():
-    return jsonify({"ok": True, "status": "healthy"})
+    """
+    Health check usado pelo deploy.
 
-@app.route("/api/notes", methods=["GET", "POST", "DELETE"])
-def handle_notes():
-    notes_path = os.path.join("data", "notes.json")
-    notes = _load_json(notes_path, [])
+    Verifica:
+    - Flask;
+    - acesso ao SQLite.
+    """
 
-    if request.method == "GET":
-        return jsonify({"ok": True, "notes": notes})
+    connection = None
 
-    data = request.get_json() or {}
-    if request.method == "POST":
-        text = str(data.get("text", "")).strip()
-        area = str(data.get("area", "ads")).strip().lower()
-        
-        if area not in _VALID_AREAS:
-            return jsonify({"ok": False, "error": "Área inválida."}), 400
-        if not text:
-            return jsonify({"ok": False, "error": "Texto vazio."}), 400
+    try:
+        connection = get_db_connection()
 
-        new_note = {
-            "id": int(datetime.now(timezone.utc).timestamp() * 1000),
-            "text": text,
-            "area": area,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        notes.insert(0, new_note)
-        _save_json(notes_path, notes)
-        return jsonify({"ok": True, "note": new_note})
+        connection.execute(
+            "SELECT 1"
+        ).fetchone()
 
-    if request.method == "DELETE":
-        note_id = data.get("id")
-        notes = [n for n in notes if n.get("id") != note_id]
-        _save_json(notes_path, notes)
-        return jsonify({"ok": True})
+        return jsonify(
+            {
+                "ok": True,
+                "service": "APEX",
+                "database": "ok",
+            }
+        ), 200
 
-@app.route("/chat/stream", methods=["POST"])
+    except sqlite3.Error:
+
+        app.logger.exception(
+            "Falha no health check"
+        )
+
+        return jsonify(
+            {
+                "ok": False,
+                "service": "APEX",
+                "database": "error",
+            }
+        ), 503
+
+    finally:
+
+        if connection is not None:
+            connection.close()
+
+
+# ============================================================
+# CHAT
+# ============================================================
+
+@app.route(
+    "/chat/stream",
+    methods=["POST"],
+)
 def chat_stream():
-    data = request.get_json() or {}
-    user_message = data.get("message", "")
-    print(f"[DEBUG] Mensagem recebida do front: {user_message}")
 
+    if not verify_auth():
+        return jsonify(
+            {
+                "error": "Não autorizado"
+            }
+        ), 401
+
+    data = (
+        request.get_json(
+            silent=True
+        )
+        or {}
+    )
+
+    user_message = str(
+        data.get(
+            "message",
+            "",
+        )
+    ).strip()
+
+    history = data.get(
+        "history",
+        [],
+    )
+
+    area = TutorCore.normalize_area(
+        data.get(
+            "area",
+            "ads",
+        )
+    )
+
+    if not user_message:
+        return jsonify(
+            {
+                "error":
+                    "Mensagem obrigatória"
+            }
+        ), 400
+
+    if (
+        len(user_message)
+        > MAX_USER_MESSAGE_CHARS
+    ):
+        return jsonify(
+            {
+                "error":
+                    "Mensagem muito longa. "
+                    "Reduza o texto e tente novamente."
+            }
+        ), 400
+
+    @stream_with_context
     def generate():
+
         try:
-            api_key = os.getenv("GROQ_API_KEY")
+
+            api_key = os.getenv(
+                "GROQ_API_KEY"
+            )
+
             if not api_key:
-                print("[ERRO] GROQ_API_KEY ausente.")
-                yield "Erro: Chave GROQ_API_KEY não configurada no .env"
+
+                yield sse(
+                    {
+                        "error":
+                            "Chave GROQ_API_KEY "
+                            "não configurada"
+                    }
+                )
+
                 return
 
-            client = Groq(api_key=api_key)
-            print("[DEBUG] Conectando ao Groq...")
-            response = client.chat.completions.create(
-                messages=[{"role": "user", "content": user_message}],
-                model="groq/compound",
-                stream=True
+            client = Groq(
+                api_key=api_key
             )
-            for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    print(f"[DEBUG CHUNK]: {content}")
-                    yield content
-        except Exception as e:
-            print(f"[ERRO NO STREAM]: {str(e)}")
-            yield f"Erro interno: {str(e)}"
 
-    return Response(generate(), mimetype="text/plain")
+            messages = (
+                TutorCore.build_messages(
+                    user_message,
+                    history,
+                    area=area,
+                )
+            )
+
+            response = (
+                client
+                .chat
+                .completions
+                .create(
+                    messages=messages,
+                    model=os.getenv(
+                        "GROQ_MODEL",
+                        "groq/compound",
+                    ),
+                    stream=True,
+                )
+            )
+
+            for chunk in response:
+
+                if (
+                    chunk.choices
+                    and
+                    chunk
+                    .choices[0]
+                    .delta
+                    .content
+                ):
+
+                    yield sse(
+                        {
+                            "token":
+                                chunk
+                                .choices[0]
+                                .delta
+                                .content
+                        }
+                    )
+
+            yield sse(
+                {
+                    "done": True
+                }
+            )
+
+        except Exception:
+
+            app.logger.exception(
+                "Falha no streaming Groq"
+            )
+
+            yield sse(
+                {
+                    "error":
+                        "Falha temporária "
+                        "ao consultar o tutor."
+                }
+            )
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control":
+                "no-cache",
+
+            "X-Accel-Buffering":
+                "no",
+        },
+    )
+
+
+# ============================================================
+# NOTAS
+# ============================================================
+
+@app.route(
+    "/api/notes",
+    methods=["POST"],
+)
+def save_note():
+
+    if not verify_auth():
+
+        return jsonify(
+            {
+                "error":
+                    "Não autorizado"
+            }
+        ), 401
+
+    data = (
+        request.get_json(
+            silent=True
+        )
+        or {}
+    )
+
+    text = str(
+        data.get(
+            "text",
+            "",
+        )
+    ).strip()
+
+    area = TutorCore.normalize_area(
+        data.get(
+            "area",
+            "ads",
+        )
+    )
+
+    if not text:
+
+        return jsonify(
+            {
+                "error":
+                    "Texto da nota "
+                    "é obrigatório"
+            }
+        ), 400
+
+    text = text[:4000]
+
+    connection = get_db_connection()
+
+    try:
+
+        cursor = connection.execute(
+            """
+            INSERT INTO notes (
+                text,
+                area
+            )
+            VALUES (?, ?)
+            """,
+            (
+                text,
+                area,
+            ),
+        )
+
+        connection.commit()
+
+        note_id = cursor.lastrowid
+
+    except sqlite3.Error:
+
+        app.logger.exception(
+            "Falha ao salvar nota"
+        )
+
+        return jsonify(
+            {
+                "error":
+                    "Não foi possível "
+                    "salvar a nota"
+            }
+        ), 500
+
+    finally:
+
+        connection.close()
+
+    return jsonify(
+        {
+            "ok": True,
+            "id": note_id,
+        }
+    )
+
+
+# ============================================================
+# EXECUÇÃO LOCAL
+# ============================================================
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=True,
+    )

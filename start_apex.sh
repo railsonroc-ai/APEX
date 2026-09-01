@@ -8,7 +8,8 @@ WORKERS="${WEB_CONCURRENCY:-2}"
 THREADS="${WEB_THREADS:-4}"
 
 echo "Iniciando APEX na porta $PORT com $WORKERS workers e $THREADS threads..."
-exec gunicorn --chdir backend app:app \
+
+exec gunicorn backend.app:app \
     --workers "$WORKERS" \
     --threads "$THREADS" \
     --timeout 120 \
