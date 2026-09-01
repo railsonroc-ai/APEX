@@ -1,6 +1,7 @@
 from backend.app import app
 from backend.config import (
     APEX_ACCESS_KEY,
+    MAX_HISTORY_MESSAGES,
     MAX_USER_MESSAGE_CHARS,
 )
 
@@ -27,6 +28,23 @@ def test_home_returns_200():
     response = client.get("/")
 
     assert response.status_code == 200
+
+
+def test_home_exposes_history_limit():
+    client = app.test_client()
+
+    response = client.get("/")
+
+    html = response.get_data(
+        as_text=True
+    )
+
+    expected_config = (
+        "maxHistoryMessages: "
+        f"{MAX_HISTORY_MESSAGES}"
+    )
+
+    assert expected_config in html
 
 
 def test_health_returns_database_ok():
