@@ -19,6 +19,7 @@ from backend.config import (
     SECRET_KEY,
     GROQ_API_KEY,
     GROQ_MODEL,
+    AI_DIALOG_TIMEOUT_SECONDS,
     MAX_CONTENT_LENGTH,
     MAX_USER_MESSAGE_CHARS,
     MAX_HISTORY_MESSAGES,
@@ -224,7 +225,8 @@ def chat_stream():
                 return
 
             client = Groq(
-                api_key=GROQ_API_KEY
+                api_key=GROQ_API_KEY,
+                timeout=AI_DIALOG_TIMEOUT_SECONDS,
             )
 
             messages = (

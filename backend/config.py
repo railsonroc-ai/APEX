@@ -69,6 +69,46 @@ GROQ_MODEL = (
 
 
 # ============================================================
+# TIMEOUT DA IA
+# ============================================================
+
+def resolve_ai_dialog_timeout():
+    """
+    Resolve o tempo máximo, em segundos,
+    permitido para chamadas ao provedor de IA.
+    """
+
+    raw_value = os.getenv(
+        "AI_DIALOG_TIMEOUT_SECONDS",
+        "45",
+    ).strip()
+
+    try:
+        timeout = float(
+            raw_value
+        )
+
+    except ValueError as exc:
+        raise RuntimeError(
+            "AI_DIALOG_TIMEOUT_SECONDS "
+            "deve ser um número válido."
+        ) from exc
+
+    if timeout <= 0:
+        raise RuntimeError(
+            "AI_DIALOG_TIMEOUT_SECONDS "
+            "deve ser maior que zero."
+        )
+
+    return timeout
+
+
+AI_DIALOG_TIMEOUT_SECONDS = (
+    resolve_ai_dialog_timeout()
+)
+
+
+# ============================================================
 # DADOS
 # ============================================================
 
