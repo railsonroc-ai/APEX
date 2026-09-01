@@ -33,19 +33,30 @@ APP_ENV = os.getenv(
 APEX_ACCESS_KEY = os.getenv(
     "APEX_ACCESS_KEY",
     "",
-)
+).strip()
 
 
 SECRET_KEY = os.getenv(
     "SECRET_KEY",
-    "dev-secret-key",
-)
+    "",
+).strip()
+
+
+if not SECRET_KEY:
+
+    if APP_ENV == "production":
+        raise RuntimeError(
+            "SECRET_KEY deve ser configurada "
+            "em ambiente de produção."
+        )
+
+    SECRET_KEY = "dev-secret-key"
 
 
 GROQ_API_KEY = os.getenv(
     "GROQ_API_KEY",
     "",
-)
+).strip()
 
 
 GROQ_MODEL = (
