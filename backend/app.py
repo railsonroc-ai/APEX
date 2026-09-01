@@ -20,6 +20,7 @@ from backend.config import (
     GROQ_MODEL,
     MAX_CONTENT_LENGTH,
     MAX_USER_MESSAGE_CHARS,
+    MAX_HISTORY_MESSAGES,
 )
 
 from backend.database import (
@@ -83,7 +84,8 @@ def sse(data):
 @app.route("/")
 def index():
     return render_template(
-        "index.html"
+        "index.html",
+        max_history_messages=MAX_HISTORY_MESSAGES,
     )
 
 

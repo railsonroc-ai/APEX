@@ -100,11 +100,21 @@ DATABASE_PATH = (
 # LIMITES HTTP / CHAT
 # ============================================================
 
+# A requisição contém:
+# - mensagem atual;
+# - histórico recente;
+# - metadados JSON.
+#
+# O limite continua pequeno o bastante para proteger a API,
+# mas permite transportar com segurança o contexto válido
+# utilizado pelo TutorCore.
 MAX_CONTENT_LENGTH = (
-    32 * 1024
+    128 * 1024
 )
 
 MAX_USER_MESSAGE_CHARS = 4000
+
+MAX_HISTORY_MESSAGES = 8
 
 
 # ============================================================

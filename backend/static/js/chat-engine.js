@@ -28,12 +28,23 @@
   const {
     area: AREA,
     lang: LANG,
-    label: LABEL
+    label: LABEL,
+    maxHistoryMessages
   } = window.APEX_CHAT_CONFIG || {
     area: 'ads',
     lang: 'pt-BR',
-    label: 'ADS'
+    label: 'ADS',
+    maxHistoryMessages: 8
   };
+
+
+  const MAX_HISTORY_MESSAGES =
+    Number.isInteger(
+      Number(maxHistoryMessages)
+    )
+    && Number(maxHistoryMessages) > 0
+      ? Number(maxHistoryMessages)
+      : 8;
 
 
   const Api = window.ApexApi;
@@ -228,11 +239,12 @@
 
   function trimHistory() {
     if (
-      historico.length > 20
+      historico.length
+      > MAX_HISTORY_MESSAGES
     ) {
       historico =
         historico.slice(
-          -20
+          -MAX_HISTORY_MESSAGES
         );
     }
   }
@@ -906,9 +918,15 @@
      *
      * O TutorCore adiciona essa pergunta
      * uma única vez.
+     *
+     * O frontend envia somente a quantidade
+     * de mensagens de contexto definida
+     * pelo backend.
      */
     const historyForRequest =
-      historico.slice();
+      historico.slice(
+        -MAX_HISTORY_MESSAGES
+      );
 
 
     addToHistory(

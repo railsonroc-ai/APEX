@@ -1,3 +1,6 @@
+from backend.config import (
+    MAX_HISTORY_MESSAGES as CONFIG_MAX_HISTORY_MESSAGES,
+)
 from backend.prompts.tutor import TUTOR_SYSTEM_PROMPT
 
 
@@ -19,7 +22,13 @@ class TutorCore:
         "assistant",
     }
 
-    MAX_HISTORY_MESSAGES = 8
+    # Mantém o limite centralizado em backend.config,
+    # mas preserva o atributo público usado pelos testes
+    # e por possíveis consumidores do TutorCore.
+    MAX_HISTORY_MESSAGES = (
+        CONFIG_MAX_HISTORY_MESSAGES
+    )
+
     MAX_HISTORY_CONTENT_CHARS = 4000
 
     AREA_CONTEXT = {
@@ -62,7 +71,9 @@ class TutorCore:
         com o contexto da área atual.
         """
 
-        normalized_area = cls.normalize_area(area)
+        normalized_area = cls.normalize_area(
+            area
+        )
 
         area_context = cls.AREA_CONTEXT[
             normalized_area
@@ -108,8 +119,13 @@ class TutorCore:
                 if not isinstance(item, dict):
                     continue
 
-                role = item.get("role")
-                content = item.get("content")
+                role = item.get(
+                    "role"
+                )
+
+                content = item.get(
+                    "content"
+                )
 
                 if (
                     role
@@ -117,7 +133,10 @@ class TutorCore:
                 ):
                     continue
 
-                if not isinstance(content, str):
+                if not isinstance(
+                    content,
+                    str,
+                ):
                     continue
 
                 content = content.strip()
