@@ -13,6 +13,7 @@ from flask import (
 from groq import Groq
 
 from backend.config import (
+    APP_ENV,
     TEMPLATE_DIR,
     STATIC_DIR,
     SECRET_KEY,
@@ -408,5 +409,8 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000,
-        debug=True,
+        debug=(
+            APP_ENV
+            == "development"
+        ),
     )
