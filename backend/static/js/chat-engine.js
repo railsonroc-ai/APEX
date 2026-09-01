@@ -1,9 +1,29 @@
 /**
- * chat-engine.js — Lógica compartilhada do Chat APEX
- * com DOMPurify, autenticação, histórico, SSE e TTS nativo.
+ * chat-engine.js
+ *
+ * Motor de conversa e interface do APEX.
+ *
+ * Responsabilidades:
+ * - estado local da conversa;
+ * - renderização das mensagens;
+ * - contador de histórico;
+ * - integração com Markdown;
+ * - ações de salvar nota e ouvir resposta;
+ * - coordenação do streaming.
+ *
+ * Comunicação HTTP/SSE:
+ * - window.ApexApi
+ *
+ * Síntese de voz:
+ * - window.ApexTTS
  */
 (function () {
   'use strict';
+
+
+  // ==========================================================
+  // CONFIGURAÇÃO
+  // ==========================================================
 
   const {
     area: AREA,
@@ -15,130 +35,165 @@
     label: 'ADS'
   };
 
-  let historico = [];
-  let currentUtterance = null;
 
-  const input = document.getElementById('user-input');
+  const Api = window.ApexApi;
+  const TTS = window.ApexTTS;
+
+  let historico = [];
+
+
+  // ==========================================================
+  // ELEMENTOS PRINCIPAIS
+  // ==========================================================
+
+  const input =
+    document.getElementById(
+      'user-input'
+    );
+
+
+  // ==========================================================
+  // VALIDAÇÃO DOS MÓDULOS
+  // ==========================================================
+
+  function modulesReady() {
+    return Boolean(
+      Api
+      && typeof Api.streamChat
+        === 'function'
+      && typeof Api.saveNote
+        === 'function'
+      && TTS
+      && typeof TTS.speak
+        === 'function'
+      && typeof TTS.stop
+        === 'function'
+    );
+  }
+
+
+  // ==========================================================
+  // INPUT
+  // ==========================================================
 
   if (input) {
-    input.addEventListener('input', () => {
-      input.style.height = 'auto';
-      input.style.height =
-        Math.min(input.scrollHeight, 120) + 'px';
-    });
+    input.addEventListener(
+      'input',
+      () => {
+        input.style.height =
+          'auto';
 
-    input.addEventListener('keydown', e => {
-      if (
-        e.key === 'Enter'
-        && !e.shiftKey
-      ) {
-        e.preventDefault();
-        sendMessage();
+        input.style.height =
+          Math.min(
+            input.scrollHeight,
+            120
+          )
+          + 'px';
       }
-    });
+    );
+
+
+    input.addEventListener(
+      'keydown',
+      event => {
+        if (
+          event.key === 'Enter'
+          && !event.shiftKey
+        ) {
+          event.preventDefault();
+
+          sendMessage();
+        }
+      }
+    );
   }
 
 
   // ==========================================================
-  // AUTENTICAÇÃO
+  // AÇÕES RÁPIDAS
   // ==========================================================
 
-  function getHeaders() {
-    const headers = {
-      'Content-Type': 'application/json'
-    };
-
-    const key = localStorage.getItem(
-      'apex_key'
-    );
-
-    if (key) {
-      headers['X-Apex-Key'] = key;
+  function ask(message) {
+    if (!input) {
+      return;
     }
 
-    return headers;
+    input.value =
+      String(message || '');
+
+    sendMessage();
   }
 
 
-  function handleAuthError() {
-    localStorage.removeItem(
-      'apex_key'
-    );
+  // ==========================================================
+  // TOAST
+  // ==========================================================
 
-    const key = prompt(
-      'Acesso protegido. Digite a sua chave APEX_ACCESS_KEY:'
-    );
-
-    if (key) {
-      localStorage.setItem(
-        'apex_key',
-        key
+  function toast(message) {
+    const element =
+      document.getElementById(
+        'toast'
       );
 
-      return true;
+    if (!element) {
+      return;
     }
 
-    return false;
+    element.textContent =
+      String(message || '');
+
+    element.classList.add(
+      'show'
+    );
+
+    window.setTimeout(
+      () => {
+        element.classList.remove(
+          'show'
+        );
+      },
+      2200
+    );
   }
 
 
-  function isAuthError(status) {
-    return (
-      status === 401
-      || status === 403
-    );
+  // ==========================================================
+  // TEXTO / HTML
+  // ==========================================================
+
+  function escapeHtml(text) {
+    return String(text || '')
+      .replace(
+        /&/g,
+        '&amp;'
+      )
+      .replace(
+        /</g,
+        '&lt;'
+      )
+      .replace(
+        />/g,
+        '&gt;'
+      );
+  }
+
+
+  function cleanText(text) {
+    return String(text || '')
+      .replace(
+        /\[\s*[^\]]{0,40}\s*\]/g,
+        ''
+      )
+      .replace(
+        /\\n/g,
+        '\n'
+      );
   }
 
 
   // ==========================================================
   // INTERFACE
   // ==========================================================
-
-  function ask(msg) {
-    if (!input) {
-      return;
-    }
-
-    input.value = msg;
-    sendMessage();
-  }
-
-
-  function toast(msg) {
-    const el = document.getElementById(
-      'toast'
-    );
-
-    if (!el) {
-      return;
-    }
-
-    el.textContent = msg;
-    el.classList.add('show');
-
-    setTimeout(() => {
-      el.classList.remove('show');
-    }, 2200);
-  }
-
-
-  function escHtml(s) {
-    return (s || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
-
-
-  function cleanText(r) {
-    return (r || '')
-      .replace(
-        /\[\s*[^\]]{0,40}\s*\]/g,
-        ''
-      )
-      .replace(/\\n/g, '\n');
-  }
-
 
   function removeWelcome() {
     const welcome =
@@ -158,16 +213,30 @@
         'messages'
       );
 
-    if (container) {
-      container.scrollTop =
-        container.scrollHeight;
+    if (!container) {
+      return;
     }
+
+    container.scrollTop =
+      container.scrollHeight;
   }
 
 
   // ==========================================================
-  // CONTADOR DO HISTÓRICO
+  // HISTÓRICO / BADGE
   // ==========================================================
+
+  function trimHistory() {
+    if (
+      historico.length > 20
+    ) {
+      historico =
+        historico.slice(
+          -20
+        );
+    }
+  }
+
 
   function updateBadge() {
     const badge =
@@ -190,36 +259,88 @@
   }
 
 
+  function addToHistory(
+    role,
+    content
+  ) {
+    historico.push({
+      role,
+      content
+    });
+
+    trimHistory();
+
+    updateBadge();
+  }
+
+
   // ==========================================================
   // MENSAGEM DO USUÁRIO
   // ==========================================================
 
-  function appendUserMsg(text) {
+  function appendUserMessage(
+    text
+  ) {
     removeWelcome();
 
-    const msgs =
+    const messages =
       document.getElementById(
         'messages'
       );
 
-    if (!msgs) {
+    if (!messages) {
       return;
     }
 
-    const div =
+
+    const wrapper =
       document.createElement(
         'div'
       );
 
-    div.className = 'msg user';
+    wrapper.className =
+      'msg user';
 
-    div.innerHTML =
-      `<div class="avatar">R</div>`
-      + `<div class="bubble">`
-      + `${escHtml(text).replace(/\n/g, '<br>')}`
-      + `</div>`;
 
-    msgs.appendChild(div);
+    const avatar =
+      document.createElement(
+        'div'
+      );
+
+    avatar.className =
+      'avatar';
+
+    avatar.textContent =
+      'R';
+
+
+    const bubble =
+      document.createElement(
+        'div'
+      );
+
+    bubble.className =
+      'bubble';
+
+    bubble.innerHTML =
+      escapeHtml(text)
+        .replace(
+          /\n/g,
+          '<br>'
+        );
+
+
+    wrapper.appendChild(
+      avatar
+    );
+
+    wrapper.appendChild(
+      bubble
+    );
+
+    messages.appendChild(
+      wrapper
+    );
 
     scrollBottom();
   }
@@ -229,26 +350,28 @@
   // MENSAGEM DO APEX
   // ==========================================================
 
-  function createBotMsg() {
+  function createBotMessage() {
     removeWelcome();
 
-    const msgs =
+    const messages =
       document.getElementById(
         'messages'
       );
 
-    if (!msgs) {
+    if (!messages) {
       throw new Error(
         'Área de mensagens não encontrada.'
       );
     }
 
-    const div =
+
+    const wrapper =
       document.createElement(
         'div'
       );
 
-    div.className = 'msg bot';
+    wrapper.className =
+      'msg bot';
 
 
     const avatar =
@@ -256,8 +379,11 @@
         'div'
       );
 
-    avatar.className = 'avatar';
-    avatar.textContent = 'A';
+    avatar.className =
+      'avatar';
+
+    avatar.textContent =
+      'A';
 
 
     const bubble =
@@ -265,7 +391,8 @@
         'div'
       );
 
-    bubble.className = 'bubble';
+    bubble.className =
+      'bubble';
 
 
     const tag =
@@ -273,8 +400,11 @@
         'div'
       );
 
-    tag.className = 'area-tag';
-    tag.textContent = LABEL;
+    tag.className =
+      'area-tag';
+
+    tag.textContent =
+      LABEL;
 
 
     const content =
@@ -286,345 +416,130 @@
       'md stream-cursor';
 
 
-    bubble.appendChild(tag);
-    bubble.appendChild(content);
+    bubble.appendChild(
+      tag
+    );
 
-    div.appendChild(avatar);
-    div.appendChild(bubble);
+    bubble.appendChild(
+      content
+    );
 
-    msgs.appendChild(div);
+    wrapper.appendChild(
+      avatar
+    );
+
+    wrapper.appendChild(
+      bubble
+    );
+
+    messages.appendChild(
+      wrapper
+    );
 
     scrollBottom();
 
+
     return {
-      content,
-      bubble
+      wrapper,
+      bubble,
+      content
     };
   }
 
 
   // ==========================================================
-  // TTS NATIVO DO NAVEGADOR
+  // MARKDOWN
   // ==========================================================
 
-  function stripForTTS(text) {
-    return (text || '')
-      .replace(
-        /```[\s\S]*?```/g,
-        ''
-      )
-      .replace(
-        /`[^`]+`/g,
-        ''
-      )
-      .replace(
-        /#{1,6}\s/g,
-        ''
-      )
-      .replace(
-        /\*\*([^*]+)\*\*/g,
-        '$1'
-      )
-      .replace(
-        /\*([^*]+)\*/g,
-        '$1'
-      )
-      .replace(
-        /\[([^\]]+)\]\([^)]+\)/g,
-        '$1'
-      )
-      .replace(
-        /^\s*[-*+]\s/gm,
-        ''
-      )
-      .replace(
-        /\n{2,}/g,
-        '. '
-      )
-      .replace(
-        /\n/g,
-        ' '
-      )
-      .trim()
-      .slice(
-        0,
-        4000
-      );
-  }
-
-
-  function resetTTSButton(btn) {
-    if (!btn) {
-      return;
-    }
-
-    btn.classList.remove(
-      'speaking'
-    );
-
-    btn.textContent = '🔊';
-    btn.title = 'Ouvir';
-  }
-
-
-  function stopSpeech() {
-    if (
-      'speechSynthesis'
-      in window
-    ) {
-      window.speechSynthesis.cancel();
-    }
-
-    currentUtterance = null;
-  }
-
-
-  function speakText(text, ttsBtn) {
-    if (
-      !(
-        'speechSynthesis'
-        in window
-      )
-      || !(
-        'SpeechSynthesisUtterance'
-        in window
-      )
-    ) {
-      toast(
-        'Seu navegador não oferece síntese de voz.'
-      );
-
-      return;
-    }
-
-    if (
-      ttsBtn
-      && ttsBtn.classList.contains(
-        'speaking'
-      )
-    ) {
-      stopSpeech();
-      resetTTSButton(ttsBtn);
-
-      return;
-    }
-
-    stopSpeech();
-
-    document
-      .querySelectorAll(
-        '.tts-btn.speaking'
-      )
-      .forEach(button => {
-        resetTTSButton(button);
-      });
-
-
-    const plain =
-      stripForTTS(text);
-
-    if (!plain) {
-      toast(
-        'Não há texto para ler.'
-      );
-
-      return;
-    }
-
-
-    const utterance =
-      new SpeechSynthesisUtterance(
-        plain
-      );
-
-    utterance.lang =
-      LANG || 'pt-BR';
-
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-
-
-    const voices =
-      window
-        .speechSynthesis
-        .getVoices();
-
-    const preferredVoice =
-      voices.find(
-        voice =>
-          voice.lang
-          && voice.lang
-            .toLowerCase()
-            .startsWith(
-              utterance.lang
-                .toLowerCase()
-                .split('-')[0]
-            )
-      );
-
-    if (preferredVoice) {
-      utterance.voice =
-        preferredVoice;
-    }
-
-
-    utterance.onstart = () => {
-      if (ttsBtn) {
-        ttsBtn.classList.add(
-          'speaking'
-        );
-
-        ttsBtn.textContent = '⏹';
-        ttsBtn.title = 'Parar leitura';
-      }
-    };
-
-
-    utterance.onend = () => {
-      resetTTSButton(
-        ttsBtn
-      );
-
-      if (
-        currentUtterance
-        === utterance
-      ) {
-        currentUtterance = null;
-      }
-    };
-
-
-    utterance.onerror = event => {
-      resetTTSButton(
-        ttsBtn
-      );
-
-      if (
-        currentUtterance
-        === utterance
-      ) {
-        currentUtterance = null;
-      }
-
-      if (
-        event.error
-        && event.error !== 'canceled'
-        && event.error !== 'interrupted'
-      ) {
-        toast(
-          'Não foi possível reproduzir o áudio.'
-        );
-      }
-    };
-
-
-    currentUtterance =
-      utterance;
-
-    window
-      .speechSynthesis
-      .speak(
-        utterance
-      );
-  }
-
-
-  // ==========================================================
-  // FINALIZA RESPOSTA
-  // ==========================================================
-
-  function finalizeBotMsg(
-    content,
-    bubble,
-    fullText
+  function renderMarkdown(
+    element,
+    text
   ) {
-    content.classList.remove(
-      'stream-cursor'
-    );
+    const cleaned =
+      cleanText(text);
+
 
     if (
       typeof window.marked
-      !== 'undefined'
+        !== 'undefined'
       && typeof window.DOMPurify
-      !== 'undefined'
+        !== 'undefined'
     ) {
-      content.innerHTML =
+      element.innerHTML =
         window.DOMPurify.sanitize(
           window.marked.parse(
-            cleanText(fullText)
+            cleaned
           )
         );
+
     } else {
-      content.textContent =
-        cleanText(fullText);
+      element.textContent =
+        cleaned;
     }
 
 
     if (
       typeof window.hljs
-      !== 'undefined'
+        !== 'undefined'
     ) {
-      content
+      element
         .querySelectorAll(
           'pre code'
         )
         .forEach(
-          el =>
-            window.hljs.highlightElement(
-              el
-            )
+          code => {
+            window.hljs
+              .highlightElement(
+                code
+              );
+          }
         );
+    }
+  }
+
+
+  // ==========================================================
+  // TTS
+  // ==========================================================
+
+  function speakText(
+    text,
+    button
+  ) {
+    if (!TTS) {
+      toast(
+        'Módulo de voz indisponível.'
+      );
+
+      return;
     }
 
 
-    const saveBtn =
-      document.createElement(
-        'button'
-      );
+    TTS.speak(
+      text,
+      {
+        button,
+        lang: LANG,
 
-    saveBtn.className =
-      'save-btn';
+        onUnsupported: () => {
+          toast(
+            'Seu navegador não oferece síntese de voz.'
+          );
+        },
 
-    saveBtn.textContent =
-      '📌 Salvar nota';
+        onEmpty: () => {
+          toast(
+            'Não há texto para ler.'
+          );
+        },
 
-    saveBtn.onclick = () =>
-      saveNote(
-        fullText,
-        saveBtn
-      );
-
-    bubble.appendChild(
-      saveBtn
+        onError: () => {
+          toast(
+            'Não foi possível reproduzir o áudio.'
+          );
+        }
+      }
     );
-
-
-    const ttsBtn =
-      document.createElement(
-        'button'
-      );
-
-    ttsBtn.className =
-      'tts-btn';
-
-    ttsBtn.title =
-      'Ouvir';
-
-    ttsBtn.textContent =
-      '🔊';
-
-    ttsBtn.onclick = () =>
-      speakText(
-        fullText,
-        ttsBtn
-      );
-
-    bubble.appendChild(
-      ttsBtn
-    );
-
-    scrollBottom();
   }
 
 
@@ -634,346 +549,298 @@
 
   async function saveNote(
     text,
-    btn
+    button
   ) {
+    if (!Api) {
+      toast(
+        'Comunicação com o servidor indisponível.'
+      );
+
+      return;
+    }
+
+
     try {
-      const res =
-        await fetch(
-          '/api/notes',
-          {
-            method: 'POST',
-
-            headers:
-              getHeaders(),
-
-            body:
-              JSON.stringify({
-                text:
-                  text.slice(
-                    0,
-                    400
-                  ),
-
-                area:
-                  AREA
-              })
-          }
+      const result =
+        await Api.saveNote(
+          String(text || '')
+            .slice(
+              0,
+              400
+            ),
+          AREA
         );
 
 
       if (
-        isAuthError(
-          res.status
-        )
+        !result
+        || !result.ok
       ) {
-        if (
-          handleAuthError()
-        ) {
-          return saveNote(
-            text,
-            btn
-          );
-        }
-
         throw new Error(
-          'Acesso não autorizado.'
+          'Resposta inválida do servidor.'
         );
       }
 
 
-      const data =
-        await res.json();
+      button.textContent =
+        '✅ Salvo!';
+
+      button.classList.add(
+        'saved'
+      );
+
+      toast(
+        'Nota salva com sucesso!'
+      );
 
 
-      if (!res.ok) {
-        throw new Error(
-          data.error
-          || `HTTP ${res.status}`
-        );
-      }
-
-
-      if (data.ok) {
-        btn.textContent =
-          '✅ Salvo!';
-
-        btn.classList.add(
-          'saved'
-        );
-
-        toast(
-          'Nota salva com sucesso!'
-        );
-
-        setTimeout(() => {
-          btn.textContent =
+      window.setTimeout(
+        () => {
+          button.textContent =
             '📌 Salvar nota';
 
-          btn.classList.remove(
+          button.classList.remove(
             'saved'
           );
-        }, 2000);
-      }
+        },
+        2000
+      );
 
-    } catch {
+    } catch (error) {
       toast(
-        'Erro ao salvar nota.'
+        error.message
+        || 'Erro ao salvar nota.'
       );
     }
   }
 
 
   // ==========================================================
-  // STREAMING
+  // FINALIZA RESPOSTA
   // ==========================================================
 
-  async function _streamChat(
+  function finalizeBotMessage(
+    content,
+    bubble,
+    fullText
+  ) {
+    content.classList.remove(
+      'stream-cursor'
+    );
+
+
+    renderMarkdown(
+      content,
+      fullText
+    );
+
+
+    const saveButton =
+      document.createElement(
+        'button'
+      );
+
+    saveButton.className =
+      'save-btn';
+
+    saveButton.textContent =
+      '📌 Salvar nota';
+
+    saveButton.addEventListener(
+      'click',
+      () => {
+        saveNote(
+          fullText,
+          saveButton
+        );
+      }
+    );
+
+
+    const ttsButton =
+      document.createElement(
+        'button'
+      );
+
+    ttsButton.className =
+      'tts-btn';
+
+    ttsButton.title =
+      'Ouvir';
+
+    ttsButton.textContent =
+      '🔊';
+
+    ttsButton.addEventListener(
+      'click',
+      () => {
+        speakText(
+          fullText,
+          ttsButton
+        );
+      }
+    );
+
+
+    bubble.appendChild(
+      saveButton
+    );
+
+    bubble.appendChild(
+      ttsButton
+    );
+
+    scrollBottom();
+  }
+
+
+  // ==========================================================
+  // ERROS NO BALÃO
+  // ==========================================================
+
+  function showBotError(
+    content,
+    message
+  ) {
+    content.classList.remove(
+      'stream-cursor'
+    );
+
+    content.innerHTML =
+      '<span style="color:#ff6b6b">'
+      + '⚠️ '
+      + escapeHtml(
+        message
+        || 'Erro inesperado.'
+      )
+      + '</span>';
+
+    scrollBottom();
+  }
+
+
+  // ==========================================================
+  // STREAM DO CHAT
+  // ==========================================================
+
+  async function streamChat(
     text,
-    btn,
+    button,
     historyForRequest
   ) {
     const {
       content,
       bubble
-    } = createBotMsg();
+    } = createBotMessage();
+
 
     let fullText = '';
     let finalized = false;
+    let streamError = false;
 
 
     try {
-      const res =
-        await fetch(
-          '/chat/stream',
-          {
-            method: 'POST',
-
-            headers:
-              getHeaders(),
-
-            body:
-              JSON.stringify({
-                message:
-                  text,
-
-                area:
-                  AREA,
-
-                history:
-                  historyForRequest
-              })
-          }
+      if (!Api) {
+        throw new Error(
+          'Módulo de comunicação indisponível.'
         );
+      }
 
 
-      if (
-        isAuthError(
-          res.status
-        )
-      ) {
-        content
-          .closest(
-            '.msg'
-          )
-          ?.remove();
-
-        if (
-          handleAuthError()
-        ) {
-          return _streamChat(
-            text,
-            btn,
+      await Api.streamChat(
+        {
+          message: text,
+          area: AREA,
+          history:
             historyForRequest
-          );
-        }
-
-        throw new Error(
-          'Acesso não autorizado.'
-        );
-      }
-
-
-      if (
-        !res.ok
-        || !res.body
-      ) {
-        throw new Error(
-          `HTTP ${res.status}`
-        );
-      }
-
-
-      const reader =
-        res.body.getReader();
-
-      const decoder =
-        new TextDecoder();
-
-      let buffer = '';
-
-
-      while (true) {
-        const {
-          value,
-          done
-        } = await reader.read();
-
-        if (done) {
-          break;
-        }
-
-        buffer +=
-          decoder.decode(
-            value,
-            {
-              stream: true
-            }
-          );
-
-        const parts =
-          buffer.split(
-            '\n'
-          );
-
-        buffer =
-          parts.pop();
-
-
-        for (
-          const part
-          of parts
-        ) {
-          const line =
-            part.trim();
-
-          if (
-            !line.startsWith(
-              'data: '
-            )
-          ) {
-            continue;
-          }
-
-
-          try {
-            const evt =
-              JSON.parse(
-                line.slice(6)
-              );
-
-
-            if (evt.token) {
-              fullText +=
-                evt.token;
-
-              content.textContent =
-                fullText;
-
-              scrollBottom();
-
-            } else if (
-              evt.done
-            ) {
-              finalizeBotMsg(
-                content,
-                bubble,
-                fullText
-              );
-
-              finalized = true;
-
-              historico.push({
-                role:
-                  'assistant',
-
-                content:
-                  fullText
-              });
-
-              if (
-                historico.length
-                > 20
-              ) {
-                historico =
-                  historico.slice(
-                    -20
-                  );
-              }
-
-              updateBadge();
-
-            } else if (
-              evt.error
-            ) {
-              content.classList.remove(
-                'stream-cursor'
-              );
-
-              content.innerHTML =
-                `<span style="color:#ff6b6b">`
-                + `⚠️ ${escHtml(evt.error)}`
-                + `</span>`;
+        },
+        {
+          onToken: token => {
+            if (streamError) {
+              return;
             }
 
-          } catch {
-            /*
-             * Ignora apenas um evento
-             * SSE isolado inválido.
-             */
+            fullText +=
+              token;
+
+            content.textContent =
+              fullText;
+
+            scrollBottom();
+          },
+
+
+          onDone: () => {
+            if (
+              finalized
+              || streamError
+            ) {
+              return;
+            }
+
+            finalizeBotMessage(
+              content,
+              bubble,
+              fullText
+            );
+
+            finalized = true;
+
+            addToHistory(
+              'assistant',
+              fullText
+            );
+          },
+
+
+          onError: message => {
+            streamError = true;
+
+            showBotError(
+              content,
+              message
+            );
           }
         }
-      }
+      );
 
 
+      /*
+       * Proteção para streams que terminam
+       * sem enviar explicitamente {"done": true}.
+       */
       if (
         fullText
         && !finalized
+        && !streamError
       ) {
-        finalizeBotMsg(
+        finalizeBotMessage(
           content,
           bubble,
           fullText
         );
 
-        historico.push({
-          role:
-            'assistant',
+        finalized = true;
 
-          content:
-            fullText
-        });
-
-        if (
-          historico.length
-          > 20
-        ) {
-          historico =
-            historico.slice(
-              -20
-            );
-        }
-
-        updateBadge();
-      }
-
-    } catch (err) {
-      if (
-        content.isConnected
-      ) {
-        content.classList.remove(
-          'stream-cursor'
+        addToHistory(
+          'assistant',
+          fullText
         );
-
-        content.innerHTML =
-          `<span style="color:#ff6b6b">`
-          + `⚠️ Sem conexão com o servidor.<br>`
-          + `<small>${escHtml(err.message)}</small>`
-          + `</span>`;
       }
+
+    } catch (error) {
+      streamError = true;
+
+      showBotError(
+        content,
+        error.message
+        || 'Sem conexão com o servidor.'
+      );
 
     } finally {
-      if (btn) {
-        btn.disabled = false;
+      if (button) {
+        button.disabled =
+          false;
       }
 
       if (input) {
@@ -992,6 +859,16 @@
       return;
     }
 
+
+    if (!modulesReady()) {
+      toast(
+        'Os módulos do APEX não foram carregados corretamente.'
+      );
+
+      return;
+    }
+
+
     const text =
       input.value.trim();
 
@@ -1000,57 +877,49 @@
     }
 
 
-    const btn =
+    const sendButton =
       document.getElementById(
         'send-btn'
       );
 
-    if (btn) {
-      btn.disabled = true;
+
+    if (sendButton) {
+      sendButton.disabled =
+        true;
     }
 
 
     input.value = '';
-    input.style.height = 'auto';
 
-    appendUserMsg(
+    input.style.height =
+      'auto';
+
+
+    appendUserMessage(
       text
     );
 
 
     /*
-     * O histórico usado na requisição é
-     * capturado ANTES de adicionar a
-     * pergunta atual.
+     * A pergunta atual NÃO deve estar
+     * no histórico enviado ao backend.
      *
-     * O TutorCore adiciona a pergunta
-     * atual uma única vez no backend.
+     * O TutorCore adiciona essa pergunta
+     * uma única vez.
      */
     const historyForRequest =
       historico.slice();
 
 
-    historico.push({
-      role: 'user',
-      content: text
-    });
-
-    if (
-      historico.length
-      > 20
-    ) {
-      historico =
-        historico.slice(
-          -20
-        );
-    }
-
-    updateBadge();
+    addToHistory(
+      'user',
+      text
+    );
 
 
-    await _streamChat(
+    await streamChat(
       text,
-      btn,
+      sendButton,
       historyForRequest
     );
   }
@@ -1061,32 +930,61 @@
   // ==========================================================
 
   function clearChat() {
-    stopSpeech();
+    if (
+      TTS
+      && typeof TTS.stop
+        === 'function'
+    ) {
+      TTS.stop();
+    }
+
 
     historico = [];
 
     updateBadge();
 
-    const msgs =
+
+    const messages =
       document.getElementById(
         'messages'
       );
 
-    if (msgs) {
-      msgs.innerHTML =
-        `<div class="welcome" id="welcome">`
-        + `<h2>Pronto!</h2>`
-        + `<p>Conversa limpa. Faça sua pergunta sobre ADS.</p>`
-        + `</div>`;
+
+    if (messages) {
+      messages.innerHTML =
+        '<div class="welcome" id="welcome">'
+        + '<h2>Pronto!</h2>'
+        + '<p>'
+        + 'Conversa limpa. '
+        + 'Faça sua pergunta sobre ADS.'
+        + '</p>'
+        + '</div>';
+    }
+
+
+    if (input) {
+      input.focus();
     }
   }
 
 
   // ==========================================================
-  // API GLOBAL
+  // INICIALIZAÇÃO
   // ==========================================================
 
   updateBadge();
+
+
+  if (!modulesReady()) {
+    console.error(
+      'APEX: apex-api.js ou apex-tts.js não foi carregado corretamente.'
+    );
+  }
+
+
+  // ==========================================================
+  // API GLOBAL DA INTERFACE
+  // ==========================================================
 
   window.ask =
     ask;
