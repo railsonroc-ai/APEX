@@ -575,11 +575,7 @@
     try {
       const result =
         await Api.saveNote(
-          String(text || '')
-            .slice(
-              0,
-              400
-            ),
+          String(text || ''),
           AREA
         );
 
