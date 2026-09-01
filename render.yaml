@@ -15,8 +15,14 @@ services:
       - key: GROQ_MODEL
         value: groq/compound
 
+      - key: AI_DIALOG_TIMEOUT_SECONDS
+        value: "45"
+
       - key: GROQ_API_KEY
         sync: false
 
       - key: APEX_ACCESS_KEY
+        sync: false
+
+      - key: SECRET_KEY
         sync: false
