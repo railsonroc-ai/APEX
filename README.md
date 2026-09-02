@@ -1,49 +1,51 @@
-# APEX 3.0
+# APEX
 
-APEX 3.0 é uma plataforma educacional adaptativa focada em estudos de Tecnologia da Informação.
+APEX é uma plataforma educacional adaptativa em desenvolvimento para ensino de programação e Tecnologia da Informação.
 
-O projeto foi redesenhado para funcionar como um sistema inteligente de aprendizagem, unindo tutor interativo, laboratório de código, acompanhamento de progresso e uma base modular preparada para expansão futura.
+O objetivo é evoluir além de um chatbot: ensinar, verificar compreensão, adaptar o nível de ajuda e conduzir o estudante progressivamente até práticas próximas do desenvolvimento profissional.
 
-## Visão
+## Estado atual
 
-O objetivo do APEX é ajudar estudantes a aprender TI de forma guiada, prática e progressiva, com apoio de inteligência artificial, memória de estudo e feedback contínuo.
+A fundação técnica e o hardening inicial estão concluídos.
 
-## MVP Inicial
+O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação, SQLite, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn e suíte automatizada com 19 testes.
 
-O MVP do APEX 3.0 será composto por cinco módulos principais:
+A camada pedagógica avançada é a próxima grande fase.
 
-- Tutor Inteligente
-- Code Lab
-- Progresso
-- Core APEX
-- Voz (opcional no MVP inicial)
+## Executar
 
-## Módulos
+Instale as dependências:
 
-### 1. Tutor Inteligente
-Responsável por explicar conteúdos, responder dúvidas, adaptar a trilha de estudo e orientar o aluno passo a passo.
+    python3 -m pip install -r requirements-dev.txt
 
-### 2. Code Lab
-Editor de código integrado com execução segura de Python e JavaScript, voltado para prática e feedback orientado.
+Execute localmente:
 
-### 3. Progresso
-Painel de evolução do aluno com histórico de atividades, erros recorrentes, lições concluídas e próximas recomendações.
+    python3 -m backend.app
 
-### 4. Core APEX
-Camada central do sistema, responsável por memória, configuração, integração entre módulos e serviços internos.
+Execute os testes:
 
-### 5. Voz
-Camada opcional para interação por fala, leitura de respostas e experiências de estudo mais imersivas.
+    pytest -q
 
-## Estrutura-alvo do projeto
+Use `.env.example` como referência de configuração e nunca versione `.env`.
 
-```text
-APEX/
-├── frontend/
-├── backend/
-├── core/
-├── content/
-├── data/
-├── infra/
-├── tests/
-└── docs/
+## Próxima fase
+
+O cérebro pedagógico do APEX será desenvolvido com controle de novidade, estado do aluno, verificação de compreensão, recuperação de conhecimentos, revisão espaçada e redução progressiva de ajuda.
+
+Depois serão adicionadas experiências de formação profissional, incluindo projetos, debugging, manutenção de código, Git, testes, APIs, bancos de dados, refatoração, code review, logs, deploy e problemas realistas.
+
+A meta é desenvolver autonomia técnica, não dependência do tutor.
+
+## Documentação
+
+Arquitetura técnica: `docs/ARCHITECTURE.md`
+
+Direção visual: `docs/DESIGN_SYSTEM.md`
+
+Materiais históricos: `docs/legacy/`
+
+## Status
+
+**Fundação técnica:** concluída.
+
+**Próxima etapa:** TutorCore pedagógico e sistema adaptativo de aprendizagem.
