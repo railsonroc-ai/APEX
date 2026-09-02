@@ -19,3 +19,74 @@ def test_review_request_moves_to_reencounter():
 def test_reexplain_request_moves_to_understanding():
     changes = LearnerStateTransition.from_signals({"difficulty_count": 0}, {"reexplain_request"})
     assert changes == {"stage": "compreender"}
+
+
+def test_demonstrated_evidence_advances_learning():
+    state = {"mastery": 0.5, "difficulty_count": 1}
+    evidence = {
+        "outcome": "demonstrated",
+        "confidence": 0.9,
+        "evidence": "Explicou corretamente.",
+    }
+    result = LearnerStateTransition.from_evidence(state, evidence)
+    assert result == {
+        "mastery": 0.7,
+        "difficulty_count": 0,
+        "stage": "fixar",
+        "last_evidence": "Explicou corretamente.",
+    }
+
+
+def test_partial_evidence_keeps_testing():
+    state = {"mastery": 0.5, "difficulty_count": 1}
+    evidence = {
+        "outcome": "partial",
+        "confidence": 0.8,
+        "evidence": "Acertou parte da explicação.",
+    }
+    result = LearnerStateTransition.from_evidence(state, evidence)
+    assert result == {
+        "mastery": 0.55,
+        "stage": "testar",
+        "last_evidence": "Acertou parte da explicação.",
+    }
+
+
+def test_misconception_evidence_triggers_correction():
+    state = {"mastery": 0.5, "difficulty_count": 1}
+    evidence = {
+        "outcome": "misconception",
+        "confidence": 0.9,
+        "evidence": "Confundiu variável com valor fixo.",
+    }
+    result = LearnerStateTransition.from_evidence(state, evidence)
+    assert result == {
+        "mastery": 0.4,
+        "difficulty_count": 2,
+        "stage": "corrigir",
+        "last_evidence": "Confundiu variável com valor fixo.",
+    }
+
+
+def test_insufficient_evidence_only_records_evidence():
+    state = {"mastery": 0.5, "difficulty_count": 1, "stage": "testar"}
+    evidence = {
+        "outcome": "insufficient",
+        "confidence": 0.8,
+        "evidence": "A resposta não demonstrou conhecimento suficiente.",
+    }
+    result = LearnerStateTransition.from_evidence(state, evidence)
+    assert result == {
+        "last_evidence": "A resposta não demonstrou conhecimento suficiente.",
+    }
+
+
+def test_low_confidence_evidence_does_not_change_state():
+    state = {"mastery": 0.5, "difficulty_count": 1, "stage": "testar"}
+    evidence = {
+        "outcome": "demonstrated",
+        "confidence": 0.6,
+        "evidence": "Resposta aparentemente correta.",
+    }
+    result = LearnerStateTransition.from_evidence(state, evidence)
+    assert result == {}

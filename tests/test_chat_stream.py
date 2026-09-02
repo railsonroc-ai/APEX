@@ -197,3 +197,65 @@ def test_identified_concept_updates_state_before_policy(monkeypatch):
     assert response.status_code == 200
     assert captured["changes"] == {"current_concept": "variáveis"}
     assert captured["policy_state"] == updated_state
+
+
+def test_semantic_evidence_updates_state_before_policy(monkeypatch):
+    from types import SimpleNamespace
+    initial_state = {"area": "ads", "current_concept": "variáveis", "stage": "testar", "last_evidence": None, "difficulty_count": 1, "mastery": 0.5, "updated_at": None}
+    updated_state = {**initial_state, "stage": "fixar", "last_evidence": "Explicou corretamente.", "difficulty_count": 0, "mastery": 0.7}
+    captured = {}
+    monkeypatch.setattr(app_module, "verify_auth", lambda: True)
+    monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial_state)
+
+    def fake_update(area, **changes):
+        captured["changes"] = changes
+        return updated_state
+
+    def fake_choose_action(state):
+        captured["policy_state"] = state
+        return "consolidar"
+
+    monkeypatch.setattr(app_module.LearnerState, "update", fake_update)
+    monkeypatch.setattr(app_module.TeachingPolicy, "choose_action", fake_choose_action)
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            if kwargs.get("stream") is False:
+                content = "{\"outcome\":\"demonstrated\",\"confidence\":0.9,\"evidence\":\"Explicou corretamente.\"}"
+                message = SimpleNamespace(content=content)
+                return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+            return []
+
+    class FakeChat:
+        completions = FakeCompletions()
+
+    class FakeGroq:
+        def __init__(self, **kwargs):
+            self.chat = FakeChat()
+
+    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+
+    history = [{
+        "role": "assistant",
+        "content": "Explique o que é uma variável.",
+    }]
+    client = app_module.app.test_client()
+    response = client.post(
+        "/chat/stream",
+        json={
+            "message": "É um espaço usado para guardar um valor.",
+            "history": history,
+            "area": "ads",
+        },
+    )
+    response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert captured["changes"] == {
+        "mastery": 0.7,
+        "difficulty_count": 0,
+        "stage": "fixar",
+        "last_evidence": "Explicou corretamente.",
+    }
+    assert captured["policy_state"] == updated_state

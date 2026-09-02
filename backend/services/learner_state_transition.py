@@ -1,4 +1,5 @@
 from backend.services.learner_signals import LearnerSignals
+from backend.services.evidence_evaluator import EvidenceEvaluator
 
 
 class LearnerStateTransition:
@@ -43,3 +44,56 @@ class LearnerStateTransition:
             changes["stage"] = "compreender"
 
         return changes
+
+    @classmethod
+    def from_evidence(cls, state, evidence):
+        if not isinstance(state, dict) or not isinstance(evidence, dict):
+            return {}
+        outcome = evidence.get("outcome")
+        if outcome not in EvidenceEvaluator.VALID_OUTCOMES:
+            return {}
+        try:
+            confidence = float(evidence.get("confidence"))
+        except (TypeError, ValueError):
+            return {}
+        if confidence < EvidenceEvaluator.MIN_CONFIDENCE:
+            return {}
+
+        try:
+            mastery = min(1.0, max(0.0, float(state.get("mastery", 0.0))))
+        except (TypeError, ValueError):
+            mastery = 0.0
+        try:
+            difficulty = max(0, int(state.get("difficulty_count", 0)))
+        except (TypeError, ValueError):
+            difficulty = 0
+
+        if outcome == EvidenceEvaluator.INSUFFICIENT:
+            return {
+                "last_evidence": evidence.get("evidence") or outcome,
+            }
+
+        if outcome == EvidenceEvaluator.MISCONCEPTION:
+            return {
+                "mastery": max(0.0, mastery - 0.10),
+                "difficulty_count": difficulty + 1,
+                "stage": "corrigir",
+                "last_evidence": evidence.get("evidence") or outcome,
+            }
+
+        if outcome == EvidenceEvaluator.PARTIAL:
+            return {
+                "mastery": min(1.0, mastery + 0.05),
+                "stage": "testar",
+                "last_evidence": evidence.get("evidence") or outcome,
+            }
+
+        if outcome == EvidenceEvaluator.DEMONSTRATED:
+            return {
+                "mastery": min(1.0, mastery + 0.20),
+                "difficulty_count": max(0, difficulty - 1),
+                "stage": "fixar",
+                "last_evidence": evidence.get("evidence") or outcome,
+            }
+
+        return {}

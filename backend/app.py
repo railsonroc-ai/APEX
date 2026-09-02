@@ -38,6 +38,7 @@ from backend.services.teaching_policy import TeachingPolicy
 from backend.services.learner_signals import LearnerSignals
 from backend.services.learner_state_transition import LearnerStateTransition
 from backend.services.concept_tracker import ConceptTracker
+from backend.services.evidence_evaluator import EvidenceEvaluator
 
 
 # ============================================================
@@ -275,6 +276,58 @@ def chat_stream():
                     learner_state = LearnerState.update(
                         area, current_concept=resolved_concept
                     )
+
+            evidence_evaluation = EvidenceEvaluator.build_evaluation(
+                user_message, history, learner_state
+            )
+
+            evidence_messages = None
+            if evidence_evaluation:
+                evidence_messages = EvidenceEvaluator.build_evaluation_messages(
+                    evidence_evaluation
+                )
+
+            evidence_response = None
+            if evidence_messages:
+                try:
+                    evidence_response = client.chat.completions.create(
+                        messages=evidence_messages,
+                        model=GROQ_MODEL,
+                        stream=False,
+                    )
+                except Exception:
+                    app.logger.exception(
+                        "Falha na avaliacao semantica da evidencia"
+                    )
+
+            evidence_response = None
+            if evidence_messages:
+                try:
+                    evidence_response = client.chat.completions.create(
+                        messages=evidence_messages,
+                        model=GROQ_MODEL,
+                        stream=False,
+                    )
+                except Exception:
+                    app.logger.exception(
+                        "Falha na avaliacao semantica da evidencia"
+                    )
+
+            semantic_evidence = None
+            if evidence_response:
+                try:
+                    content = evidence_response.choices[0].message.content
+                    semantic_evidence = EvidenceEvaluator.parse_evaluation_response(
+                        content
+                    )
+                except (AttributeError, IndexError, TypeError):
+                    semantic_evidence = None
+
+            evidence_changes = LearnerStateTransition.from_evidence(
+                learner_state, semantic_evidence
+            )
+            if evidence_changes:
+                learner_state = LearnerState.update(area, **evidence_changes)
 
             signals = LearnerSignals.detect(user_message)
             state_changes = LearnerStateTransition.from_signals(learner_state, signals)
