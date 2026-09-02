@@ -36,3 +36,28 @@ def test_without_previous_tutor_message_is_not_evaluated():
     history = [{"role": "user", "content": "Quero estudar variáveis."}]
     result = EvidenceEvaluator.build_evaluation("Uma variável guarda um valor.", history, state)
     assert result is None
+
+
+def test_parses_semantic_evaluation_response():
+    valid = "{\"outcome\":\"demonstrated\",\"confidence\":0.9,\"evidence\":\"Explicou corretamente.\"}"
+    result = EvidenceEvaluator.parse_evaluation_response(valid)
+    assert result == {"outcome": "demonstrated", "confidence": 0.9, "evidence": "Explicou corretamente."}
+    assert EvidenceEvaluator.parse_evaluation_response("{\"outcome\":\"inventado\",\"confidence\":0.9}") is None
+    assert EvidenceEvaluator.parse_evaluation_response("{\"outcome\":\"partial\",\"confidence\":1.5}") is None
+    assert EvidenceEvaluator.parse_evaluation_response("resposta inválida") is None
+
+
+
+
+def test_builds_semantic_evaluation_messages():
+    evaluation = {
+        "concept": "variáveis",
+        "stage": "testar",
+        "tutor_message": "Explique o que é uma variável.",
+        "student_answer": "É um espaço usado para guardar um valor.",
+    }
+    result = EvidenceEvaluator.build_evaluation_messages(evaluation)
+    assert len(result) == 2
+    assert result[0]["role"] == "system"
+    assert result[1]["role"] == "user"
+    assert "Conceito: variáveis" in result[1]["content"]
