@@ -37,6 +37,7 @@ from backend.services.learner_state import LearnerState
 from backend.services.teaching_policy import TeachingPolicy
 from backend.services.learner_signals import LearnerSignals
 from backend.services.learner_state_transition import LearnerStateTransition
+from backend.services.concept_tracker import ConceptTracker
 
 
 # ============================================================
@@ -234,6 +235,47 @@ def chat_stream():
             )
 
             learner_state = LearnerState.get(area)
+            tracking_request = ConceptTracker.build_tracking_request(
+                user_message, learner_state, area
+            )
+            identification_messages = None
+            if tracking_request:
+                identification_messages = ConceptTracker.build_identification_messages(
+                    tracking_request
+                )
+
+            identification_response = None
+            if identification_messages:
+                try:
+                    identification_response = client.chat.completions.create(
+                        messages=identification_messages,
+                        model=GROQ_MODEL,
+                        stream=False,
+                    )
+                except Exception:
+                    app.logger.exception(
+                        "Falha na identificacao semantica do conceito"
+                    )
+
+            identified_concept = None
+            if identification_response:
+                try:
+                    content = identification_response.choices[0].message.content
+                    identified_concept = ConceptTracker.parse_identification_response(
+                        content
+                    )
+                except (AttributeError, IndexError, TypeError):
+                    identified_concept = None
+
+            if identified_concept:
+                resolved_concept = ConceptTracker.resolve_candidate(
+                    learner_state, identified_concept
+                )
+                if resolved_concept:
+                    learner_state = LearnerState.update(
+                        area, current_concept=resolved_concept
+                    )
+
             signals = LearnerSignals.detect(user_message)
             state_changes = LearnerStateTransition.from_signals(learner_state, signals)
             if state_changes:
