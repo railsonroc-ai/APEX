@@ -33,6 +33,8 @@ from backend.database import (
 from backend.security import verify_auth
 
 from backend.services.tutor_core import TutorCore
+from backend.services.learner_state import LearnerState
+from backend.services.teaching_policy import TeachingPolicy
 
 
 # ============================================================
@@ -229,11 +231,16 @@ def chat_stream():
                 timeout=AI_DIALOG_TIMEOUT_SECONDS,
             )
 
+            learner_state = LearnerState.get(area)
+            teaching_action = TeachingPolicy.choose_action(learner_state)
+
             messages = (
                 TutorCore.build_messages(
                     user_message,
                     history,
                     area=area,
+                    learner_state=learner_state,
+                    teaching_action=teaching_action,
                 )
             )
 
