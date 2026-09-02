@@ -1,45 +1,45 @@
 # Backend APEX
 
-## Objetivo
+O diretório `backend` contém a aplicação Flask e os serviços centrais do APEX.
 
-O diretório `backend` concentra a lógica de aplicação do APEX 3.0.
+## Componentes
 
-## Responsabilidades
+- `app.py` — rotas HTTP, SSE e orquestração.
+- `config.py` — variáveis de ambiente, caminhos e limites.
+- `database.py` — conexões e inicialização do SQLite.
+- `security.py` — autenticação por `X-Apex-Key`.
+- `prompts/tutor.py` — prompt pedagógico do tutor.
+- `services/tutor_core.py` — preparação e proteção do contexto.
+- `templates/index.html` — interface principal.
+- `static/js/chat-engine.js` — estado da conversa e interface.
+- `static/js/apex-api.js` — HTTP, autenticação, notas e SSE.
+- `static/js/apex-tts.js` — síntese de voz no navegador.
 
-O backend será responsável por:
+## Rotas atuais
 
-- expor APIs do sistema
-- processar solicitações do frontend
-- integrar tutor, conteúdo e progresso
-- controlar execução segura no Code Lab
-- centralizar regras de negócio
+- `/` — interface principal.
+- `/health` — verifica Flask e SQLite.
+- `/chat/stream` — conversa com o tutor via SSE.
+- `/api/notes` — salva notas no SQLite.
 
-## Áreas principais
+## TutorCore
 
-### 1. Tutor API
-Responsável por:
-- receber perguntas do usuário
-- encaminhar contexto ao tutor
-- devolver respostas estruturadas
+Atualmente o TutorCore aplica o prompt do tutor, adiciona contexto da área, filtra o histórico, bloqueia injeção de mensagens `system`, limita o contexto e garante que a pergunta atual seja adicionada uma única vez.
 
-### 2. Code Execution
-Responsável por:
-- executar código com segurança
-- retornar saídas e erros
-- limitar ambiente de execução
+A próxima grande fase será evoluir essa camada para o sistema pedagógico adaptativo do APEX.
 
-### 3. Progress Service
-Responsável por:
-- registrar evolução do aluno
-- salvar lições concluídas
-- acompanhar dificuldades recorrentes
+## Testes
 
-### 4. Content Delivery
-Responsável por:
-- entregar módulos e lições
-- estruturar trilhas
-- integrar conteúdo ao tutor
+Os testes ficam em `tests/`.
 
-## Direção inicial
+Execute:
 
-Durante a reorganização do APEX 3.0, o backend será preparado para receber a lógica que hoje ainda está espalhada em arquivos soltos na raiz do projeto.
+    pytest -q
+
+## Produção
+
+O servidor de produção utiliza Gunicorn através de `start_apex.sh`.
+
+Valide a configuração com:
+
+    gunicorn backend.app:app --check-config
