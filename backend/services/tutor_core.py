@@ -65,7 +65,7 @@ class TutorCore:
         return normalized
 
     @classmethod
-    def build_system_message(cls, area):
+    def build_system_message(cls, area, learner_state=None, teaching_action=None):
         """
         Combina o prompt pedagógico principal
         com o contexto da área atual.
@@ -79,10 +79,24 @@ class TutorCore:
             normalized_area
         ]
 
+        pedagogical_context = ""
+        if isinstance(learner_state, dict):
+            pedagogical_context = (
+                "ESTADO PEDAGÓGICO ATUAL:\n"
+                f"Conceito: {learner_state.get('current_concept') or 'não definido'}\n"
+                f"Etapa: {learner_state.get('stage', 'compreender')}\n"
+                f"Domínio: {learner_state.get('mastery', 0.0)}\n"
+                f"Dificuldades: {learner_state.get('difficulty_count', 0)}\n"
+            )
+
+        if teaching_action:
+            pedagogical_context += f"Ação pedagógica prioritária: {teaching_action}.\n"
+
         return (
             f"{TUTOR_SYSTEM_PROMPT}\n\n"
             "CONTEXTO DA SESSÃO ATUAL:\n"
             f"{area_context}\n\n"
+            f"{pedagogical_context}\n"
             "Use a área apenas como contexto temático. "
             "Se o aluno fizer uma pergunta legítima fora "
             "dessa área, responda normalmente sem inventar "
@@ -95,6 +109,8 @@ class TutorCore:
         user_message,
         history=None,
         area="ads",
+        learner_state=None,
+        teaching_action=None,
     ):
         """
         Produz a lista final de mensagens
@@ -105,7 +121,9 @@ class TutorCore:
             {
                 "role": "system",
                 "content": cls.build_system_message(
-                    area
+                    area,
+                    learner_state=learner_state,
+                    teaching_action=teaching_action,
                 ),
             }
         ]

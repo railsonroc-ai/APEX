@@ -101,3 +101,11 @@ def test_history_is_limited():
         len(historical_messages)
         == TutorCore.MAX_HISTORY_MESSAGES
     )
+
+def test_pedagogical_context_is_added():
+    state = {"current_concept": "variáveis", "stage": "testar", "mastery": 0.5, "difficulty_count": 1}
+    messages = TutorCore.build_messages("teste", [], area="ads", learner_state=state, teaching_action="testar")
+    system = messages[0]["content"]
+    assert "ESTADO PEDAGÓGICO ATUAL:" in system
+    assert "Conceito: variáveis" in system
+    assert "Ação pedagógica prioritária: testar." in system
