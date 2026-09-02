@@ -1,65 +1,46 @@
-# APEX 3.0 - Arquitetura Inicial
+# Arquitetura do APEX
 
-## Visão Geral
+Este documento descreve a arquitetura técnica atualmente implementada.
 
-O APEX 3.0 é uma plataforma educacional adaptativa focada em estudos de Tecnologia da Informação.
-
-A arquitetura do sistema foi reorganizada para priorizar ensino, prática, acompanhamento de progresso e expansão modular, deixando a antiga automação operacional como infraestrutura secundária.
-
-## Objetivos da Arquitetura
-
-- Tornar o projeto mais limpo e modular
-- Facilitar manutenção e evolução do produto
-- Separar claramente produto, infraestrutura e legado
-- Preparar a base para tutor inteligente, Code Lab e progresso adaptativo
-
-## Módulos Principais
-
-### 1. Tutor Inteligente
-Responsável por:
-- explicar conteúdos
-- responder dúvidas
-- orientar trilhas de estudo
-- adaptar o fluxo de aprendizagem
-
-### 2. Code Lab
-Responsável por:
-- editar código
-- executar Python e JavaScript com segurança
-- fornecer feedback sobre erros e resultados
-- integrar prática com explicação
-
-### 3. Progresso
-Responsável por:
-- armazenar evolução do aluno
-- registrar lições concluídas
-- mapear erros recorrentes
-- sugerir próximos passos
-
-### 4. Core APEX
-Responsável por:
-- memória
-- configuração
-- integração entre módulos
-- orquestração interna
-- agentes e serviços centrais
-
-### 5. Voz
-Responsável por:
-- entrada por voz
-- saída por voz
-- experiências imersivas
-- acessibilidade e interação natural
-
-## Estrutura-alvo
+## Fluxo principal
 
 ```text
-APEX/
-├── frontend/
-├── backend/
-├── core/
-├── content/
-├── data/
-├── infra/
-├── tests/
-└── docs/
+Navegador -> JS -> Flask -> TutorCore -> Groq
+                  \-> SQLite
+```
+
+## Backend
+
+- `app.py`: rotas HTTP, SSE e orquestração.
+- `config.py`: ambiente, caminhos, limites e timeout.
+- `security.py`: autenticação por `X-Apex-Key`.
+- `database.py`: SQLite e configuração das conexões.
+
+## Tutor
+
+- `services/tutor_core.py`: prepara e protege o contexto enviado ao modelo.
+- `prompts/tutor.py`: contém as regras pedagógicas atuais.
+
+## Frontend
+
+- `chat-engine.js`: conversa e interface.
+- `apex-api.js`: HTTP, autenticação, notas e SSE.
+- `apex-tts.js`: síntese de voz.
+- `index.html`: página principal.
+
+## Persistência
+
+O SQLite atual usa `data/apex.db`.
+Hoje ele armazena notas; estado pedagógico e progresso serão adicionados depois.
+
+## Produção e testes
+
+Produção: Gunicorn via `start_apex.sh`.
+
+Testes: `pytest -q`.
+
+A fundação técnica foi validada com 19 testes.
+
+## Próxima fase
+
+A próxima evolução será o sistema pedagógico adaptativo: estado do aluno, controle de novidade, política de ensino, recuperação, revisão e progresso.
