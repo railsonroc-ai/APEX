@@ -35,6 +35,8 @@ from backend.security import verify_auth
 from backend.services.tutor_core import TutorCore
 from backend.services.learner_state import LearnerState
 from backend.services.teaching_policy import TeachingPolicy
+from backend.services.learner_signals import LearnerSignals
+from backend.services.learner_state_transition import LearnerStateTransition
 
 
 # ============================================================
@@ -232,6 +234,10 @@ def chat_stream():
             )
 
             learner_state = LearnerState.get(area)
+            signals = LearnerSignals.detect(user_message)
+            state_changes = LearnerStateTransition.from_signals(learner_state, signals)
+            if state_changes:
+                learner_state = LearnerState.update(area, **state_changes)
             teaching_action = TeachingPolicy.choose_action(learner_state)
 
             messages = (

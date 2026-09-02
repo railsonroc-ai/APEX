@@ -107,3 +107,44 @@ def test_chat_uses_pedagogical_state(monkeypatch):
     assert response.status_code == 200
     assert captured["learner_state"] == state
     assert captured["teaching_action"] == "testar"
+
+
+def test_difficulty_signal_updates_state_before_policy(monkeypatch):
+    initial_state = {"area": "ads", "current_concept": "variáveis", "stage": "compreender", "last_evidence": None, "difficulty_count": 0, "mastery": 0.2, "updated_at": None}
+    updated_state = {**initial_state, "stage": "corrigir", "difficulty_count": 1}
+    captured = {}
+    monkeypatch.setattr(app_module, "verify_auth", lambda: True)
+    monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial_state)
+
+    def fake_update(area, **changes):
+        captured["changes"] = changes
+        return updated_state
+
+    def fake_choose_action(state):
+        captured["policy_state"] = state
+        return "corrigir"
+
+    monkeypatch.setattr(app_module.LearnerState, "update", fake_update)
+    monkeypatch.setattr(app_module.TeachingPolicy, "choose_action", fake_choose_action)
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            return []
+
+    class FakeChat:
+        completions = FakeCompletions()
+
+    class FakeGroq:
+        def __init__(self, **kwargs):
+            self.chat = FakeChat()
+
+    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+
+    client = app_module.app.test_client()
+    response = client.post("/chat/stream", json={"message": "Não entendi", "history": [], "area": "ads"})
+    response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert captured["changes"] == {"difficulty_count": 1, "stage": "corrigir"}
+    assert captured["policy_state"] == updated_state
