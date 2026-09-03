@@ -217,6 +217,15 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
         return "consolidar"
 
     monkeypatch.setattr(app_module.LearnerState, "update", fake_update)
+    monkeypatch.setattr(
+        app_module.ConceptProgress,
+        "update",
+        lambda area, concept, **changes: {
+            "area": area,
+            "concept": concept,
+            **changes,
+        },
+    )
     monkeypatch.setattr(app_module.TeachingPolicy, "choose_action", fake_choose_action)
 
     class FakeCompletions:
@@ -259,3 +268,66 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
         "last_evidence": "Explicou corretamente.",
     }
     assert captured["policy_state"] == updated_state
+
+def test_completed_concept_schedules_review(monkeypatch):
+    from types import SimpleNamespace
+
+    initial = {
+        "area": "ads", "current_concept": "variáveis",
+        "stage": "fixar", "last_evidence": None,
+        "difficulty_count": 0, "mastery": 0.7, "updated_at": None,
+    }
+    completed = {
+        **initial, "stage": "concluido",
+        "mastery": 0.9, "last_evidence": "Aplicou sem ajuda.",
+    }
+    captured = {"progress": []}
+
+    monkeypatch.setattr(app_module, "verify_auth", lambda: True)
+    monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial)
+    monkeypatch.setattr(app_module.LearnerState, "update", lambda area, **changes: completed)
+
+    def fake_progress(area, concept, **changes):
+        captured["progress"].append(changes)
+        return {"area": area, "concept": concept, **changes}
+
+    monkeypatch.setattr(app_module.ConceptProgress, "update", fake_progress)
+    monkeypatch.setattr(
+        app_module.ReviewScheduler,
+        "schedule",
+        lambda progress: {"next_review_at": "2026-09-04T12:00:00+00:00"},
+    )
+    monkeypatch.setattr(app_module.TeachingPolicy, "choose_action", lambda state: "avancar")
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            if kwargs.get("stream") is False:
+                content = '{"outcome":"demonstrated","confidence":0.9,"evidence":"Aplicou sem ajuda."}'
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(
+                        message=SimpleNamespace(content=content)
+                    )]
+                )
+            return []
+
+    class FakeGroq:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+
+    response = app_module.app.test_client().post(
+        "/chat/stream",
+        json={
+            "message": "Resolvi corretamente.",
+            "history": [{"role": "assistant", "content": "Aplique o conceito."}],
+            "area": "ads",
+        },
+    )
+    response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert captured["progress"][-1] == {
+        "next_review_at": "2026-09-04T12:00:00+00:00"
+    }

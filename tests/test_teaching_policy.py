@@ -18,3 +18,7 @@ def test_high_mastery_prioritizes_consolidation():
 def test_reencounter_stage_maps_to_review():
     state = {"stage": "reencontrar", "difficulty_count": 0, "mastery": 0.6}
     assert TeachingPolicy.choose_action(state) == "revisar"
+
+def test_completed_stage_maps_to_advance():
+    state = {"stage": "concluido", "difficulty_count": 0, "mastery": 0.9}
+    assert TeachingPolicy.choose_action(state) == "avancar"

@@ -62,3 +62,19 @@ def test_invalid_values_are_normalized(monkeypatch, tmp_path):
     assert state["stage"] == "compreender"
     assert state["difficulty_count"] == 0
     assert state["mastery"] == 1.0
+
+def test_completed_stage_is_persisted(monkeypatch, tmp_path):
+    path = tmp_path / "learner-completed.db"
+    create_learner_database(path)
+    use_test_database(monkeypatch, path)
+
+    state = LearnerState.update(
+        "ads",
+        current_concept="variáveis",
+        stage="concluido",
+        mastery=0.9,
+    )
+
+    assert state["stage"] == "concluido"
+    assert state["current_concept"] == "variáveis"
+    assert state["mastery"] == 0.9

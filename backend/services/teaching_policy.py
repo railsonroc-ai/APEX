@@ -6,6 +6,7 @@ class TeachingPolicy:
         "testar": "testar",
         "corrigir": "corrigir",
         "fixar": "consolidar",
+        "concluido": "avancar",
         "reencontrar": "revisar",
     }
 

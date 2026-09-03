@@ -3,7 +3,7 @@ from backend.database import get_db_connection
 
 class LearnerState:
     ALLOWED_AREAS = {"ads", "it"}
-    ALLOWED_STAGES = {"ler", "compreender", "explicar", "testar", "corrigir", "fixar", "reencontrar"}
+    ALLOWED_STAGES = {"ler", "compreender", "explicar", "testar", "corrigir", "fixar", "concluido", "reencontrar"}
 
     @classmethod
     def normalize_area(cls, area):
