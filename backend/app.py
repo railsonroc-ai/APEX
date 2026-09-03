@@ -42,6 +42,7 @@ from backend.services.evidence_evaluator import EvidenceEvaluator
 from backend.services.concept_progress import ConceptProgress
 from backend.services.review_scheduler import ReviewScheduler
 from backend.services.concept_activation import ConceptActivation
+from backend.services.review_lifecycle import ReviewLifecycle
 
 
 # ============================================================
@@ -331,6 +332,20 @@ def chat_stream():
                     )
 
                     if (
+                        previous_stage == "reencontrar"
+                        and semantic_evidence
+                        and semantic_evidence.get("outcome")
+                        == EvidenceEvaluator.DEMONSTRATED
+                    ):
+                        review_result = ReviewLifecycle.complete_due(
+                            area,
+                            current_concept,
+                            learner_state,
+                        )
+                        if review_result:
+                            learner_state = review_result["state"]
+
+                    elif (
                         previous_stage != "concluido"
                         and learner_state.get("stage") == "concluido"
                     ):
@@ -343,6 +358,12 @@ def chat_stream():
                             )
 
             signals = LearnerSignals.detect(user_message)
+
+            if LearnerSignals.REVIEW_REQUEST in signals:
+                due_review_state = ReviewLifecycle.activate_due(area)
+                if due_review_state:
+                    learner_state = due_review_state
+
             state_changes = LearnerStateTransition.from_signals(learner_state, signals)
             if state_changes:
                 learner_state = LearnerState.update(area, **state_changes)
