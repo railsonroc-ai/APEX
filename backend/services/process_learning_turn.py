@@ -1,3 +1,4 @@
+from backend.database import transaction
 from backend.services.concept_activation import ConceptActivation
 from backend.services.concept_progress import ConceptProgress
 from backend.services.concept_tracker import ConceptTracker
@@ -36,6 +37,22 @@ class ProcessLearningTurn:
 
     @classmethod
     def finalize(
+        cls,
+        area,
+        user_message,
+        learner_state,
+        semantic_evidence,
+    ):
+        with transaction():
+            return cls._finalize(
+                area,
+                user_message,
+                learner_state,
+                semantic_evidence,
+            )
+
+    @classmethod
+    def _finalize(
         cls,
         area,
         user_message,
