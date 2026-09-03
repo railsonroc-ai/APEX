@@ -43,6 +43,7 @@ from backend.services.concept_progress import ConceptProgress
 from backend.services.review_scheduler import ReviewScheduler
 from backend.services.concept_activation import ConceptActivation
 from backend.services.review_lifecycle import ReviewLifecycle
+from backend.services.process_learning_turn import ProcessLearningTurn
 
 
 # ============================================================
@@ -272,14 +273,11 @@ def chat_stream():
                 except (AttributeError, IndexError, TypeError):
                     identified_concept = None
 
-            if identified_concept:
-                resolved_concept = ConceptTracker.resolve_candidate(
-                    learner_state, identified_concept
-                )
-                if resolved_concept:
-                    learner_state = ConceptActivation.activate(
-                        area, resolved_concept
-                    )
+            learner_state = ProcessLearningTurn.activate_identified_concept(
+                area,
+                learner_state,
+                identified_concept,
+            )
 
             evidence_evaluation = EvidenceEvaluator.build_evaluation(
                 user_message, history, learner_state
@@ -314,60 +312,14 @@ def chat_stream():
                 except (AttributeError, IndexError, TypeError):
                     semantic_evidence = None
 
-            evidence_changes = LearnerStateTransition.from_evidence(
-                learner_state, semantic_evidence
+            turn_result = ProcessLearningTurn.finalize(
+                area,
+                user_message,
+                learner_state,
+                semantic_evidence,
             )
-            if evidence_changes:
-                previous_stage = learner_state.get("stage")
-                learner_state = LearnerState.update(area, **evidence_changes)
-
-                current_concept = learner_state.get("current_concept")
-                if current_concept:
-                    concept_progress = ConceptProgress.update(
-                        area,
-                        current_concept,
-                        mastery=learner_state.get("mastery"),
-                        difficulty_count=learner_state.get("difficulty_count"),
-                        last_evidence=learner_state.get("last_evidence"),
-                    )
-
-                    if (
-                        previous_stage == "reencontrar"
-                        and semantic_evidence
-                        and semantic_evidence.get("outcome")
-                        == EvidenceEvaluator.DEMONSTRATED
-                    ):
-                        review_result = ReviewLifecycle.complete_due(
-                            area,
-                            current_concept,
-                            learner_state,
-                        )
-                        if review_result:
-                            learner_state = review_result["state"]
-
-                    elif (
-                        previous_stage != "concluido"
-                        and learner_state.get("stage") == "concluido"
-                    ):
-                        review_schedule = ReviewScheduler.schedule(concept_progress)
-                        if review_schedule:
-                            ConceptProgress.update(
-                                area,
-                                current_concept,
-                                **review_schedule,
-                            )
-
-            signals = LearnerSignals.detect(user_message)
-
-            if LearnerSignals.REVIEW_REQUEST in signals:
-                due_review_state = ReviewLifecycle.activate_due(area)
-                if due_review_state:
-                    learner_state = due_review_state
-
-            state_changes = LearnerStateTransition.from_signals(learner_state, signals)
-            if state_changes:
-                learner_state = LearnerState.update(area, **state_changes)
-            teaching_action = TeachingPolicy.choose_action(learner_state)
+            learner_state = turn_result["learner_state"]
+            teaching_action = turn_result["teaching_action"]
 
             messages = (
                 TutorCore.build_messages(
