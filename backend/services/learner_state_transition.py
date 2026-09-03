@@ -92,7 +92,7 @@ class LearnerStateTransition:
             return {
                 "mastery": min(1.0, mastery + 0.20),
                 "difficulty_count": max(0, difficulty - 1),
-                "stage": "fixar",
+                "stage": "reencontrar" if state.get("stage") == "fixar" else "fixar",
                 "last_evidence": evidence.get("evidence") or outcome,
             }
 

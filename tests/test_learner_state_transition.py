@@ -90,3 +90,15 @@ def test_low_confidence_evidence_does_not_change_state():
     }
     result = LearnerStateTransition.from_evidence(state, evidence)
     assert result == {}
+
+
+def test_demonstrated_while_fixing_advances_to_reencounter():
+    state = {"stage": "fixar", "mastery": 0.7, "difficulty_count": 0}
+    evidence = {
+        "outcome": "demonstrated",
+        "confidence": 0.9,
+        "evidence": "Aplicou corretamente sem ajuda.",
+    }
+    result = LearnerStateTransition.from_evidence(state, evidence)
+    assert result["stage"] == "reencontrar"
+    assert round(result["mastery"], 2) == 0.9
