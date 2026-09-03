@@ -24,11 +24,17 @@ def test_without_current_concept_is_not_applicable():
     assert result is None
 
 
-def test_comprehension_stage_is_not_evaluated():
+def test_comprehension_stage_is_evaluated():
     state = {"current_concept": "variáveis", "stage": "compreender"}
-    history = [{"role": "assistant", "content": "Uma variável guarda um valor."}]
-    result = EvidenceEvaluator.build_evaluation("Certo, entendi.", history, state)
-    assert result is None
+    history = [{"role": "assistant", "content": "Explique com suas palavras o que é uma variável."}]
+    result = EvidenceEvaluator.build_evaluation(
+        "É um espaço usado para guardar um valor.",
+        history,
+        state,
+    )
+    assert result is not None
+    assert result["concept"] == "variáveis"
+    assert result["stage"] == "compreender"
 
 
 def test_without_previous_tutor_message_is_not_evaluated():

@@ -18,6 +18,7 @@ class EvidenceEvaluator:
     }
 
     EVALUATION_STAGES = {
+        "compreender",
         "explicar",
         "testar",
         "corrigir",
