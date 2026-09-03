@@ -862,8 +862,16 @@
   // ENVIAR MENSAGEM
   // ==========================================================
 
+  let sendingMessage = false;
+
+
   async function sendMessage() {
     if (!input) {
+      return;
+    }
+
+
+    if (sendingMessage) {
       return;
     }
 
@@ -931,11 +939,17 @@
     );
 
 
-    await streamChat(
-      text,
-      sendButton,
-      historyForRequest
-    );
+    sendingMessage = true;
+
+    try {
+      await streamChat(
+        text,
+        sendButton,
+        historyForRequest
+      );
+    } finally {
+      sendingMessage = false;
+    }
   }
 
 
