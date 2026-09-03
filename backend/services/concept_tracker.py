@@ -8,6 +8,8 @@ class ConceptTracker:
     def has_current_concept(state):
         if not isinstance(state, dict):
             return False
+        if state.get("stage") == "concluido":
+            return False
         concept = state.get("current_concept")
         return isinstance(concept, str) and bool(concept.strip())
 

@@ -48,3 +48,23 @@ def test_builds_identification_messages():
     assert result[1]["role"] == "user"
     assert "Área: ads" in result[1]["content"]
     assert "Quero aprender variáveis" in result[1]["content"]
+
+def test_completed_concept_allows_new_tracking():
+    state = {
+        "current_concept": "variáveis",
+        "stage": "concluido",
+    }
+
+    assert ConceptTracker.has_current_concept(state) is False
+    assert ConceptTracker.needs_tracking(state) is True
+
+    result = ConceptTracker.build_tracking_request(
+        "Quero aprender funções",
+        state,
+        "ads",
+    )
+
+    assert result == {
+        "area": "ads",
+        "student_message": "Quero aprender funções",
+    }
