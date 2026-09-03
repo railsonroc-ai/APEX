@@ -302,19 +302,6 @@ def chat_stream():
                         "Falha na avaliacao semantica da evidencia"
                     )
 
-            evidence_response = None
-            if evidence_messages:
-                try:
-                    evidence_response = client.chat.completions.create(
-                        messages=evidence_messages,
-                        model=GROQ_MODEL,
-                        stream=False,
-                    )
-                except Exception:
-                    app.logger.exception(
-                        "Falha na avaliacao semantica da evidencia"
-                    )
-
             semantic_evidence = None
             if evidence_response:
                 try:

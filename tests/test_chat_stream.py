@@ -203,7 +203,7 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
     from types import SimpleNamespace
     initial_state = {"area": "ads", "current_concept": "variáveis", "stage": "testar", "last_evidence": None, "difficulty_count": 1, "mastery": 0.5, "updated_at": None}
     updated_state = {**initial_state, "stage": "fixar", "last_evidence": "Explicou corretamente.", "difficulty_count": 0, "mastery": 0.7}
-    captured = {}
+    captured = {"evidence_calls": 0}
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
     monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial_state)
@@ -231,6 +231,7 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
     class FakeCompletions:
         def create(self, **kwargs):
             if kwargs.get("stream") is False:
+                captured["evidence_calls"] += 1
                 content = "{\"outcome\":\"demonstrated\",\"confidence\":0.9,\"evidence\":\"Explicou corretamente.\"}"
                 message = SimpleNamespace(content=content)
                 return SimpleNamespace(choices=[SimpleNamespace(message=message)])
@@ -268,6 +269,7 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
         "last_evidence": "Explicou corretamente.",
     }
     assert captured["policy_state"] == updated_state
+    assert captured["evidence_calls"] == 1
 
 def test_completed_concept_schedules_review(monkeypatch):
     from types import SimpleNamespace
