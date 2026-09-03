@@ -1,4 +1,6 @@
 import sqlite3
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from backend.config import (
     DATA_DIR,
@@ -7,22 +9,82 @@ from backend.config import (
     SQLITE_BUSY_TIMEOUT_MS,
 )
 
-def get_db_connection():
+
+_active_transaction = ContextVar(
+    "apex_database_transaction",
+    default=None,
+)
+
+
+class _TransactionConnectionProxy:
+    def __init__(self, connection):
+        self._connection = connection
+
+    def commit(self):
+        return None
+
+    def close(self):
+        return None
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+
+def _new_connection():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     connection = sqlite3.connect(
         str(DATABASE_PATH),
         timeout=SQLITE_TIMEOUT_SECONDS,
     )
     connection.row_factory = sqlite3.Row
-    connection.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}")
+    connection.execute(
+        f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}"
+    )
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA synchronous = NORMAL")
+
     return connection
+
+
+def get_db_connection():
+    active = _active_transaction.get()
+
+    if active is not None:
+        return _TransactionConnectionProxy(active)
+
+    return _new_connection()
+
+
+@contextmanager
+def transaction():
+    active = _active_transaction.get()
+
+    if active is not None:
+        yield _TransactionConnectionProxy(active)
+        return
+
+    connection = _new_connection()
+    token = _active_transaction.set(connection)
+
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        yield _TransactionConnectionProxy(connection)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        _active_transaction.reset(token)
+        connection.close()
+
 
 def init_database():
     connection = get_db_connection()
+
     try:
         connection.execute("PRAGMA journal_mode = WAL")
+
         connection.execute("""
             CREATE TABLE IF NOT EXISTS notes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +93,7 @@ def init_database():
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
         connection.execute("""
             CREATE TABLE IF NOT EXISTS learner_state (
                 area TEXT PRIMARY KEY,
