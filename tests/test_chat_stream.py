@@ -159,15 +159,15 @@ def test_identified_concept_updates_state_before_policy(monkeypatch):
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
     monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial_state)
 
-    def fake_update(area, **changes):
-        captured["changes"] = changes
+    def fake_activate(area, concept):
+        captured["activation"] = (area, concept)
         return updated_state
 
     def fake_choose_action(state):
         captured["policy_state"] = state
         return "explicar"
 
-    monkeypatch.setattr(app_module.LearnerState, "update", fake_update)
+    monkeypatch.setattr(app_module.ConceptActivation, "activate", fake_activate)
     monkeypatch.setattr(app_module.TeachingPolicy, "choose_action", fake_choose_action)
 
     class FakeCompletions:
@@ -195,7 +195,7 @@ def test_identified_concept_updates_state_before_policy(monkeypatch):
     response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert captured["changes"] == {"current_concept": "variáveis"}
+    assert captured["activation"] == ("ads", "variáveis")
     assert captured["policy_state"] == updated_state
 
 

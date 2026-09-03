@@ -41,6 +41,7 @@ from backend.services.concept_tracker import ConceptTracker
 from backend.services.evidence_evaluator import EvidenceEvaluator
 from backend.services.concept_progress import ConceptProgress
 from backend.services.review_scheduler import ReviewScheduler
+from backend.services.concept_activation import ConceptActivation
 
 
 # ============================================================
@@ -275,8 +276,8 @@ def chat_stream():
                     learner_state, identified_concept
                 )
                 if resolved_concept:
-                    learner_state = LearnerState.update(
-                        area, current_concept=resolved_concept
+                    learner_state = ConceptActivation.activate(
+                        area, resolved_concept
                     )
 
             evidence_evaluation = EvidenceEvaluator.build_evaluation(
