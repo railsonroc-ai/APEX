@@ -98,3 +98,30 @@ def test_invalid_progress_values_are_normalized(monkeypatch, tmp_path):
     assert state["mastery"] == 1.0
     assert state["difficulty_count"] == 0
     assert state["review_count"] == 0
+
+def test_list_scheduled_returns_only_scheduled_concepts(monkeypatch, tmp_path):
+    path = tmp_path / "concept-scheduled.db"
+    create_concept_progress_database(path)
+    use_test_database(monkeypatch, path)
+
+    ConceptProgress.update(
+        "ads",
+        "variáveis",
+        next_review_at="2026-09-04T12:00:00+00:00",
+    )
+    ConceptProgress.update(
+        "ads",
+        "condicionais",
+        next_review_at="2026-09-06T12:00:00+00:00",
+    )
+    ConceptProgress.update(
+        "ads",
+        "funções",
+    )
+
+    scheduled = ConceptProgress.list_scheduled("ads")
+
+    assert [item["concept"] for item in scheduled] == [
+        "variáveis",
+        "condicionais",
+    ]

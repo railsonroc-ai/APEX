@@ -114,3 +114,22 @@ class ConceptProgress:
             connection.close()
 
         return cls.get(area, concept)
+
+    @classmethod
+    def list_scheduled(cls, area):
+        area = cls.normalize_area(area)
+        connection = get_db_connection()
+        try:
+            rows = connection.execute(
+                """
+                SELECT * FROM concept_progress
+                WHERE area = ?
+                  AND next_review_at IS NOT NULL
+                ORDER BY next_review_at ASC
+                """,
+                (area,),
+            ).fetchall()
+
+            return [dict(row) for row in rows]
+        finally:
+            connection.close()
