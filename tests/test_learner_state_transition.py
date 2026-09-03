@@ -102,3 +102,16 @@ def test_demonstrated_while_fixing_completes_concept():
     result = LearnerStateTransition.from_evidence(state, evidence)
     assert result["stage"] == "concluido"
     assert round(result["mastery"], 2) == 0.9
+
+def test_fixing_below_mastery_threshold_does_not_complete():
+    state = {"stage": "fixar", "mastery": 0.2, "difficulty_count": 0}
+    evidence = {
+        "outcome": "demonstrated",
+        "confidence": 0.9,
+        "evidence": "Acertou novamente.",
+    }
+
+    result = LearnerStateTransition.from_evidence(state, evidence)
+
+    assert result["stage"] == "fixar"
+    assert round(result["mastery"], 2) == 0.4

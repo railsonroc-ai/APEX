@@ -3,6 +3,7 @@ from backend.services.evidence_evaluator import EvidenceEvaluator
 
 
 class LearnerStateTransition:
+    MIN_MASTERY_TO_COMPLETE = 0.80
     @classmethod
     def from_signals(cls, state, signals):
         if not isinstance(state, dict):
@@ -92,7 +93,7 @@ class LearnerStateTransition:
             return {
                 "mastery": min(1.0, mastery + 0.20),
                 "difficulty_count": max(0, difficulty - 1),
-                "stage": "concluido" if state.get("stage") == "fixar" else "fixar",
+                "stage": "concluido" if state.get("stage") == "fixar" and min(1.0, mastery + 0.20) >= cls.MIN_MASTERY_TO_COMPLETE else "fixar",
                 "last_evidence": evidence.get("evidence") or outcome,
             }
 
