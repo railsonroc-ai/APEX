@@ -43,6 +43,22 @@ def init_database():
             )
         """)
 
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS concept_progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                area TEXT NOT NULL,
+                concept TEXT NOT NULL,
+                mastery REAL NOT NULL DEFAULT 0.0,
+                difficulty_count INTEGER NOT NULL DEFAULT 0,
+                last_evidence TEXT,
+                review_count INTEGER NOT NULL DEFAULT 0,
+                next_review_at TEXT,
+                last_reviewed_at TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(area, concept)
+            )
+        """)
+
         connection.commit()
     finally:
         connection.close()
