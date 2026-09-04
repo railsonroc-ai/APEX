@@ -190,15 +190,7 @@
 
 
   function cleanText(text) {
-    return String(text || '')
-      .replace(
-        /\[\s*[^\]]{0,40}\s*\]/g,
-        ''
-      )
-      .replace(
-        /\\n/g,
-        '\n'
-      );
+    return String(text || '');
   }
 
 
