@@ -1358,6 +1358,208 @@ def create_assistance_events(connection):
     """)
 
 
+def create_learning_attempts_and_rubric_assessments(connection):
+    connection.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_turns_student_turn_v10
+        ON learning_turns (student_id, turn_id)
+    """)
+
+    connection.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_evidence_events_student_event_v10
+        ON evidence_events (student_id, event_id)
+    """)
+
+    connection.execute("""
+        CREATE TABLE learning_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            attempt_id TEXT NOT NULL UNIQUE,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            source_turn_id TEXT,
+            area TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            attempt_kind TEXT NOT NULL,
+            student_answer TEXT NOT NULL,
+            artifact_ref TEXT,
+            assistance_level TEXT NOT NULL,
+            policy_id TEXT NOT NULL,
+            policy_version INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(student_id, id, area),
+            FOREIGN KEY(student_id, turn_id)
+                REFERENCES learning_turns(student_id, turn_id),
+            FOREIGN KEY(student_id, source_turn_id)
+                REFERENCES learning_turns(student_id, turn_id),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            UNIQUE(student_id, turn_id),
+            CHECK(area IN ('ads', 'it')),
+            CHECK(stage IN (
+                'compreender',
+                'explicar',
+                'testar',
+                'corrigir',
+                'fixar',
+                'reencontrar'
+            )),
+            CHECK(attempt_kind IN (
+                'comprehension',
+                'explanation',
+                'practice',
+                'correction',
+                'consolidation',
+                'retention'
+            )),
+            CHECK(assistance_level IN (
+                'untracked',
+                'independent',
+                'light',
+                'guided',
+                'direct'
+            )),
+            CHECK(policy_version > 0)
+        )
+    """)
+
+    connection.execute("""
+        CREATE UNIQUE INDEX idx_learning_attempts_student_attempt
+        ON learning_attempts (student_id, attempt_id)
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_attempts_student_concept_created
+        ON learning_attempts (
+            student_id,
+            session_id,
+            area,
+            concept_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_attempts_source_turn
+        ON learning_attempts (
+            student_id,
+            source_turn_id
+        )
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER learning_attempts_no_update
+        BEFORE UPDATE ON learning_attempts
+        BEGIN
+            SELECT RAISE(ABORT, 'learning_attempts are immutable');
+        END
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER learning_attempts_no_delete
+        BEFORE DELETE ON learning_attempts
+        BEGIN
+            SELECT RAISE(ABORT, 'learning_attempts are immutable');
+        END
+    """)
+
+    connection.execute("""
+        CREATE TABLE rubric_assessments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id TEXT NOT NULL UNIQUE,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            attempt_id TEXT NOT NULL,
+            evidence_event_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            task_response TEXT NOT NULL,
+            conceptual_correctness TEXT NOT NULL,
+            understanding_application TEXT NOT NULL,
+            criteria_complete INTEGER NOT NULL,
+            outcome TEXT NOT NULL,
+            outcome_source TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            rubric_id TEXT NOT NULL,
+            rubric_version INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(student_id, id, area),
+            FOREIGN KEY(student_id, turn_id)
+                REFERENCES learning_turns(student_id, turn_id),
+            FOREIGN KEY(student_id, attempt_id)
+                REFERENCES learning_attempts(student_id, attempt_id),
+            FOREIGN KEY(student_id, evidence_event_id)
+                REFERENCES evidence_events(student_id, event_id),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            UNIQUE(student_id, turn_id),
+            UNIQUE(student_id, attempt_id),
+            UNIQUE(student_id, evidence_event_id),
+            CHECK(area IN ('ads', 'it')),
+            CHECK(task_response IN ('met', 'partial', 'not_met', 'unknown')),
+            CHECK(conceptual_correctness IN ('met', 'partial', 'not_met', 'unknown')),
+            CHECK(understanding_application IN ('met', 'partial', 'not_met', 'unknown')),
+            CHECK(criteria_complete IN (0, 1)),
+            CHECK(outcome IN (
+                'insufficient',
+                'partial',
+                'demonstrated',
+                'misconception'
+            )),
+            CHECK(outcome_source IN (
+                'rubric',
+                'legacy_outcome',
+                'rubric_incomplete'
+            )),
+            CHECK(confidence >= 0.0 AND confidence <= 1.0),
+            CHECK(rubric_version > 0)
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_rubric_assessments_student_concept_created
+        ON rubric_assessments (
+            student_id,
+            session_id,
+            area,
+            concept_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_rubric_assessments_rubric
+        ON rubric_assessments (
+            rubric_id,
+            rubric_version,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER rubric_assessments_no_update
+        BEFORE UPDATE ON rubric_assessments
+        BEGIN
+            SELECT RAISE(ABORT, 'rubric_assessments are immutable');
+        END
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER rubric_assessments_no_delete
+        BEFORE DELETE ON rubric_assessments
+        BEGIN
+            SELECT RAISE(ABORT, 'rubric_assessments are immutable');
+        END
+    """)
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -1403,6 +1605,11 @@ MIGRATIONS = (
         9,
         "create_assistance_events",
         create_assistance_events,
+    ),
+    Migration(
+        10,
+        "create_learning_attempts_and_rubric_assessments",
+        create_learning_attempts_and_rubric_assessments,
     ),
 )
 

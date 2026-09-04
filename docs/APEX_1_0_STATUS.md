@@ -16,7 +16,11 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 
 - `LearnerState`: estado pedagógico atual.
 - `LearnerStateTransition`: transições por sinais e evidências.
-- `EvidenceEvaluator`: avaliação semântica da resposta do aluno com rubrica versionada.
+- `EvidenceEvaluator`: coleta classificações por critério; o outcome final é derivado pelo backend.
+- `AttemptPolicy`: classifica a tentativa pelo estágio pedagógico confirmado.
+- `LearningAttempt`: ledger imutável da ação do aluno, separado do julgamento semântico.
+- `RubricPolicy`: rubrica v2 com critérios estáveis e derivação determinística do outcome.
+- `RubricAssessment`: ledger imutável dos critérios, completude e origem do outcome.
 - `EvidenceEvent`: ledger imutável das avaliações confirmadas, com contexto, confiança, assistência, versão da rubrica/política e mastery antes/depois.
 - `MasteryPolicy`: política versionada que impede conclusão apenas por score e exige portfólio mínimo de evidências.
 - `MasteryAssessment`: ledger imutável da decisão de domínio, contagens, diversidade, retenção observada e bloqueadores.
@@ -38,6 +42,8 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - persistência SQLite;
 - migrations de schema versionadas, atômicas e idempotentes;
 - ledger de evidências imutável, isolado por aluno e ligado ao turno confirmado;
+- tentativa e julgamento são entidades distintas: `learning_attempts` preserva a ação do aluno e `rubric_assessments` preserva os critérios usados para julgá-la;
+- a rubrica semântica v2 não aceita `demonstrated` como decisão global autoatribuída pela LLM: o backend deriva o outcome a partir de três critérios estruturados;
 - identidade estável de aluno e sessão, com migração dos registros legados para o aluno padrão;
 - transações atômicas no turno pedagógico;
 - rollback quando uma gravação falha;

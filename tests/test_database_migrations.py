@@ -22,6 +22,7 @@ EXPECTED_MIGRATIONS = [
     (7, "add_concept_catalog"),
     (8, "create_mastery_assessments"),
     (9, "create_assistance_events"),
+    (10, "create_learning_attempts_and_rubric_assessments"),
 ]
 
 
@@ -110,6 +111,8 @@ def test_new_database_applies_ordered_migrations(
         "concept_aliases",
         "mastery_assessments",
         "assistance_events",
+        "learning_attempts",
+        "rubric_assessments",
     }.issubset(tables)
 
     assert "concept_id" in turn_columns
@@ -644,7 +647,7 @@ def test_v5_database_receives_empty_evidence_ledger(
 
         assert total == 0
         assert turns == 1
-        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         assert connection.execute(
             "PRAGMA foreign_key_check"
         ).fetchall() == []
@@ -1026,7 +1029,7 @@ def test_v7_database_receives_empty_mastery_assessment_ledger(monkeypatch, tmp_p
         ).fetchone()[0]
         assert total == 0
         assert preserved_evidence == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1143,7 +1146,7 @@ def test_v8_database_receives_empty_assistance_ledger(monkeypatch, tmp_path):
         ).fetchone()[0]
         assert total == 0
         assert preserved_turn == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1205,5 +1208,127 @@ def test_assistance_migration_rolls_back_schema_and_version(monkeypatch, tmp_pat
         assert table is None
         assert trigger is None
         assert versions == [1, 2, 3, 4, 5, 6, 7, 8]
+    finally:
+        connection.close()
+
+
+def test_v9_database_receives_empty_attempt_and_rubric_ledgers(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="v9-to-v10.db")
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:9],
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO learning_turns (
+                student_id, session_id, turn_id, area,
+                user_message, assistant_message, concept_id
+            ) VALUES (
+                'student_default', 'session_default_ads', 'turn-v9-before-v10',
+                'ads', 'Pergunta', 'Resposta', 'ads.variables'
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations,
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        attempts = connection.execute(
+            "SELECT COUNT(*) FROM learning_attempts"
+        ).fetchone()[0]
+        rubrics = connection.execute(
+            "SELECT COUNT(*) FROM rubric_assessments"
+        ).fetchone()[0]
+        preserved_turn = connection.execute(
+            "SELECT COUNT(*) FROM learning_turns WHERE turn_id='turn-v9-before-v10'"
+        ).fetchone()[0]
+        versions = [
+            row["version"]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+
+        assert attempts == 0
+        assert rubrics == 0
+        assert preserved_turn == 1
+        assert versions == list(range(1, 11))
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_attempt_rubric_migration_rolls_back_schema_and_version(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="attempt-v10-rollback.db")
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:9],
+    )
+    database_module.init_database()
+
+    def failing(connection):
+        migrations_module.create_learning_attempts_and_rubric_assessments(connection)
+        raise RuntimeError("falha depois dos ledgers de tentativa/rubrica")
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:9]
+        + (
+            Migration(
+                10,
+                "create_learning_attempts_and_rubric_assessments",
+                failing,
+            ),
+        ),
+    )
+
+    with pytest.raises(MigrationError, match="Falha ao aplicar migração 10"):
+        database_module.init_database()
+
+    connection = connect(path)
+    try:
+        attempt_table = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='learning_attempts'
+            """
+        ).fetchone()
+        rubric_table = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='rubric_assessments'
+            """
+        ).fetchone()
+        versions = [
+            row["version"]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+
+        assert attempt_table is None
+        assert rubric_table is None
+        assert versions == list(range(1, 10))
     finally:
         connection.close()

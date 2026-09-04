@@ -46,11 +46,44 @@ def test_without_previous_tutor_message_is_not_evaluated():
 
 
 def test_parses_semantic_evaluation_response():
-    valid = "{\"outcome\":\"demonstrated\",\"confidence\":0.9,\"evidence\":\"Explicou corretamente.\"}"
+    valid = (
+        '{"criteria":{'
+        '"task_response":"met",'
+        '"conceptual_correctness":"met",'
+        '"understanding_application":"met"},'
+        '"confidence":0.9,'
+        '"evidence":"Explicou corretamente."}'
+    )
     result = EvidenceEvaluator.parse_evaluation_response(valid)
-    assert result == {"outcome": "demonstrated", "confidence": 0.9, "evidence": "Explicou corretamente."}
-    assert EvidenceEvaluator.parse_evaluation_response("{\"outcome\":\"inventado\",\"confidence\":0.9}") is None
-    assert EvidenceEvaluator.parse_evaluation_response("{\"outcome\":\"partial\",\"confidence\":1.5}") is None
+    assert result["outcome"] == "demonstrated"
+    assert result["confidence"] == 0.9
+    assert result["evidence"] == "Explicou corretamente."
+    assert result["rubric_complete"] is True
+    assert result["outcome_source"] == "rubric"
+    assert result["criteria"] == {
+        "task_response": "met",
+        "conceptual_correctness": "met",
+        "understanding_application": "met",
+    }
+
+    misconception = (
+        '{"criteria":{'
+        '"task_response":"met",'
+        '"conceptual_correctness":"not_met",'
+        '"understanding_application":"partial"},'
+        '"confidence":0.88}'
+    )
+    assert (
+        EvidenceEvaluator.parse_evaluation_response(misconception)["outcome"]
+        == "misconception"
+    )
+
+    assert EvidenceEvaluator.parse_evaluation_response(
+        '{"outcome":"demonstrated","confidence":0.9}'
+    ) is None
+    assert EvidenceEvaluator.parse_evaluation_response(
+        '{"criteria":{},"confidence":1.5}'
+    ) is None
     assert EvidenceEvaluator.parse_evaluation_response("resposta inválida") is None
 
 
@@ -66,8 +99,10 @@ def test_builds_semantic_evaluation_messages():
     result = EvidenceEvaluator.build_evaluation_messages(evaluation)
     assert len(result) == 2
     assert result[0]["role"] == "system"
-    assert "Rubrica semantic_evidence v1" in result[0]["content"]
-    assert "três critérios" in result[0]["content"]
+    assert "Rubrica semantic_evidence v2" in result[0]["content"]
+    assert "task_response" in result[0]["content"]
+    assert "conceptual_correctness" in result[0]["content"]
+    assert "understanding_application" in result[0]["content"]
     assert result[1]["role"] == "user"
     assert "Conceito: variáveis" in result[1]["content"]
 

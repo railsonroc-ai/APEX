@@ -1,6 +1,7 @@
 from backend.services.concept_catalog import ConceptCatalog
 from backend.services.learner_signals import LearnerSignals
 from backend.services.evidence_policy import EvidencePolicy
+from backend.services.rubric_policy import RubricPolicy
 
 
 class EvidenceEvaluator:
@@ -94,16 +95,16 @@ class EvidenceEvaluator:
         system = (
             "Avalie semanticamente a evidência de aprendizagem do aluno. "
             f"Rubrica {EvidencePolicy.RUBRIC_ID} v{EvidencePolicy.RUBRIC_VERSION}. "
-            "Critérios: (1) responder ao que o tutor pediu, "
-            "(2) manter correção conceitual e "
-            "(3) demonstrar compreensão/aplicação, não apenas concordância. "
-            "Use demonstrated somente quando os três critérios forem materialmente atendidos; "
-            "partial quando houver progresso correto porém incompleto; "
-            "misconception quando houver erro conceitual relevante; "
-            "insufficient quando não houver evidência suficiente para julgar. "
-            "Não considere declarações como entendi como prova suficiente. "
-            "Responda somente JSON com outcome, confidence e evidence. "
-            "outcome deve ser insufficient, partial, demonstrated ou misconception."
+            "Classifique separadamente três critérios: "
+            "task_response (respondeu ao que o tutor pediu), "
+            "conceptual_correctness (correção conceitual) e "
+            "understanding_application (demonstrou compreensão ou aplicação, não mera concordância). "
+            "Para cada critério use somente met, partial, not_met ou unknown. "
+            "Não transforme frases como 'entendi' em prova de compreensão. "
+            "O servidor derivará o outcome final; não tente decidir domínio. "
+            "Responda somente JSON com criteria, confidence e evidence. "
+            "criteria deve conter exatamente task_response, conceptual_correctness "
+            "e understanding_application."
         )
         user = f"Conceito: {concept}\nTutor: {tutor}\nAluno: {student}"
         return [
@@ -114,24 +115,45 @@ class EvidenceEvaluator:
     @classmethod
     def parse_evaluation_response(cls, content):
         import json
+
         if not isinstance(content, str) or not content.strip():
             return None
+
         try:
             data = json.loads(content)
         except (json.JSONDecodeError, TypeError):
             return None
+
         if not isinstance(data, dict):
             return None
-        outcome = data.get("outcome")
-        if outcome not in cls.VALID_OUTCOMES:
-            return None
+
         try:
             confidence = float(data.get("confidence"))
         except (TypeError, ValueError):
             return None
         if not 0.0 <= confidence <= 1.0:
             return None
+
         evidence = data.get("evidence")
         if evidence is not None and not isinstance(evidence, str):
             return None
-        return {"outcome": outcome, "confidence": confidence, "evidence": evidence}
+
+        normalized = RubricPolicy.normalize_payload(data)
+        if normalized is None:
+            return None
+
+        # Respostas no contrato v2 precisam trazer os três critérios.
+        # O fallback legacy_outcome existe apenas para compatibilidade de
+        # chamadas internas e dados antigos; a saída do avaliador atual deve
+        # estar completa para ser aceita como avaliação semântica nova.
+        if normalized["outcome_source"] != "rubric":
+            return None
+
+        return {
+            "outcome": normalized["outcome"],
+            "confidence": confidence,
+            "evidence": evidence,
+            "criteria": normalized["criteria"],
+            "rubric_complete": True,
+            "outcome_source": "rubric",
+        }

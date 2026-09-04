@@ -32,7 +32,10 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `LearnerStateTransition`: mudanças por sinais e evidências.
 - `TeachingPolicy`: escolha determinística da próxima ação.
 - `ConceptCatalog`, `ConceptTracker` e `ConceptActivation`: catálogo, seleção por ID estável e ativação segura de conceitos.
-- `EvidenceEvaluator`: contrato da avaliação semântica e rubrica versionada.
+- `EvidenceEvaluator`: coleta classificações estruturadas por critério.
+- `AttemptPolicy` e `LearningAttempt`: classificam e preservam a tentativa do aluno antes da avaliação.
+- `RubricPolicy`: deriva deterministicamente o outcome a partir dos critérios da rubrica v2.
+- `RubricAssessment`: snapshot imutável dos critérios e da origem do outcome.
 - `EvidenceEvent`: ledger imutável de avaliações confirmadas.
 - `EvidencePolicy`: IDs/versões de rubrica e política, além dos níveis válidos de assistência.
 - `AssistancePolicy`: converte somente ações pedagógicas server-side em níveis de ajuda e contratos de geração.
@@ -70,7 +73,9 @@ Tabelas principais:
 - `learning_turn_leases`: reserva temporária por aluno + área;
 - `evidence_events`: avaliações imutáveis ligadas ao aluno, sessão, turno e `concept_id` confirmado;
 - `mastery_assessments`: decisões imutáveis da política de domínio ligadas ao evento de evidência e ao turno;
-- `assistance_events`: assistência imutável de cada resposta do tutor, derivada da ação pedagógica controlada pelo servidor.
+- `assistance_events`: assistência imutável de cada resposta do tutor, derivada da ação pedagógica controlada pelo servidor;
+- `learning_attempts`: tentativa imutável do aluno, ligada ao turno confirmado e opcionalmente ao turno-fonte do tutor;
+- `rubric_assessments`: critérios imutáveis que sustentam a avaliação da tentativa e apontam para a evidência correspondente.
 
 O navegador não fornece o histórico usado pelo tutor e não escolhe livremente
 o `student_id`. O backend resolve a identidade do aluno padrão atual, lê apenas
@@ -88,6 +93,8 @@ A migration 7 introduz `concept_definitions` e `concept_aliases` e reconstrói a
 A migration 8 cria `mastery_assessments`, também protegido contra `UPDATE` e `DELETE`. A `MasteryPolicy` não substitui o score numérico por uma fórmula opaca: ela usa o score existente como um sinal, mas exige um portfólio mínimo antes da conclusão. O gate atual exige evidência aplicada suficiente, múltiplas demonstrações, diversidade entre etapas pedagógicas, etapa atual `fixar`, outcome atual `demonstrated` e score mínimo. Quando a assistência deixa de ser `untracked`, ao menos uma demonstração deve ocorrer com assistência `independent` ou `light`. Se um conceito legado chega a `fixar` sem diversidade de etapas, a decisão recomenda `testar` para produzir evidência em outro contexto e evitar retenção infinita em `fixar`. Demonstrações em `reencontrar` são contabilizadas explicitamente como sinal de retenção para a evolução posterior da política.
 
 A migration 9 cria `assistance_events`, também imutável. A classificação não vem do navegador nem de uma autoavaliação da LLM: `AssistancePolicy` deriva o nível do `teaching_action` escolhido pelo kernel. `testar` e `revisar` são contratos `independent`; `verificar` e `consolidar`, `light`; `explicar`, `guided`; `corrigir`, `direct`; `avancar` permanece `untracked`. O `TutorCore` recebe um contrato de geração correspondente para limitar o suporte permitido. Ao avaliar a resposta seguinte, o backend localiza o turno anterior exato do tutor pelo mesmo aluno, sessão, área, `concept_id` e mensagem confirmada, então copia o nível desse `AssistanceEvent` para o `EvidenceEvent`. A `MasteryPolicy` v2 exige pelo menos uma demonstração de baixa assistência e impede conclusão quando a evidência final foi produzida sob ajuda `guided`, `direct` ou não rastreada; nesses casos, em `fixar`, recomenda um novo `testar` para obter uma demonstração mais autônoma.
+
+A migration 10 separa formalmente a ação do aluno do julgamento semântico. `learning_attempts` registra a tentativa confirmada, o estágio, o tipo pedagógico, a assistência observada, o artefato opcional e o turno-fonte do tutor. `rubric_assessments` registra os três critérios da rubrica — resposta à tarefa, correção conceitual e compreensão/aplicação —, sua completude, confiança e origem do outcome. Ambos os ledgers são protegidos contra `UPDATE` e `DELETE`. Na rubrica `semantic_evidence` v2, a LLM deixa de escolher diretamente o outcome global: ela classifica os critérios e `RubricPolicy` deriva `demonstrated`, `partial`, `misconception` ou `insufficient` no servidor. Respostas históricas/internas sem critérios continuam auditáveis como `legacy_outcome`, sem fingir que possuem uma rubrica completa.
 
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação
@@ -108,4 +115,4 @@ Aplicação segura de pacotes futuros: `python3 tools/apex_apply_update.py <paco
 O APEX 1.0 continua operando como produto individual, mas a fundação de identidade
 já existe: `student_id` participa das chaves pedagógicas e o aluno atual é resolvido
 no servidor. Ainda não existem cadastro, login, autorização individual, revogação,
-seleção de perfil ou gestão multiusuário completa. O ledger de evidências, o catálogo de conceitos, o ledger de assistência e a `MasteryPolicy` tornam a conclusão explicável e resistente a uma única classificação. O nível de ajuda já é mensurado no contrato server-side do turno; ainda faltam tentativas/desafios estruturados, critérios profissionais por tipo de atividade e uma política de retenção mais rica.
+seleção de perfil ou gestão multiusuário completa. O ledger de evidências, o catálogo de conceitos, o ledger de assistência e a `MasteryPolicy` tornam a conclusão explicável e resistente a uma única classificação. O nível de ajuda já é mensurado no contrato server-side do turno e as tentativas/rubricas básicas já são auditáveis. Ainda faltam atividades/desafios estruturados, rubricas profissionais específicas por tipo de atividade e uma política de retenção mais rica.

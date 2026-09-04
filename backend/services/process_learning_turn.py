@@ -18,9 +18,11 @@ from backend.services.learner_signals import LearnerSignals
 from backend.services.learner_state import LearnerState
 from backend.services.learner_state_transition import LearnerStateTransition
 from backend.services.learning_history import LearningHistory
+from backend.services.learning_attempt import LearningAttempt
 from backend.services.mastery_assessment import MasteryAssessment
 from backend.services.mastery_policy import MasteryPolicy
 from backend.services.review_lifecycle import ReviewLifecycle
+from backend.services.rubric_assessment import RubricAssessment
 from backend.services.review_scheduler import ReviewScheduler
 from backend.services.teaching_policy import TeachingPolicy
 
@@ -318,6 +320,18 @@ class ProcessLearningTurn:
                     session_id=normalized_session_id,
                 )
 
+                learning_attempt = cls._record_learning_attempt(
+                    normalized_turn_id=normalized_turn_id,
+                    normalized_area=normalized_area,
+                    normalized_user_message=normalized_user_message,
+                    normalized_student_id=normalized_student_id,
+                    normalized_session_id=normalized_session_id,
+                    semantic_evidence=semantic_evidence,
+                    evidence_context=evidence_context,
+                    assistance_level=assistance_level,
+                    artifact_ref=artifact_ref,
+                )
+
                 evidence_event = cls._record_evidence_event(
                     normalized_turn_id=normalized_turn_id,
                     normalized_area=normalized_area,
@@ -332,6 +346,18 @@ class ProcessLearningTurn:
                     assistance_level=assistance_level,
                     artifact_ref=artifact_ref,
                 )
+
+                if evidence_event is not None and learning_attempt is not None:
+                    RubricAssessment.record(
+                        turn_id=normalized_turn_id,
+                        attempt_id=learning_attempt["attempt_id"],
+                        evidence_event_id=evidence_event["event_id"],
+                        area=normalized_area,
+                        concept_id=evidence_event["concept_id"],
+                        semantic_evidence=semantic_evidence,
+                        student_id=normalized_student_id,
+                        session_id=normalized_session_id,
+                    )
 
                 if evidence_event is not None and mastery_decision is not None:
                     MasteryAssessment.record(
@@ -401,6 +427,47 @@ class ProcessLearningTurn:
             current_applied=bool(proposed_changes),
             student_id=student_id,
             assistance_level=assistance_level,
+        )
+
+    @classmethod
+    def _record_learning_attempt(
+        cls,
+        *,
+        normalized_turn_id,
+        normalized_area,
+        normalized_user_message,
+        normalized_student_id,
+        normalized_session_id,
+        semantic_evidence,
+        evidence_context,
+        assistance_level,
+        artifact_ref,
+    ):
+        if (
+            not isinstance(semantic_evidence, dict)
+            or not isinstance(evidence_context, dict)
+        ):
+            return None
+
+        context_answer = LearningHistory.normalize_message(
+            evidence_context.get("student_answer")
+        )
+        if context_answer != normalized_user_message:
+            raise ValueError(
+                "evidence_context não corresponde ao turno confirmado"
+            )
+
+        return LearningAttempt.record(
+            turn_id=normalized_turn_id,
+            area=normalized_area,
+            concept_id=evidence_context.get("concept_id"),
+            stage=evidence_context.get("stage"),
+            student_answer=context_answer,
+            student_id=normalized_student_id,
+            session_id=normalized_session_id,
+            source_turn_id=evidence_context.get("source_turn_id"),
+            assistance_level=assistance_level,
+            artifact_ref=artifact_ref,
         )
 
     @classmethod

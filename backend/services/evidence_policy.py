@@ -7,10 +7,10 @@ class EvidencePolicy:
     """
 
     RUBRIC_ID = "semantic_evidence"
-    RUBRIC_VERSION = 1
+    RUBRIC_VERSION = 2
 
     POLICY_ID = "learner_state_transition"
-    POLICY_VERSION = 3
+    POLICY_VERSION = 4
 
     ASSISTANCE_UNTRACKED = "untracked"
     ASSISTANCE_LEVELS = {

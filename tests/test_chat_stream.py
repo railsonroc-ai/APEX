@@ -237,7 +237,7 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
         def create(self, **kwargs):
             if kwargs.get("stream") is False:
                 captured["evidence_calls"] += 1
-                content = "{\"outcome\":\"demonstrated\",\"confidence\":0.9,\"evidence\":\"Explicou corretamente.\"}"
+                content = '{"criteria":{"task_response":"met","conceptual_correctness":"met","understanding_application":"met"},"confidence":0.9,"evidence":"Explicou corretamente."}'
                 message = SimpleNamespace(content=content)
                 return SimpleNamespace(choices=[SimpleNamespace(message=message)])
             return []
@@ -345,7 +345,7 @@ def test_completed_concept_schedules_review(monkeypatch):
     class FakeCompletions:
         def create(self, **kwargs):
             if kwargs.get("stream") is False:
-                content = '{"outcome":"demonstrated","confidence":0.9,"evidence":"Aplicou sem ajuda."}'
+                content = '{"criteria":{"task_response":"met","conceptual_correctness":"met","understanding_application":"met"},"confidence":0.9,"evidence":"Aplicou sem ajuda."}'
                 return SimpleNamespace(
                     choices=[SimpleNamespace(
                         message=SimpleNamespace(content=content)

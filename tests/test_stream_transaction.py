@@ -16,8 +16,10 @@ class FakeCompletions:
     def create(self, **kwargs):
         if kwargs.get("stream") is False:
             content = (
-                '{"outcome":"demonstrated","confidence":0.9,'
-                '"evidence":"Aplicou corretamente."}'
+                '{"criteria":{"task_response":"met",'
+                '"conceptual_correctness":"met",'
+                '"understanding_application":"met"},'
+                '"confidence":0.9,"evidence":"Aplicou corretamente."}'
             )
             return SimpleNamespace(
                 choices=[
