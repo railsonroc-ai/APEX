@@ -280,9 +280,13 @@ def chat_stream():
                 identified_concept,
             )
 
-            evidence_evaluation = EvidenceEvaluator.build_evaluation(
-                user_message, history, learner_state
-            )
+            evidence_evaluation = None
+            if not tracking_request:
+                evidence_evaluation = EvidenceEvaluator.build_evaluation(
+                    user_message,
+                    history,
+                    learner_state,
+                )
 
             evidence_messages = None
             if evidence_evaluation:

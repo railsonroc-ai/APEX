@@ -28,10 +28,19 @@ def test_valid_message_creates_tracking_request():
     }
 
 
-def test_existing_concept_does_not_create_tracking_request():
+def test_explicit_study_request_can_create_tracking_request_with_active_concept():
     state = {"current_concept": "variáveis"}
-    result = ConceptTracker.build_tracking_request("Quero aprender listas", state, "ads")
-    assert result is None
+
+    result = ConceptTracker.build_tracking_request(
+        "Quero aprender listas",
+        state,
+        "ads",
+    )
+
+    assert result == {
+        "area": "ads",
+        "student_message": "Quero aprender listas",
+    }
 
 
 def test_parses_identification_response():

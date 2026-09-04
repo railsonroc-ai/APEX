@@ -22,9 +22,12 @@ class ProcessLearningTurn:
         if not identified_concept:
             return learner_state
 
-        resolved_concept = ConceptTracker.resolve_candidate(
-            learner_state,
-            identified_concept,
+        resolved_concept = (
+            ConceptTracker
+            .resolve_identified_candidate(
+                learner_state,
+                identified_concept,
+            )
         )
 
         if not resolved_concept:
