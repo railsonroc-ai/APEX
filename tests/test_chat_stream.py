@@ -250,6 +250,13 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
         "role": "assistant",
         "content": "Explique o que é uma variável.",
     }]
+
+    monkeypatch.setattr(
+        app_module.LearningHistory,
+        "get_messages",
+        lambda area, concept=None: history,
+    )
+
     client = app_module.app.test_client()
     response = client.post(
         "/chat/stream",
@@ -318,6 +325,19 @@ def test_completed_concept_schedules_review(monkeypatch):
             self.chat = SimpleNamespace(completions=FakeCompletions())
 
     monkeypatch.setattr(app_module, "Groq", FakeGroq)
+
+    server_history = [
+        {
+            "role": "assistant",
+            "content": "Aplique o conceito.",
+        }
+    ]
+
+    monkeypatch.setattr(
+        app_module.LearningHistory,
+        "get_messages",
+        lambda area, concept=None: server_history,
+    )
 
     response = app_module.app.test_client().post(
         "/chat/stream",

@@ -150,7 +150,33 @@ def init_database():
                 area TEXT NOT NULL,
                 user_message TEXT NOT NULL,
                 assistant_message TEXT,
+                concept TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        learning_turn_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(learning_turns)"
+            ).fetchall()
+        }
+
+        if "concept" not in learning_turn_columns:
+            connection.execute(
+                """
+                ALTER TABLE learning_turns
+                ADD COLUMN concept TEXT
+                """
+            )
+
+        connection.execute("""
+            CREATE INDEX IF NOT EXISTS
+                idx_learning_turns_area_concept_created_at
+            ON learning_turns (
+                area,
+                concept,
+                created_at
             )
         """)
 

@@ -160,12 +160,10 @@ DATABASE_PATH = (
 
 # A requisição contém:
 # - mensagem atual;
-# - histórico recente;
 # - metadados JSON.
 #
 # O limite continua pequeno o bastante para proteger a API,
-# mas permite transportar com segurança o contexto válido
-# utilizado pelo TutorCore.
+# e permite transportar com segurança a mensagem atual.
 MAX_CONTENT_LENGTH = (
     128 * 1024
 )

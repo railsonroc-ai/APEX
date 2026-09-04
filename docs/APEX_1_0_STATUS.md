@@ -24,6 +24,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `ReviewQueue`: seleção de revisões vencidas.
 - `ReviewLifecycle`: ativação, conclusão e reagendamento de revisões.
 - `ProcessLearningTurn`: orquestração determinística do turno pedagógico.
+- `LearningHistory`: histórico confirmado, limitado e isolado por conceito.
 
 ## Confiabilidade
 
@@ -32,6 +33,9 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - rollback quando uma gravação falha;
 - rollback quando o streaming da resposta falha;
 - proteção contra envio concorrente no frontend;
+- idempotência por `turn_id` e replay da resposta confirmada;
+- histórico pedagógico autoritativo no servidor;
+- descarte de histórico forjado enviado pelo navegador;
 - limite explícito de mensagens e notas;
 - configuração de produção exige `SECRET_KEY` e `APEX_ACCESS_KEY`.
 

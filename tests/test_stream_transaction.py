@@ -4,6 +4,7 @@ import backend.app as app_module
 import backend.database as database_module
 from backend.services.concept_progress import ConceptProgress
 from backend.services.learner_state import LearnerState
+from backend.services.learning_history import LearningHistory
 
 
 class BrokenStream:
@@ -97,6 +98,7 @@ def test_stream_failure_rolls_back_learning_turn(
                 }
             ],
             "area": "ads",
+            "turn_id": "broken-stream-turn",
         },
     )
 
@@ -113,3 +115,9 @@ def test_stream_failure_rolls_back_learning_turn(
     assert state["stage"] == "fixar"
     assert state["mastery"] == 0.7
     assert progress["mastery"] == 0.7
+    assert (
+        LearningHistory.find(
+            "broken-stream-turn"
+        )
+        is None
+    )

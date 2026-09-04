@@ -10,6 +10,8 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `security.py` — autenticação por `X-Apex-Key`.
 - `prompts/tutor.py` — prompt pedagógico do tutor.
 - `services/tutor_core.py` — preparação e proteção do contexto.
+- `services/process_learning_turn.py` — preview e commit do turno pedagógico.
+- `services/learning_history.py` — histórico confirmado no servidor.
 - `templates/index.html` — interface principal.
 - `static/js/chat-engine.js` — estado da conversa e interface.
 - `static/js/apex-api.js` — HTTP, autenticação, notas e SSE.
@@ -24,9 +26,9 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 
 ## TutorCore
 
-Atualmente o TutorCore aplica o prompt do tutor, adiciona contexto da área, filtra o histórico, bloqueia injeção de mensagens `system`, limita o contexto e garante que a pergunta atual seja adicionada uma única vez.
-
-A próxima grande fase será evoluir essa camada para o sistema pedagógico adaptativo do APEX.
+O TutorCore aplica o prompt pedagógico, adiciona o estado atual e limita o
+contexto. O histórico usado pelo tutor vem de turnos confirmados no SQLite;
+o navegador não é fonte de verdade para a conversa pedagógica.
 
 ## Testes
 

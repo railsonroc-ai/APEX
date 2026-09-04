@@ -23,13 +23,17 @@ def test_frontend_generates_and_sends_turn_id():
         source,
     )
 
-    assert re.search(
-        r"streamChat\("
-        r".*?historyForRequest,"
-        r"\s*turnId",
+    assert "historyForRequest" not in source
+
+    payload = re.search(
+        r"await Api\.streamChat\("
+        r"\s*\{(.*?)\}\s*,",
         source,
         re.DOTALL,
     )
+
+    assert payload is not None
+    assert "history:" not in payload.group(1)
 
 
 def test_backend_forwards_turn_id_to_commit(
@@ -95,8 +99,12 @@ def test_backend_forwards_turn_id_to_commit(
         identified_concept,
         semantic_evidence,
         turn_id=None,
+        assistant_message=None,
     ):
         captured["turn_id"] = turn_id
+        captured["assistant_message"] = (
+            assistant_message
+        )
 
         return {
             "learner_state":
@@ -178,5 +186,7 @@ def test_backend_forwards_turn_id_to_commit(
         captured["turn_id"]
         == "turn-end-to-end-001"
     )
+
+    assert captured["assistant_message"] == ""
 
     assert '"done": true' in body.lower()

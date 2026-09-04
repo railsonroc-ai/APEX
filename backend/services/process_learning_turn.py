@@ -1,5 +1,4 @@
 from backend.database import (
-    get_db_connection,
     preview_transaction,
     transaction,
 )
@@ -10,6 +9,7 @@ from backend.services.evidence_evaluator import EvidenceEvaluator
 from backend.services.learner_signals import LearnerSignals
 from backend.services.learner_state import LearnerState
 from backend.services.learner_state_transition import LearnerStateTransition
+from backend.services.learning_history import LearningHistory
 from backend.services.review_lifecycle import ReviewLifecycle
 from backend.services.review_scheduler import ReviewScheduler
 from backend.services.teaching_policy import TeachingPolicy
@@ -88,42 +88,57 @@ class ProcessLearningTurn:
         identified_concept,
         semantic_evidence,
         turn_id=None,
+        assistant_message=None,
     ):
-        normalized_turn_id = None
-
-        if turn_id is not None:
-            normalized_turn_id = str(
+        normalized_turn_id = (
+            LearningHistory.normalize_turn_id(
                 turn_id
-            ).strip() or None
+            )
+        )
+        normalized_area = LearningHistory.normalize_area(
+            area
+        )
+        normalized_user_message = (
+            LearningHistory.normalize_message(
+                user_message
+            )
+        )
+
+        if not normalized_user_message:
+            raise ValueError(
+                "user_message obrigatória"
+            )
 
         with transaction():
-            connection = get_db_connection()
-
             if normalized_turn_id:
-                existing = connection.execute(
-                    """
-                    SELECT
-                        area,
-                        user_message
-                    FROM learning_turns
-                    WHERE turn_id = ?
-                    """,
-                    (normalized_turn_id,),
-                ).fetchone()
+                existing = LearningHistory.find(
+                    normalized_turn_id
+                )
 
                 if existing is not None:
                     if (
-                        existing["area"] != area
+                        existing["area"] != normalized_area
                         or existing["user_message"]
-                        != user_message
+                        != normalized_user_message
                     ):
                         raise ValueError(
                             "turn_id reutilizado "
                             "com conteúdo diferente"
                         )
 
-                    learner_state = (
-                        LearnerState.get(area)
+                    learner_state = LearnerState.get(
+                        normalized_area
+                    )
+
+                    existing = (
+                        LearningHistory
+                        .attach_response(
+                            normalized_turn_id,
+                            assistant_message,
+                            concept=learner_state.get(
+                                "current_concept"
+                            ),
+                        )
                     )
 
                     return {
@@ -134,37 +149,40 @@ class ProcessLearningTurn:
                                 learner_state
                             ),
                         "duplicate": True,
+                        "assistant_message": (
+                            existing.get(
+                                "assistant_message"
+                            )
+                            if existing
+                            else None
+                        ),
                     }
 
-            learner_state = LearnerState.get(area)
+            learner_state = LearnerState.get(
+                normalized_area
+            )
 
             learner_state = cls.activate_identified_concept(
-                area,
+                normalized_area,
                 learner_state,
                 identified_concept,
             )
 
             result = cls._finalize(
-                area,
-                user_message,
+                normalized_area,
+                normalized_user_message,
                 learner_state,
                 semantic_evidence,
             )
 
             if normalized_turn_id:
-                connection.execute(
-                    """
-                    INSERT INTO learning_turns (
-                        turn_id,
-                        area,
-                        user_message
-                    )
-                    VALUES (?, ?, ?)
-                    """,
-                    (
-                        normalized_turn_id,
-                        area,
-                        user_message,
+                LearningHistory.record(
+                    turn_id=normalized_turn_id,
+                    area=normalized_area,
+                    user_message=normalized_user_message,
+                    assistant_message=assistant_message,
+                    concept=result["learner_state"].get(
+                        "current_concept"
                     ),
                 )
 

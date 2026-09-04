@@ -13,7 +13,7 @@ def test_stream_commits_before_done_confirmation():
     done_marker = '"done": True'
 
     assert source.count(commit_marker) == 1
-    assert source.count(done_marker) == 1
+    assert source.count(done_marker) == 2
 
     token_position = source.index(
         token_marker
@@ -21,7 +21,7 @@ def test_stream_commits_before_done_confirmation():
     commit_position = source.index(
         commit_marker
     )
-    done_position = source.index(
+    done_position = source.rindex(
         done_marker
     )
 

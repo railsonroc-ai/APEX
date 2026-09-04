@@ -743,7 +743,6 @@
   async function streamChat(
     text,
     button,
-    historyForRequest,
     turnId
   ) {
     const {
@@ -769,9 +768,7 @@
         {
           message: text,
           area: AREA,
-          turn_id: turnId,
-          history:
-            historyForRequest
+          turn_id: turnId
         },
         {
           onToken: token => {
@@ -929,23 +926,6 @@
     );
 
 
-    /*
-     * A pergunta atual NÃO deve estar
-     * no histórico enviado ao backend.
-     *
-     * O TutorCore adiciona essa pergunta
-     * uma única vez.
-     *
-     * O frontend envia somente a quantidade
-     * de mensagens de contexto definida
-     * pelo backend.
-     */
-    const historyForRequest =
-      historico.slice(
-        -MAX_HISTORY_MESSAGES
-      );
-
-
     sendingMessage = true;
 
     try {
@@ -956,7 +936,6 @@
         await streamChat(
           text,
           sendButton,
-          historyForRequest,
           turnId
         );
 

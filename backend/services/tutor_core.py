@@ -11,10 +11,9 @@ class TutorCore:
     Responsabilidades atuais:
     - aplicar o prompt pedagógico do APEX;
     - informar a área de estudo atual;
-    - filtrar o histórico recebido do navegador;
+    - filtrar o histórico confirmado pelo servidor;
     - limitar o tamanho do contexto;
-    - impedir injeção de mensagens "system"
-      através do histórico do cliente.
+    - aceitar somente papéis válidos no histórico.
     """
 
     ALLOWED_HISTORY_ROLES = {

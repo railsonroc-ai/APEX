@@ -63,3 +63,69 @@ def test_finalize_rolls_back_state_when_progress_fails(
     assert restored["current_concept"] == "variáveis"
     assert restored["stage"] == "fixar"
     assert restored["mastery"] == 0.7
+
+
+def test_commit_rolls_back_state_when_history_record_fails(
+    monkeypatch,
+    tmp_path,
+):
+    path = tmp_path / "history-rollback.db"
+
+    monkeypatch.setattr(
+        database_module,
+        "DATABASE_PATH",
+        path,
+    )
+    monkeypatch.setattr(
+        database_module,
+        "DATA_DIR",
+        tmp_path,
+    )
+
+    database_module.init_database()
+
+    LearnerState.update(
+        "ads",
+        current_concept="variáveis",
+        stage="testar",
+        difficulty_count=0,
+        mastery=0.5,
+    )
+
+    initial = LearnerState.get("ads")
+
+    def fail_history(*args, **kwargs):
+        raise RuntimeError(
+            "falha simulada no histórico"
+        )
+
+    monkeypatch.setattr(
+        turn_module.LearningHistory,
+        "record",
+        fail_history,
+    )
+
+    evidence = {
+        "outcome": "demonstrated",
+        "confidence": 0.9,
+        "evidence": "Aplicou corretamente.",
+    }
+
+    with pytest.raises(RuntimeError):
+        ProcessLearningTurn.commit_turn(
+            area="ads",
+            user_message="Resposta correta.",
+            identified_concept=None,
+            semantic_evidence=evidence,
+            turn_id="history-failure",
+            assistant_message="Próxima orientação.",
+        )
+
+    restored = LearnerState.get("ads")
+
+    assert restored["stage"] == initial["stage"]
+    assert restored["mastery"] == initial["mastery"]
+    assert (
+        restored["last_evidence"]
+        == initial["last_evidence"]
+    )

@@ -140,6 +140,19 @@ def test_demonstrated_review_completes_lifecycle(monkeypatch):
         lambda state: "avancar",
     )
 
+    server_history = [
+        {
+            "role": "assistant",
+            "content": "Explique novamente o conceito.",
+        }
+    ]
+
+    monkeypatch.setattr(
+        app_module.LearningHistory,
+        "get_messages",
+        lambda area, concept=None: server_history,
+    )
+
     response = app_module.app.test_client().post(
         "/chat/stream",
         json={

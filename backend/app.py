@@ -38,6 +38,7 @@ from backend.services.learner_state import LearnerState
 from backend.services.teaching_policy import TeachingPolicy
 from backend.services.learner_signals import LearnerSignals
 from backend.services.learner_state_transition import LearnerStateTransition
+from backend.services.learning_history import LearningHistory
 from backend.services.concept_tracker import ConceptTracker
 from backend.services.evidence_evaluator import EvidenceEvaluator
 from backend.services.concept_progress import ConceptProgress
@@ -187,11 +188,6 @@ def chat_stream():
         )
     ).strip()
 
-    history = data.get(
-        "history",
-        [],
-    )
-
     turn_id = str(
         data.get(
             "turn_id",
@@ -241,6 +237,40 @@ def chat_stream():
     def generate():
 
         try:
+
+            existing_turn = LearningHistory.find(
+                turn_id
+            )
+
+            if existing_turn is not None:
+                if (
+                    existing_turn["area"] != area
+                    or existing_turn["user_message"]
+                    != user_message
+                ):
+                    raise ValueError(
+                        "turn_id reutilizado "
+                        "com conteúdo diferente"
+                    )
+
+                previous_response = (
+                    existing_turn.get(
+                        "assistant_message"
+                    )
+                )
+
+                if previous_response:
+                    yield sse(
+                        {
+                            "token": previous_response
+                        }
+                    )
+                    yield sse(
+                        {
+                            "done": True
+                        }
+                    )
+                    return
 
             if not GROQ_API_KEY:
 
@@ -296,6 +326,13 @@ def chat_stream():
                 area,
                 learner_state,
                 identified_concept,
+            )
+
+            history = LearningHistory.get_messages(
+                area,
+                concept=learner_state.get(
+                    "current_concept"
+                ),
             )
 
             evidence_evaluation = None
@@ -365,6 +402,8 @@ def chat_stream():
                 )
             )
 
+            assistant_parts = []
+
             for chunk in response:
 
                 if (
@@ -376,15 +415,26 @@ def chat_stream():
                     .content
                 ):
 
+                    token = (
+                        chunk
+                        .choices[0]
+                        .delta
+                        .content
+                    )
+
+                    assistant_parts.append(
+                        token
+                    )
+
                     yield sse(
                         {
-                            "token":
-                                chunk
-                                .choices[0]
-                                .delta
-                                .content
+                            "token": token
                         }
                     )
+
+            assistant_message = "".join(
+                assistant_parts
+            )
 
             ProcessLearningTurn.commit_turn(
                 area,
@@ -392,6 +442,7 @@ def chat_stream():
                 identified_concept,
                 semantic_evidence,
                 turn_id=turn_id,
+                assistant_message=assistant_message,
             )
 
             yield sse(
