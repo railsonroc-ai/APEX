@@ -79,6 +79,28 @@ def transaction():
         connection.close()
 
 
+
+@contextmanager
+def preview_transaction():
+    active = _active_transaction.get()
+
+    if active is not None:
+        raise RuntimeError(
+            "preview_transaction nao pode ser aninhada"
+        )
+
+    connection = _new_connection()
+    token = _active_transaction.set(connection)
+
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        yield _TransactionConnectionProxy(connection)
+    finally:
+        connection.rollback()
+        _active_transaction.reset(token)
+        connection.close()
+
+
 def init_database():
     connection = get_db_connection()
 

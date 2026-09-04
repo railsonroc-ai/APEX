@@ -1,4 +1,4 @@
-from backend.database import transaction
+from backend.database import preview_transaction, transaction
 from backend.services.concept_activation import ConceptActivation
 from backend.services.concept_progress import ConceptProgress
 from backend.services.concept_tracker import ConceptTracker
@@ -34,6 +34,68 @@ class ProcessLearningTurn:
             area,
             resolved_concept,
         )
+
+    @classmethod
+    def preview_activation(
+        cls,
+        area,
+        learner_state,
+        identified_concept,
+    ):
+        with preview_transaction():
+            return cls.activate_identified_concept(
+                area,
+                learner_state,
+                identified_concept,
+            )
+
+    @classmethod
+    def preview_turn(
+        cls,
+        area,
+        user_message,
+        identified_concept,
+        semantic_evidence,
+    ):
+        with preview_transaction():
+            learner_state = LearnerState.get(area)
+
+            learner_state = cls.activate_identified_concept(
+                area,
+                learner_state,
+                identified_concept,
+            )
+
+            return cls._finalize(
+                area,
+                user_message,
+                learner_state,
+                semantic_evidence,
+            )
+
+    @classmethod
+    def commit_turn(
+        cls,
+        area,
+        user_message,
+        identified_concept,
+        semantic_evidence,
+    ):
+        with transaction():
+            learner_state = LearnerState.get(area)
+
+            learner_state = cls.activate_identified_concept(
+                area,
+                learner_state,
+                identified_concept,
+            )
+
+            return cls._finalize(
+                area,
+                user_message,
+                learner_state,
+                semantic_evidence,
+            )
 
     @classmethod
     def finalize(

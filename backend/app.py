@@ -29,7 +29,6 @@ from backend.config import (
 from backend.database import (
     get_db_connection,
     init_database,
-    transaction,
 )
 
 from backend.security import verify_auth
@@ -237,135 +236,140 @@ def chat_stream():
 
                 return
 
-            with transaction():
-                client = Groq(
-                    api_key=GROQ_API_KEY,
-                    timeout=AI_DIALOG_TIMEOUT_SECONDS,
+            client = Groq(
+                api_key=GROQ_API_KEY,
+                timeout=AI_DIALOG_TIMEOUT_SECONDS,
+            )
+
+            learner_state = LearnerState.get(area)
+            tracking_request = ConceptTracker.build_tracking_request(
+                user_message, learner_state, area
+            )
+            identification_messages = None
+            if tracking_request:
+                identification_messages = ConceptTracker.build_identification_messages(
+                    tracking_request
                 )
 
-                learner_state = LearnerState.get(area)
-                tracking_request = ConceptTracker.build_tracking_request(
-                    user_message, learner_state, area
-                )
-                identification_messages = None
-                if tracking_request:
-                    identification_messages = ConceptTracker.build_identification_messages(
-                        tracking_request
-                    )
-
-                identification_response = None
-                if identification_messages:
-                    try:
-                        identification_response = client.chat.completions.create(
-                            messages=identification_messages,
-                            model=GROQ_MODEL,
-                            stream=False,
-                        )
-                    except Exception:
-                        app.logger.exception(
-                            "Falha na identificacao semantica do conceito"
-                        )
-
-                identified_concept = None
-                if identification_response:
-                    try:
-                        content = identification_response.choices[0].message.content
-                        identified_concept = ConceptTracker.parse_identification_response(
-                            content
-                        )
-                    except (AttributeError, IndexError, TypeError):
-                        identified_concept = None
-
-                learner_state = ProcessLearningTurn.activate_identified_concept(
-                    area,
-                    learner_state,
-                    identified_concept,
-                )
-
-                evidence_evaluation = EvidenceEvaluator.build_evaluation(
-                    user_message, history, learner_state
-                )
-
-                evidence_messages = None
-                if evidence_evaluation:
-                    evidence_messages = EvidenceEvaluator.build_evaluation_messages(
-                        evidence_evaluation
-                    )
-
-                evidence_response = None
-                if evidence_messages:
-                    try:
-                        evidence_response = client.chat.completions.create(
-                            messages=evidence_messages,
-                            model=GROQ_MODEL,
-                            stream=False,
-                        )
-                    except Exception:
-                        app.logger.exception(
-                            "Falha na avaliacao semantica da evidencia"
-                        )
-
-                semantic_evidence = None
-                if evidence_response:
-                    try:
-                        content = evidence_response.choices[0].message.content
-                        semantic_evidence = EvidenceEvaluator.parse_evaluation_response(
-                            content
-                        )
-                    except (AttributeError, IndexError, TypeError):
-                        semantic_evidence = None
-
-                turn_result = ProcessLearningTurn.finalize(
-                    area,
-                    user_message,
-                    learner_state,
-                    semantic_evidence,
-                )
-                learner_state = turn_result["learner_state"]
-                teaching_action = turn_result["teaching_action"]
-
-                messages = (
-                    TutorCore.build_messages(
-                        user_message,
-                        history,
-                        area=area,
-                        learner_state=learner_state,
-                        teaching_action=teaching_action,
-                    )
-                )
-
-                response = (
-                    client
-                    .chat
-                    .completions
-                    .create(
-                        messages=messages,
+            identification_response = None
+            if identification_messages:
+                try:
+                    identification_response = client.chat.completions.create(
+                        messages=identification_messages,
                         model=GROQ_MODEL,
-                        stream=True,
+                        stream=False,
                     )
+                except Exception:
+                    app.logger.exception(
+                        "Falha na identificacao semantica do conceito"
+                    )
+
+            identified_concept = None
+            if identification_response:
+                try:
+                    content = identification_response.choices[0].message.content
+                    identified_concept = ConceptTracker.parse_identification_response(
+                        content
+                    )
+                except (AttributeError, IndexError, TypeError):
+                    identified_concept = None
+
+            learner_state = ProcessLearningTurn.preview_activation(
+                area,
+                learner_state,
+                identified_concept,
+            )
+
+            evidence_evaluation = EvidenceEvaluator.build_evaluation(
+                user_message, history, learner_state
+            )
+
+            evidence_messages = None
+            if evidence_evaluation:
+                evidence_messages = EvidenceEvaluator.build_evaluation_messages(
+                    evidence_evaluation
                 )
 
-                for chunk in response:
+            evidence_response = None
+            if evidence_messages:
+                try:
+                    evidence_response = client.chat.completions.create(
+                        messages=evidence_messages,
+                        model=GROQ_MODEL,
+                        stream=False,
+                    )
+                except Exception:
+                    app.logger.exception(
+                        "Falha na avaliacao semantica da evidencia"
+                    )
 
-                    if (
-                        chunk.choices
-                        and
-                        chunk
-                        .choices[0]
-                        .delta
-                        .content
-                    ):
+            semantic_evidence = None
+            if evidence_response:
+                try:
+                    content = evidence_response.choices[0].message.content
+                    semantic_evidence = EvidenceEvaluator.parse_evaluation_response(
+                        content
+                    )
+                except (AttributeError, IndexError, TypeError):
+                    semantic_evidence = None
 
-                        yield sse(
-                            {
-                                "token":
-                                    chunk
-                                    .choices[0]
-                                    .delta
-                                    .content
-                            }
-                        )
+            turn_result = ProcessLearningTurn.preview_turn(
+                area,
+                user_message,
+                identified_concept,
+                semantic_evidence,
+            )
+            learner_state = turn_result["learner_state"]
+            teaching_action = turn_result["teaching_action"]
 
+            messages = (
+                TutorCore.build_messages(
+                    user_message,
+                    history,
+                    area=area,
+                    learner_state=learner_state,
+                    teaching_action=teaching_action,
+                )
+            )
+
+            response = (
+                client
+                .chat
+                .completions
+                .create(
+                    messages=messages,
+                    model=GROQ_MODEL,
+                    stream=True,
+                )
+            )
+
+            for chunk in response:
+
+                if (
+                    chunk.choices
+                    and
+                    chunk
+                    .choices[0]
+                    .delta
+                    .content
+                ):
+
+                    yield sse(
+                        {
+                            "token":
+                                chunk
+                                .choices[0]
+                                .delta
+                                .content
+                        }
+                    )
+
+            ProcessLearningTurn.commit_turn(
+                area,
+                user_message,
+                identified_concept,
+                semantic_evidence,
+            )
 
             yield sse(
                 {
