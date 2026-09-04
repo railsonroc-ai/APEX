@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import time
 from uuid import uuid4
 
 from flask import (
@@ -64,6 +65,7 @@ from backend.services.llm_gateway import (
     LLMGateway,
     LLMProviderError,
 )
+from backend.services.observability import Observability
 
 
 # ============================================================
@@ -96,8 +98,59 @@ def create_app(config_overrides=None):
         application.config.update(config_overrides)
 
     application.register_blueprint(bp)
+    application.before_request(_begin_request_observability)
+    application.after_request(_finish_request_observability)
     application.after_request(_apply_security_headers)
+    application.teardown_request(_clear_request_observability)
     return application
+
+
+# ============================================================
+# OBSERVABILIDADE HTTP
+# ============================================================
+
+def _begin_request_observability():
+    g.apex_request_started_at = time.monotonic()
+    g.apex_request_id = Observability.begin_request()
+
+
+def _finish_request_observability(response):
+    request_id = getattr(g, "apex_request_id", None) or Observability.begin_request()
+    response.headers.setdefault("X-Apex-Request-ID", request_id)
+
+    started_at = getattr(g, "apex_request_started_at", None)
+    latency_ms = (
+        Observability.elapsed_ms(started_at)
+        if started_at is not None
+        else None
+    )
+
+    rule = request.url_rule.rule if request.url_rule is not None else None
+    Observability.event(
+        current_app.logger,
+        "http_response_ready",
+        method=request.method,
+        route=rule,
+        endpoint=request.endpoint,
+        status_code=response.status_code,
+        latency_ms=latency_ms,
+    )
+    return response
+
+
+def _clear_request_observability(_error=None):
+    Observability.clear()
+
+
+def _bind_observability_context(context, *, turn_id=None):
+    Observability.bind(
+        area=context.get("area"),
+        turn_id=turn_id,
+    )
+    Observability.bind_identity(
+        student_id=context.get("student_id"),
+        session_id=context.get("session_id"),
+    )
 
 
 # ============================================================
@@ -137,6 +190,11 @@ def _apply_security_headers(response):
 
 def _auth_failure_response():
     if getattr(g, "apex_rate_limited", False):
+        Observability.event(
+            current_app.logger,
+            "auth_rate_limited",
+            retry_after=getattr(g, "apex_retry_after", 60),
+        )
         response = jsonify(
             {
                 "error": "Muitas requisicoes. Aguarde e tente novamente.",
@@ -148,6 +206,11 @@ def _auth_failure_response():
         )
         return response, 429
 
+    Observability.event(
+        current_app.logger,
+        "auth_rejected",
+        reason="invalid_or_missing_credential",
+    )
     return jsonify({"error": "Não autorizado"}), 401
 
 
@@ -215,10 +278,12 @@ def health():
             }
         ), 200
 
-    except sqlite3.Error:
+    except sqlite3.Error as exc:
 
-        current_app.logger.exception(
-            "Falha no health check"
+        Observability.exception(
+            current_app.logger,
+            "health_check_failed",
+            error_type=type(exc).__name__,
         )
 
         return jsonify(
@@ -252,6 +317,7 @@ def session_status():
         return _auth_failure_response()
 
     _, context = _resolve_session_request()
+    _bind_observability_context(context)
     session = LearningSessionLifecycle.get(
         context["area"],
         student_id=context["student_id"],
@@ -266,6 +332,7 @@ def pause_session():
         return _auth_failure_response()
 
     _, context = _resolve_session_request()
+    _bind_observability_context(context)
     owner = f"session-control-{uuid4().hex}"
     acquired = LearningTurnLease.acquire(
         context["area"],
@@ -295,6 +362,13 @@ def pause_session():
             student_id=context["student_id"],
         )
 
+    Observability.event(
+        current_app.logger,
+        "session_transition",
+        action="pause",
+        status=session.get("status"),
+        duplicate=bool(session.get("duplicate")),
+    )
     return jsonify({"ok": True, "session": session}), 200
 
 
@@ -304,6 +378,7 @@ def resume_session():
         return _auth_failure_response()
 
     data, context = _resolve_session_request()
+    _bind_observability_context(context)
     mode = str(data.get("mode", "direct")).strip().lower()
     if mode not in LearningSessionLifecycle.VALID_RESUME_MODES:
         return jsonify({"error": "modo de retomada inválido"}), 400
@@ -338,6 +413,14 @@ def resume_session():
             student_id=context["student_id"],
         )
 
+    Observability.event(
+        current_app.logger,
+        "session_transition",
+        action="resume",
+        resume_mode=mode,
+        status=session.get("status"),
+        duplicate=bool(session.get("duplicate")),
+    )
     return jsonify({"ok": True, "session": session}), 200
 
 
@@ -396,11 +479,16 @@ def chat_stream():
     student_context = StudentContext.resolve(area)
     student_id = student_context["student_id"]
     session_id = student_context["session_id"]
+    _bind_observability_context(
+        student_context,
+        turn_id=turn_id,
+    )
     session_runtime = LearningSessionLifecycle.get(
         area,
         student_id=student_id,
         session_id=session_id,
     )
+    request_id = getattr(g, "apex_request_id", None)
 
     if session_runtime.get("status") == LearningSessionLifecycle.PAUSED:
         replay_allowed = False
@@ -470,6 +558,14 @@ def chat_stream():
     @stream_with_context
     def generate():
 
+        # O streaming pode continuar depois do teardown inicial do Flask.
+        # Reata explicitamente o mesmo request_id ao contexto operacional.
+        Observability.begin_request(request_id)
+        _bind_observability_context(
+            student_context,
+            turn_id=turn_id,
+        )
+        turn_started_at = time.monotonic()
         lease_owner = turn_id or uuid4().hex
         lease_acquired = False
 
@@ -480,6 +576,11 @@ def chat_stream():
             )
 
             if previous_response:
+                Observability.event(
+                    current_app.logger,
+                    "learning_turn_replay",
+                    latency_ms=Observability.elapsed_ms(turn_started_at),
+                )
                 yield sse(
                     {
                         "token": previous_response
@@ -494,6 +595,12 @@ def chat_stream():
 
             if not GROQ_API_KEY:
 
+                Observability.event(
+                    current_app.logger,
+                    "learning_turn_blocked",
+                    reason="llm_not_configured",
+                    latency_ms=Observability.elapsed_ms(turn_started_at),
+                )
                 yield sse(
                     {
                         "error":
@@ -513,6 +620,12 @@ def chat_stream():
             )
 
             if not lease_acquired:
+                Observability.event(
+                    current_app.logger,
+                    "learning_turn_blocked",
+                    reason="lease_busy",
+                    latency_ms=Observability.elapsed_ms(turn_started_at),
+                )
                 yield sse(
                     {
                         "error":
@@ -530,6 +643,12 @@ def chat_stream():
                 session_id=session_id,
             )
             if current_session.get("status") == LearningSessionLifecycle.PAUSED:
+                Observability.event(
+                    current_app.logger,
+                    "learning_turn_blocked",
+                    reason="session_paused",
+                    latency_ms=Observability.elapsed_ms(turn_started_at),
+                )
                 yield sse(
                     {
                         "error": "Sessão pausada",
@@ -545,6 +664,11 @@ def chat_stream():
             )
 
             if previous_response:
+                Observability.event(
+                    current_app.logger,
+                    "learning_turn_replay",
+                    latency_ms=Observability.elapsed_ms(turn_started_at),
+                )
                 yield sse(
                     {
                         "token": previous_response
@@ -570,6 +694,7 @@ def chat_stream():
                 area,
                 student_id=student_id,
             )
+            initial_stage = learner_state.get("stage")
             if session_runtime.get("status") == LearningSessionLifecycle.REVIEWING:
                 tracking_request = None
             else:
@@ -589,9 +714,11 @@ def chat_stream():
                         identification_messages,
                         purpose=LLMGateway.PURPOSE_CONCEPT_IDENTIFICATION,
                     )
-                except LLMProviderError:
-                    current_app.logger.exception(
-                        "Falha na identificacao semantica do conceito"
+                except LLMProviderError as exc:
+                    Observability.exception(
+                        current_app.logger,
+                        "concept_identification_failed",
+                        error_type=type(exc).__name__,
                     )
 
             identified_concept = None
@@ -661,9 +788,11 @@ def chat_stream():
                         evidence_messages,
                         purpose=LLMGateway.PURPOSE_EVIDENCE_EVALUATION,
                     )
-                except LLMProviderError:
-                    current_app.logger.exception(
-                        "Falha na avaliacao semantica da evidencia"
+                except LLMProviderError as exc:
+                    Observability.exception(
+                        current_app.logger,
+                        "evidence_evaluation_failed",
+                        error_type=type(exc).__name__,
                     )
 
             semantic_evidence = None
@@ -716,7 +845,7 @@ def chat_stream():
                     "Resposta vazia recebida do tutor"
                 )
 
-            ProcessLearningTurn.commit_turn(
+            committed_result = ProcessLearningTurn.commit_turn(
                 area,
                 user_message,
                 identified_concept,
@@ -729,16 +858,36 @@ def chat_stream():
                 teaching_action=teaching_action,
             )
 
+            final_state = committed_result.get("learner_state", {})
+            Observability.event(
+                current_app.logger,
+                "learning_turn_completed",
+                latency_ms=Observability.elapsed_ms(turn_started_at),
+                stage_before=initial_stage,
+                stage_after=final_state.get("stage"),
+                teaching_action=committed_result.get("teaching_action"),
+                evidence_outcome=(
+                    semantic_evidence.get("outcome")
+                    if isinstance(semantic_evidence, dict)
+                    else None
+                ),
+                mastery=final_state.get("mastery"),
+                duplicate=bool(committed_result.get("duplicate")),
+            )
+
             yield sse(
                 {
                     "done": True
                 }
             )
 
-        except Exception:
+        except Exception as exc:
 
-            current_app.logger.exception(
-                "Falha no streaming do tutor"
+            Observability.exception(
+                current_app.logger,
+                "learning_turn_failed",
+                error_type=type(exc).__name__,
+                latency_ms=Observability.elapsed_ms(turn_started_at),
             )
 
             yield sse(
@@ -757,10 +906,13 @@ def chat_stream():
                         lease_owner,
                         student_id=student_id,
                     )
-                except Exception:
-                    current_app.logger.exception(
-                        "Falha ao liberar reserva do turno"
+                except Exception as exc:
+                    Observability.exception(
+                        current_app.logger,
+                        "turn_lease_release_failed",
+                        error_type=type(exc).__name__,
                     )
+            Observability.clear()
 
     return Response(
         generate(),
@@ -811,6 +963,7 @@ def save_note():
 
     student_context = StudentContext.resolve(area)
     student_id = student_context["student_id"]
+    _bind_observability_context(student_context)
 
     if not text:
 
@@ -855,10 +1008,12 @@ def save_note():
 
         note_id = cursor.lastrowid
 
-    except sqlite3.Error:
+    except sqlite3.Error as exc:
 
-        current_app.logger.exception(
-            "Falha ao salvar nota"
+        Observability.exception(
+            current_app.logger,
+            "note_save_failed",
+            error_type=type(exc).__name__,
         )
 
         return jsonify(

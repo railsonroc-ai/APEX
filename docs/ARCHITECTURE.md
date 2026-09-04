@@ -25,6 +25,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 ## Tutor
 
 - `services/llm_gateway.py`: única fronteira com o SDK do provider; aplica timeout, retries deliberados, limites de geração por finalidade e logs de metadados sem conteúdo.
+- `services/observability.py`: contexto operacional por request/turno, pseudonimização de identidade e emissão de eventos JSON privacy-first.
 - `services/tutor_core.py`: prepara e protege o contexto enviado ao modelo.
 - `prompts/tutor.py`: contém as regras pedagógicas atuais.
 
@@ -120,6 +121,12 @@ A app factory aplica headers HTTP defensivos a todas as respostas: CSP compatív
 ## Runtime LLM
 
 O `LLMGateway` é a única camada autorizada a importar o SDK Groq. O adapter expõe apenas texto completo ou tokens de streaming ao restante do APEX. As chamadas são classificadas como `concept_identification`, `evidence_evaluation` ou `tutor_response`, cada uma com limite próprio de geração. O cliente do provider recebe timeout e número de retries configurados explicitamente; os logs registram `call_id`, finalidade, modelo, latência, uso de tokens quando disponível e classe de erro, sem registrar prompts ou respostas.
+
+## Observabilidade operacional
+
+A app factory cria um `request_id` server-side para cada request e o devolve em `X-Apex-Request-ID`. No chat SSE, o mesmo ID é reatado ao contexto do generator para preservar correlação durante todo o streaming. `turn_id`, área e referências SHA-256 truncadas de aluno/sessão compõem o contexto operacional. Os eventos são serializados como JSON com prefixo `apex_event` e incluem somente metadados escalares permitidos. O contrato rejeita explicitamente campos como `user_message`, `assistant_message`, `student_answer`, `prompt`, `response`, `content`, notas e segredos.
+
+Eventos centrais: `http_response_ready`, `llm_call`, `learning_turn_completed`, `learning_turn_failed`, `learning_turn_replay`, `learning_turn_blocked`, `session_transition`, `auth_rejected` e `auth_rate_limited`. Assim, é possível correlacionar latência, tokens, erros, etapa antes/depois e decisão pedagógica sem transformar logs em uma cópia das conversas educacionais.
 
 ## Produção e testes
 

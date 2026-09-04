@@ -11,6 +11,7 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `security.py` — autenticação por `X-Apex-Key`, vínculo da credencial ao aluno e aplicação de rate limit.
 - `services/access_control.py` — credenciais persistidas por hash, rotação/revogação e quota SQLite compartilhada entre workers.
 - `services/llm_gateway.py` — adapter único para Groq, limites por finalidade e telemetria segura.
+- `services/observability.py` — contexto de request/turno, pseudonimização de identidade e eventos JSON sem conteúdo pedagógico sensível.
 - `prompts/tutor.py` — prompt pedagógico do tutor.
 - `services/tutor_core.py` — preparação e proteção do contexto.
 - `identity.py` — IDs estáveis do aluno e das sessões padrão do APEX individual.
@@ -52,7 +53,7 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 
 A interface consulta o lifecycle no servidor ao abrir a página e depois de cada turno confirmado. Em `paused`, o campo de mensagem fica desabilitado e aparecem apenas as opções de retomada; em `reviewing`, o painel informa que a revisão está ativa. O navegador renderiza o estado recebido do backend, mas não decide a transição pedagógica.
 
-Rotas protegidas usam credenciais vinculadas ao aluno no servidor. A chave em texto puro não é salva no SQLite; a credencial padrão é provisionada no bootstrap a partir de `APEX_ACCESS_KEY` e pode ser rotacionada ao reiniciar com nova configuração. O rate limit é persistido no SQLite para ser compartilhado entre workers Gunicorn.
+Rotas protegidas usam credenciais vinculadas ao aluno no servidor. A chave em texto puro não é salva no SQLite; a credencial padrão é provisionada no bootstrap a partir de `APEX_ACCESS_KEY` e pode ser rotacionada ao reiniciar com nova configuração. O rate limit é persistido no SQLite para ser compartilhado entre workers Gunicorn. Cada resposta HTTP também recebe `X-Apex-Request-ID`; eventos `apex_event` correlacionam requests, turnos, LLM e transições de sessão sem registrar mensagens, prompts, respostas, notas ou segredos.
 
 ## TutorCore
 

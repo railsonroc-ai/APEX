@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import json
 
 import pytest
 
@@ -6,6 +7,7 @@ from backend.services.llm_gateway import (
     LLMGateway,
     LLMProviderError,
 )
+from backend.services.observability import Observability
 
 
 LIMITS = {
@@ -201,14 +203,31 @@ def test_gateway_logs_metadata_without_prompt_or_response(caplog):
 
     gateway = build_gateway(Provider)
 
-    with caplog.at_level("INFO"):
-        gateway.complete_text(
-            [{"role": "user", "content": "PROMPT_SECRETO"}],
-            purpose=LLMGateway.PURPOSE_EVIDENCE_EVALUATION,
-        )
+    Observability.begin_request("request-llm-test")
+    Observability.bind(turn_id="turn-llm-test", area="ads")
+    try:
+        with caplog.at_level("INFO"):
+            gateway.complete_text(
+                [{"role": "user", "content": "PROMPT_SECRETO"}],
+                purpose=LLMGateway.PURPOSE_EVIDENCE_EVALUATION,
+            )
+    finally:
+        Observability.clear()
 
     logs = "\n".join(record.getMessage() for record in caplog.records)
     assert "llm_call" in logs
     assert "evidence_evaluation" in logs
     assert "PROMPT_SECRETO" not in logs
     assert "RESPOSTA_SECRETA" not in logs
+
+    structured = next(
+        record.getMessage()
+        for record in caplog.records
+        if record.getMessage().startswith(Observability.EVENT_PREFIX)
+    )
+    payload = json.loads(structured[len(Observability.EVENT_PREFIX):])
+    assert payload["event"] == "llm_call"
+    assert payload["request_id"] == "request-llm-test"
+    assert payload["turn_id"] == "turn-llm-test"
+    assert payload["purpose"] == LLMGateway.PURPOSE_EVIDENCE_EVALUATION
+    assert payload["ok"] is True

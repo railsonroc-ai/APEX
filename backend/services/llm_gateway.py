@@ -6,6 +6,8 @@ import time
 from typing import Any, Callable, Iterable, Iterator
 from uuid import uuid4
 
+from backend.services.observability import Observability
+
 
 @dataclass(frozen=True)
 class LLMCallMeta:
@@ -170,20 +172,19 @@ class LLMGateway:
         )
 
         # Não incluir messages, prompt nem resposta nos logs.
-        self.logger.info(
-            "llm_call call_id=%s purpose=%s model=%s stream=%s ok=%s "
-            "latency_ms=%s prompt_tokens=%s completion_tokens=%s "
-            "total_tokens=%s error_type=%s",
-            meta.call_id,
-            meta.purpose,
-            meta.model,
-            meta.stream,
-            ok,
-            meta.latency_ms,
-            meta.prompt_tokens,
-            meta.completion_tokens,
-            meta.total_tokens,
-            error_type or "",
+        Observability.event(
+            self.logger,
+            "llm_call",
+            call_id=meta.call_id,
+            purpose=meta.purpose,
+            model=meta.model,
+            stream=meta.stream,
+            ok=bool(ok),
+            latency_ms=meta.latency_ms,
+            prompt_tokens=meta.prompt_tokens,
+            completion_tokens=meta.completion_tokens,
+            total_tokens=meta.total_tokens,
+            error_type=error_type or None,
         )
         return meta
 

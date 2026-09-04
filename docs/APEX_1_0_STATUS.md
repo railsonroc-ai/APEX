@@ -44,6 +44,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `Session UI`: controles da página principal que refletem o estado server-side e expõem Pausar / Retomar direto / Revisar antes.
 - `LLMGateway`: fronteira única com o provider de IA, com timeout/retries deliberados, limites de geração por finalidade e telemetria sem conteúdo.
 - `create_app()`: factory Flask sem efeitos de persistência no import; bootstrap de produção e pytest inicializam o SQLite explicitamente em ambientes separados.
+- `Observability`: correlação por `request_id`/`turn_id`, eventos JSON e referências pseudonimizadas de identidade, sem conteúdo pedagógico sensível nos logs.
 
 ## Confiabilidade
 
@@ -82,6 +83,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - cada finalidade LLM possui limite de geração configurável e o provider recebe política explícita de retries.
 - logs LLM registram latência e tokens quando disponíveis, sem persistir prompt/resposta.
 - importar `backend.app` não executa migrations nem cria `apex.db`; a suíte pytest força um diretório SQLite temporário próprio.
+- cada resposta HTTP recebe `X-Apex-Request-ID`; logs operacionais estruturados correlacionam requests, turnos, chamadas LLM, transições de sessão e falhas sem registrar mensagens, prompts, respostas, notas ou chaves.
 
 ## Validação da release
 

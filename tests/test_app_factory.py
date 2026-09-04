@@ -85,3 +85,20 @@ def test_start_script_bootstraps_access_control_after_database():
     assert script.index("init_database()") < script.index(
         "bootstrap_access_control()"
     ) < script.index("exec gunicorn backend.app:app")
+
+
+def test_request_id_header_is_generated_for_each_response():
+    application = create_app({"TESTING": True})
+    client = application.test_client()
+
+    first = client.get("/")
+    second = client.get("/")
+
+    first_id = first.headers.get("X-Apex-Request-ID")
+    second_id = second.headers.get("X-Apex-Request-ID")
+
+    assert first_id
+    assert second_id
+    assert first_id != second_id
+    assert len(first_id) == 32
+    assert len(second_id) == 32
