@@ -3,6 +3,7 @@ from backend.config import (
 )
 from backend.prompts.tutor import TUTOR_SYSTEM_PROMPT
 from backend.services.concept_catalog import ConceptCatalog
+from backend.services.assistance_policy import AssistancePolicy
 
 
 class TutorCore:
@@ -99,6 +100,17 @@ class TutorCore:
 
         if teaching_action:
             pedagogical_context += f"Ação pedagógica prioritária: {teaching_action}.\n"
+            assistance_contract = AssistancePolicy.contract_for_action(
+                teaching_action
+            )
+            pedagogical_context += (
+                "Nível de assistência controlado pelo servidor: "
+                f"{assistance_contract['assistance_level']}.\n"
+                "Contrato de assistência: "
+                f"{assistance_contract['instruction']}\n"
+                "Não aumente o nível de ajuda além deste contrato e não "
+                "declare outro nível de assistência.\n"
+            )
 
         return (
             f"{TUTOR_SYSTEM_PROMPT}\n\n"

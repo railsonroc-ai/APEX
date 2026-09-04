@@ -21,6 +21,7 @@ EXPECTED_MIGRATIONS = [
     (6, "create_evidence_events"),
     (7, "add_concept_catalog"),
     (8, "create_mastery_assessments"),
+    (9, "create_assistance_events"),
 ]
 
 
@@ -108,6 +109,7 @@ def test_new_database_applies_ordered_migrations(
         "concept_definitions",
         "concept_aliases",
         "mastery_assessments",
+        "assistance_events",
     }.issubset(tables)
 
     assert "concept_id" in turn_columns
@@ -642,7 +644,7 @@ def test_v5_database_receives_empty_evidence_ledger(
 
         assert total == 0
         assert turns == 1
-        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8]
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9]
         assert connection.execute(
             "PRAGMA foreign_key_check"
         ).fetchall() == []
@@ -1024,7 +1026,7 @@ def test_v7_database_receives_empty_mastery_assessment_ledger(monkeypatch, tmp_p
         ).fetchone()[0]
         assert total == 0
         assert preserved_evidence == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1086,5 +1088,122 @@ def test_mastery_assessment_migration_rolls_back_schema_and_version(monkeypatch,
         assert table is None
         assert trigger is None
         assert versions == [1, 2, 3, 4, 5, 6, 7]
+    finally:
+        connection.close()
+
+
+
+def test_v8_database_receives_empty_assistance_ledger(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="v8-to-v9.db")
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:8],
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO learning_turns (
+                student_id, session_id, turn_id, area,
+                user_message, assistant_message, concept_id
+            ) VALUES (
+                'student_default', 'session_default_ads', 'turn-v8-before-v9',
+                'ads', 'Pergunta', 'Resposta', 'ads.variables'
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations,
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        total = connection.execute(
+            "SELECT COUNT(*) FROM assistance_events"
+        ).fetchone()[0]
+        versions = [
+            row["version"] for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+        preserved_turn = connection.execute(
+            "SELECT COUNT(*) FROM learning_turns WHERE turn_id='turn-v8-before-v9'"
+        ).fetchone()[0]
+        assert total == 0
+        assert preserved_turn == 1
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_assistance_migration_rolls_back_schema_and_version(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="assistance-v9-rollback.db")
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:8],
+    )
+    database_module.init_database()
+
+    def failing(connection):
+        migrations_module.create_assistance_events(connection)
+        raise RuntimeError("falha depois do assistance ledger")
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:8]
+        + (
+            Migration(
+                9,
+                "create_assistance_events",
+                failing,
+            ),
+        ),
+    )
+
+    with pytest.raises(MigrationError, match="Falha ao aplicar migração 9"):
+        database_module.init_database()
+
+    connection = connect(path)
+    try:
+        table = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type='table' AND name='assistance_events'
+            """
+        ).fetchone()
+        trigger = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type='trigger' AND name='assistance_events_no_update'
+            """
+        ).fetchone()
+        versions = [
+            row["version"] for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+        assert table is None
+        assert trigger is None
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8]
     finally:
         connection.close()

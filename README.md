@@ -10,7 +10,7 @@ A fundação técnica e o hardening inicial estão concluídos.
 
 O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn, um ledger imutável de evidências pedagógicas, catálogo mínimo de competências com `concept_id` estável e uma política de domínio baseada em portfólio de evidências.
 
-A fundação do Evidence Engine torna avaliações confirmadas auditáveis por aluno/turno, com rubrica e policy versionadas. A identidade das competências também é estável: aliases convergem para `concept_id` versionado e texto livre do LLM não funciona como chave de negócio. A `MasteryPolicy` adiciona um segundo gate: score sozinho não conclui uma competência; são exigidas evidências aplicadas suficientes, demonstrações, diversidade mínima de etapas e uma evidência atual válida. Quando assistência explícita for rastreada, a política também exige demonstração com baixa ajuda.
+A fundação do Evidence Engine torna avaliações confirmadas auditáveis por aluno/turno, com rubrica e policy versionadas. A identidade das competências também é estável: aliases convergem para `concept_id` versionado e texto livre do LLM não funciona como chave de negócio. A `MasteryPolicy` adiciona um segundo gate: score sozinho não conclui uma competência; são exigidas evidências aplicadas suficientes, demonstrações, diversidade mínima de etapas e uma evidência atual válida. A assistência agora é rastreada pelo servidor: cada resposta do tutor recebe um `AssistanceEvent` derivado da ação pedagógica e a evidência seguinte herda esse nível de suporte. A conclusão exige demonstração com baixa assistência e não aceita `untracked`, `guided` ou `direct` como evidência final suficiente.
 
 ## Executar
 
@@ -52,4 +52,4 @@ Materiais históricos: `docs/legacy/`
 
 **Fundação técnica:** concluída.
 
-**Próxima etapa:** tornar scaffolding/nível de ajuda explícito e evoluir a estimativa de competência com retenção e contextos profissionais, mantendo decisões auditáveis.
+**Próxima etapa:** estruturar tentativas/desafios e rubricas por tipo de atividade, aproveitando identidade, evidência, assistência e domínio já auditáveis.

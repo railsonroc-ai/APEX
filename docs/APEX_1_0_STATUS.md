@@ -20,6 +20,8 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `EvidenceEvent`: ledger imutável das avaliações confirmadas, com contexto, confiança, assistência, versão da rubrica/política e mastery antes/depois.
 - `MasteryPolicy`: política versionada que impede conclusão apenas por score e exige portfólio mínimo de evidências.
 - `MasteryAssessment`: ledger imutável da decisão de domínio, contagens, diversidade, retenção observada e bloqueadores.
+- `AssistancePolicy`: política server-side que converte a ação pedagógica em nível estável de ajuda.
+- `AssistanceEvent`: ledger imutável da assistência vinculada à resposta do tutor; a evidência seguinte usa esse evento anterior.
 - `ConceptCatalog`: catálogo mínimo versionado com `concept_id` estável, aliases e nomes canônicos.
 - `ConceptTracker`: seleção do conceito somente entre IDs permitidos pelo catálogo.
 - `ConceptActivation`: início e retomada de conceitos sem contaminação de estado.
@@ -51,6 +53,9 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - avaliações abaixo do limiar podem ser auditadas sem alterar o estado pedagógico;
 - conclusão de competência exige decisão explícita da `MasteryPolicy`; chamar a transição isoladamente não contorna o gate;
 - cada evidência confirmada recebe uma avaliação de domínio versionada e explicável por bloqueadores;
+- o nível de assistência não é fornecido pelo navegador nem declarado pela LLM: nasce da `TeachingPolicy`/`AssistancePolicy` e é persistido no turno confirmado;
+- a assistência atribuída à resposta do aluno vem da mensagem anterior do tutor, associada por aluno, sessão, área, conceito e turno;
+- conclusão de domínio exige pelo menos uma demonstração com assistência `independent` ou `light`, e a evidência final não pode ser `untracked`, `guided` ou `direct`;
 - conceitos legados desconhecidos são preservados como não selecionáveis e recebem nome seguro;
 - configuração de produção exige `SECRET_KEY` e `APEX_ACCESS_KEY`.
 

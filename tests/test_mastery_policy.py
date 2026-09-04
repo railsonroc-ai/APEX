@@ -34,7 +34,7 @@ def evaluate(monkeypatch, existing, **overrides):
         "mastery_score": 0.8,
         "current_applied": True,
         "student_id": "student_default",
-        "assistance_level": "untracked",
+        "assistance_level": "independent",
     }
     params.update(overrides)
     return MasteryPolicy.evaluate(**params)
@@ -120,6 +120,22 @@ def test_tracked_assistance_requires_low_assistance_demonstration(monkeypatch):
 
     assert allowed["can_complete"] is True
     assert allowed["low_assistance_demonstrated_count"] == 1
+
+
+def test_current_assistance_must_be_low_and_recommends_independent_recheck(monkeypatch):
+    decision = evaluate(
+        monkeypatch,
+        [
+            event("demonstrated", "compreender", assistance="guided"),
+            event("partial", "testar", assistance="direct"),
+        ],
+        assistance_level="untracked",
+    )
+
+    assert decision["can_complete"] is False
+    assert MasteryPolicy.BLOCK_ASSISTANCE in decision["blockers"]
+    assert MasteryPolicy.BLOCK_CURRENT_ASSISTANCE in decision["blockers"]
+    assert decision["recommended_stage"] == "testar"
 
 
 def test_retention_demonstration_is_visible_in_decision(monkeypatch):

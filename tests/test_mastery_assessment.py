@@ -5,7 +5,9 @@ import pytest
 import backend.database as database_module
 import backend.services.process_learning_turn as turn_module
 from backend.services.concept_progress import ConceptProgress
+from backend.services.assistance_event import AssistanceEvent
 from backend.services.learner_state import LearnerState
+from backend.services.learning_history import LearningHistory
 from backend.services.mastery_assessment import MasteryAssessment
 from backend.services.mastery_policy import MasteryPolicy
 from backend.services.process_learning_turn import ProcessLearningTurn
@@ -38,6 +40,32 @@ def context(stage, answer):
 
 
 def commit_demo(turn_id, stage, answer, *, identified=None):
+    action_by_stage = {
+        "compreender": "explicar",
+        "testar": "testar",
+        "fixar": "consolidar",
+        "reencontrar": "revisar",
+    }
+    source_turn_id = f"source-{turn_id}"
+    tutor_message = f"Atividade na etapa {stage}."
+
+    LearningHistory.record(
+        turn_id=source_turn_id,
+        area="ads",
+        user_message="Preparar atividade.",
+        assistant_message=tutor_message,
+        concept="variáveis",
+    )
+    AssistanceEvent.record(
+        turn_id=source_turn_id,
+        area="ads",
+        concept="variáveis",
+        teaching_action=action_by_stage.get(stage, "explicar"),
+    )
+
+    evidence_context = context(stage, answer)
+    evidence_context["tutor_message"] = tutor_message
+
     return ProcessLearningTurn.commit_turn(
         area="ads",
         user_message=answer,
@@ -45,7 +73,7 @@ def commit_demo(turn_id, stage, answer, *, identified=None):
         semantic_evidence=evidence(),
         turn_id=turn_id,
         assistant_message=f"Resposta do tutor {turn_id}.",
-        evidence_context=context(stage, answer),
+        evidence_context=evidence_context,
     )
 
 

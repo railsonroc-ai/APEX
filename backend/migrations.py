@@ -1275,6 +1275,89 @@ def create_mastery_assessments(connection):
     """)
 
 
+
+def create_assistance_events(connection):
+    connection.execute("""
+        CREATE TABLE assistance_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assistance_id TEXT NOT NULL UNIQUE,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            concept_id TEXT,
+            teaching_action TEXT NOT NULL,
+            assistance_level TEXT NOT NULL,
+            policy_id TEXT NOT NULL,
+            policy_version INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(student_id, id, area),
+            FOREIGN KEY(student_id, turn_id)
+                REFERENCES learning_turns(student_id, turn_id),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            UNIQUE(student_id, turn_id),
+            CHECK(area IN ('ads', 'it')),
+            CHECK(teaching_action IN (
+                'explicar',
+                'verificar',
+                'testar',
+                'corrigir',
+                'consolidar',
+                'avancar',
+                'revisar'
+            )),
+            CHECK(assistance_level IN (
+                'untracked',
+                'independent',
+                'light',
+                'guided',
+                'direct'
+            )),
+            CHECK(policy_version > 0)
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_assistance_events_student_concept_created
+        ON assistance_events (
+            student_id,
+            session_id,
+            area,
+            concept_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_assistance_events_policy
+        ON assistance_events (
+            policy_id,
+            policy_version,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER assistance_events_no_update
+        BEFORE UPDATE ON assistance_events
+        BEGIN
+            SELECT RAISE(ABORT, 'assistance_events are immutable');
+        END
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER assistance_events_no_delete
+        BEFORE DELETE ON assistance_events
+        BEGIN
+            SELECT RAISE(ABORT, 'assistance_events are immutable');
+        END
+    """)
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -1315,6 +1398,11 @@ MIGRATIONS = (
         8,
         "create_mastery_assessments",
         create_mastery_assessments,
+    ),
+    Migration(
+        9,
+        "create_assistance_events",
+        create_assistance_events,
     ),
 )
 

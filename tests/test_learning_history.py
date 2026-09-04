@@ -258,3 +258,32 @@ def test_existing_learning_turns_table_is_migrated(
 
     assert "concept_id" in columns
     assert "concept" not in columns
+
+
+def test_latest_confirmed_turn_returns_exact_source_context(monkeypatch, tmp_path):
+    prepare_database(monkeypatch, tmp_path)
+
+    LearningHistory.record(
+        turn_id="source-old",
+        area="ads",
+        user_message="Pergunta antiga",
+        assistant_message="Resposta antiga",
+        concept="variáveis",
+    )
+    LearningHistory.record(
+        turn_id="source-latest",
+        area="ads",
+        user_message="Pergunta nova",
+        assistant_message="Resposta nova",
+        concept="variáveis",
+    )
+
+    turn = LearningHistory.latest_confirmed_turn(
+        "ads",
+        concept_id="ads.variables",
+        session_id="session_default_ads",
+    )
+
+    assert turn["turn_id"] == "source-latest"
+    assert turn["assistant_message"] == "Resposta nova"
+    assert turn["concept_id"] == "ads.variables"

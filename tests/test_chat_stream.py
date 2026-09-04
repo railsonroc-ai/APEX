@@ -261,6 +261,14 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
         "get_messages",
         lambda area, concept=None, **kwargs: history,
     )
+    monkeypatch.setattr(
+        app_module.LearningHistory,
+        "latest_confirmed_turn",
+        lambda *args, **kwargs: {
+            "turn_id": "source-semantic-turn",
+            "assistant_message": "Explique o que é uma variável.",
+        },
+    )
 
     client = app_module.app.test_client()
     response = client.post(
@@ -320,7 +328,7 @@ def test_completed_concept_schedules_review(monkeypatch):
         classmethod(
             lambda cls, **kwargs: {
                 "policy_id": "evidence_portfolio_mastery",
-                "policy_version": 1,
+                "policy_version": 2,
                 "score": 0.9,
                 "can_complete": True,
                 "applied_evidence_count": 4,
@@ -362,6 +370,14 @@ def test_completed_concept_schedules_review(monkeypatch):
         app_module.LearningHistory,
         "get_messages",
         lambda area, concept=None, **kwargs: server_history,
+    )
+    monkeypatch.setattr(
+        app_module.LearningHistory,
+        "latest_confirmed_turn",
+        lambda *args, **kwargs: {
+            "turn_id": "source-completion-turn",
+            "assistant_message": "Aplique o conceito.",
+        },
     )
 
     response = app_module.app.test_client().post(

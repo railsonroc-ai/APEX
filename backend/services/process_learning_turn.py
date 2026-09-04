@@ -8,6 +8,7 @@ from backend.identity import (
     normalize_student_id,
 )
 from backend.services.concept_activation import ConceptActivation
+from backend.services.assistance_event import AssistanceEvent
 from backend.services.concept_progress import ConceptProgress
 from backend.services.concept_tracker import ConceptTracker
 from backend.services.evidence_evaluator import EvidenceEvaluator
@@ -78,6 +79,8 @@ class ProcessLearningTurn:
         identified_concept,
         semantic_evidence,
         student_id=DEFAULT_STUDENT_ID,
+        session_id=None,
+        evidence_context=None,
     ):
         with preview_transaction():
             learner_state = LearnerState.get(
@@ -92,12 +95,19 @@ class ProcessLearningTurn:
                 student_id=student_id,
             )
 
+            assistance_level = AssistanceEvent.resolve_for_evidence(
+                area=area,
+                evidence_context=evidence_context,
+                student_id=student_id,
+                session_id=session_id,
+            )
+
             mastery_decision = cls._build_mastery_decision(
                 area=area,
                 learner_state=learner_state,
                 semantic_evidence=semantic_evidence,
                 student_id=student_id,
-                assistance_level=EvidencePolicy.ASSISTANCE_UNTRACKED,
+                assistance_level=assistance_level,
             )
 
             return cls._finalize(
@@ -121,7 +131,7 @@ class ProcessLearningTurn:
         student_id=DEFAULT_STUDENT_ID,
         session_id=None,
         evidence_context=None,
-        assistance_level=EvidencePolicy.ASSISTANCE_UNTRACKED,
+        teaching_action=None,
         artifact_ref=None,
     ):
         normalized_turn_id = (
@@ -270,6 +280,13 @@ class ProcessLearningTurn:
             )
             evidence_applied = bool(proposed_changes)
 
+            assistance_level = AssistanceEvent.resolve_for_evidence(
+                area=normalized_area,
+                evidence_context=evidence_context,
+                student_id=normalized_student_id,
+                session_id=normalized_session_id,
+            )
+
             mastery_decision = cls._build_mastery_decision(
                 area=normalized_area,
                 learner_state=state_before_evidence,
@@ -326,6 +343,21 @@ class ProcessLearningTurn:
                         student_id=normalized_student_id,
                         session_id=normalized_session_id,
                     )
+
+                effective_action = result["teaching_action"]
+                if teaching_action is not None and teaching_action != effective_action:
+                    raise ValueError(
+                        "teaching_action não corresponde à decisão confirmada"
+                    )
+
+                AssistanceEvent.record(
+                    turn_id=normalized_turn_id,
+                    area=normalized_area,
+                    concept_id=result["learner_state"].get("current_concept_id"),
+                    teaching_action=effective_action,
+                    student_id=normalized_student_id,
+                    session_id=normalized_session_id,
+                )
 
             return result
 

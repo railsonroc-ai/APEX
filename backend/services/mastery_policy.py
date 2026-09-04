@@ -14,7 +14,7 @@ class MasteryPolicy:
     """
 
     POLICY_ID = "evidence_portfolio_mastery"
-    POLICY_VERSION = 1
+    POLICY_VERSION = 2
 
     MIN_SCORE_TO_COMPLETE = 0.80
     MIN_APPLIED_EVIDENCE = 3
@@ -38,6 +38,7 @@ class MasteryPolicy:
     BLOCK_STAGE_DIVERSITY = "insufficient_demonstrated_stage_diversity"
     BLOCK_LATEST_OUTCOME = "latest_outcome_not_demonstrated"
     BLOCK_ASSISTANCE = "no_low_assistance_demonstration"
+    BLOCK_CURRENT_ASSISTANCE = "current_assistance_too_high_or_untracked"
 
     @staticmethod
     def _normalize_score(value):
@@ -142,13 +143,19 @@ class MasteryPolicy:
             blockers.append(cls.BLOCK_STAGE_DIVERSITY)
         if candidate_outcome != EvidenceEvaluator.DEMONSTRATED:
             blockers.append(cls.BLOCK_LATEST_OUTCOME)
-        if tracked_demonstrated and not low_assistance_demonstrated:
+        if not low_assistance_demonstrated:
             blockers.append(cls.BLOCK_ASSISTANCE)
+        if normalized_assistance not in cls.LOW_ASSISTANCE_LEVELS:
+            blockers.append(cls.BLOCK_CURRENT_ASSISTANCE)
 
         recommended_stage = None
         if (
             stage_before == "fixar"
-            and cls.BLOCK_STAGE_DIVERSITY in blockers
+            and (
+                cls.BLOCK_STAGE_DIVERSITY in blockers
+                or cls.BLOCK_ASSISTANCE in blockers
+                or cls.BLOCK_CURRENT_ASSISTANCE in blockers
+            )
         ):
             recommended_stage = "testar"
 

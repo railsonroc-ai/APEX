@@ -403,6 +403,15 @@ def chat_stream():
                     history,
                     learner_state,
                 )
+                if evidence_evaluation:
+                    source_turn = LearningHistory.latest_confirmed_turn(
+                        area,
+                        concept_id=learner_state.get("current_concept_id"),
+                        student_id=student_id,
+                        session_id=session_id,
+                    )
+                    if source_turn is not None:
+                        evidence_evaluation["source_turn_id"] = source_turn["turn_id"]
 
             evidence_messages = None
             if evidence_evaluation:
@@ -439,6 +448,8 @@ def chat_stream():
                 identified_concept,
                 semantic_evidence,
                 student_id=student_id,
+                session_id=session_id,
+                evidence_context=evidence_evaluation,
             )
             learner_state = turn_result["learner_state"]
             teaching_action = turn_result["teaching_action"]
@@ -513,6 +524,7 @@ def chat_stream():
                 student_id=student_id,
                 session_id=session_id,
                 evidence_context=evidence_evaluation,
+                teaching_action=teaching_action,
             )
 
             yield sse(

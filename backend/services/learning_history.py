@@ -203,6 +203,69 @@ class LearningHistory:
         return cls.find(normalized_turn_id, student_id=normalized_student_id)
 
     @classmethod
+    def latest_confirmed_turn(
+        cls,
+        area,
+        concept=None,
+        concept_id=None,
+        student_id=DEFAULT_STUDENT_ID,
+        session_id=None,
+    ):
+        normalized_area = cls.normalize_area(area)
+        normalized_student_id = normalize_student_id(student_id)
+        normalized_session_id = cls.normalize_session_id(session_id)
+        normalized_concept_id = cls.resolve_concept_id(
+            normalized_area,
+            concept=concept,
+            concept_id=concept_id,
+        )
+        if not normalized_concept_id:
+            return None
+
+        connection = get_db_connection()
+        try:
+            params = [
+                normalized_student_id,
+                normalized_area,
+                normalized_concept_id,
+            ]
+            session_filter = ""
+            if normalized_session_id:
+                session_filter = " AND turns.session_id = ?"
+                params.append(normalized_session_id)
+
+            row = connection.execute(
+                f"""
+                SELECT
+                    turns.student_id,
+                    turns.session_id,
+                    turns.turn_id,
+                    turns.area,
+                    turns.user_message,
+                    turns.assistant_message,
+                    turns.concept_id,
+                    definition.canonical_name AS concept,
+                    turns.created_at
+                FROM learning_turns AS turns
+                LEFT JOIN concept_definitions AS definition
+                  ON definition.area = turns.area
+                 AND definition.concept_id = turns.concept_id
+                WHERE turns.student_id = ?
+                  AND turns.area = ?
+                  AND turns.concept_id = ?
+                  AND turns.assistant_message IS NOT NULL
+                  AND TRIM(turns.assistant_message) != ''
+                  {session_filter}
+                ORDER BY turns.id DESC
+                LIMIT 1
+                """,
+                tuple(params),
+            ).fetchone()
+            return dict(row) if row is not None else None
+        finally:
+            connection.close()
+
+    @classmethod
     def get_messages(
         cls,
         area,

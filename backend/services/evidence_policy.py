@@ -1,16 +1,16 @@
 class EvidencePolicy:
     """Metadados versionados da avaliação semântica atual.
 
-    Este bloco não inventa um nível de ajuda que o APEX ainda não mede.
-    Enquanto o scaffolding explícito não existir, a assistência é registrada
-    como ``untracked`` para preservar honestidade do dado.
+    A assistência usada pela evidência é derivada do ledger do turno anterior
+    do tutor. Turnos legados, anteriores ao rastreamento de assistência,
+    permanecem ``untracked`` em vez de receber uma classificação inventada.
     """
 
     RUBRIC_ID = "semantic_evidence"
     RUBRIC_VERSION = 1
 
     POLICY_ID = "learner_state_transition"
-    POLICY_VERSION = 2
+    POLICY_VERSION = 3
 
     ASSISTANCE_UNTRACKED = "untracked"
     ASSISTANCE_LEVELS = {
