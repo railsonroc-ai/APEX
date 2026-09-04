@@ -103,6 +103,11 @@ class ProcessLearningTurn:
                 user_message
             )
         )
+        normalized_assistant_message = (
+            LearningHistory.normalize_message(
+                assistant_message
+            )
+        )
 
         if not normalized_user_message:
             raise ValueError(
@@ -126,6 +131,17 @@ class ProcessLearningTurn:
                             "com conteúdo diferente"
                         )
 
+                    if (
+                        not existing.get(
+                            "assistant_message"
+                        )
+                        and not normalized_assistant_message
+                    ):
+                        raise ValueError(
+                            "assistant_message obrigatória "
+                            "para confirmar o turno"
+                        )
+
                     learner_state = LearnerState.get(
                         normalized_area
                     )
@@ -134,7 +150,7 @@ class ProcessLearningTurn:
                         LearningHistory
                         .attach_response(
                             normalized_turn_id,
-                            assistant_message,
+                            normalized_assistant_message,
                             concept=learner_state.get(
                                 "current_concept"
                             ),
@@ -158,6 +174,15 @@ class ProcessLearningTurn:
                         ),
                     }
 
+            if (
+                normalized_turn_id
+                and not normalized_assistant_message
+            ):
+                raise ValueError(
+                    "assistant_message obrigatória "
+                    "para confirmar o turno"
+                )
+
             learner_state = LearnerState.get(
                 normalized_area
             )
@@ -180,7 +205,7 @@ class ProcessLearningTurn:
                     turn_id=normalized_turn_id,
                     area=normalized_area,
                     user_message=normalized_user_message,
-                    assistant_message=assistant_message,
+                    assistant_message=normalized_assistant_message,
                     concept=result["learner_state"].get(
                         "current_concept"
                     ),

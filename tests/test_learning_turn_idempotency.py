@@ -51,6 +51,7 @@ def test_same_turn_id_does_not_apply_evidence_twice(
         identified_concept="variáveis",
         semantic_evidence=evidence,
         turn_id="turn-001",
+        assistant_message="Próxima orientação.",
     )
 
     after_first = LearnerState.get("ads")
@@ -98,6 +99,7 @@ def test_turn_id_cannot_be_reused_for_different_message(
         identified_concept="variáveis",
         semantic_evidence=demonstrated_evidence(),
         turn_id="turn-002",
+        assistant_message="Próxima orientação.",
     )
 
     with pytest.raises(
@@ -111,3 +113,32 @@ def test_turn_id_cannot_be_reused_for_different_message(
             semantic_evidence=demonstrated_evidence(),
             turn_id="turn-002",
         )
+
+
+def test_new_turn_requires_confirmed_assistant_response(
+    monkeypatch,
+    tmp_path,
+):
+    prepare_database(
+        monkeypatch,
+        tmp_path,
+    )
+
+    before = LearnerState.get("ads")
+
+    with pytest.raises(
+        ValueError,
+        match="assistant_message obrigatória",
+    ):
+        ProcessLearningTurn.commit_turn(
+            area="ads",
+            user_message="Uma variável guarda um valor.",
+            identified_concept="variáveis",
+            semantic_evidence=demonstrated_evidence(),
+            turn_id="turn-without-response",
+            assistant_message="   ",
+        )
+
+    after = LearnerState.get("ads")
+
+    assert after == before

@@ -436,6 +436,11 @@ def chat_stream():
                 assistant_parts
             )
 
+            if not assistant_message.strip():
+                raise RuntimeError(
+                    "Resposta vazia recebida do tutor"
+                )
+
             ProcessLearningTurn.commit_turn(
                 area,
                 user_message,
