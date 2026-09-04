@@ -8,7 +8,8 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `config.py` — variáveis de ambiente, caminhos e limites.
 - `database.py` — conexões e inicialização do SQLite.
 - `migrations.py` — evolução versionada e atômica do schema SQLite.
-- `security.py` — autenticação por `X-Apex-Key`.
+- `security.py` — autenticação por `X-Apex-Key`, vínculo da credencial ao aluno e aplicação de rate limit.
+- `services/access_control.py` — credenciais persistidas por hash, rotação/revogação e quota SQLite compartilhada entre workers.
 - `services/llm_gateway.py` — adapter único para Groq, limites por finalidade e telemetria segura.
 - `prompts/tutor.py` — prompt pedagógico do tutor.
 - `services/tutor_core.py` — preparação e proteção do contexto.
@@ -50,6 +51,8 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `/api/notes` — salva notas no SQLite.
 
 A interface consulta o lifecycle no servidor ao abrir a página e depois de cada turno confirmado. Em `paused`, o campo de mensagem fica desabilitado e aparecem apenas as opções de retomada; em `reviewing`, o painel informa que a revisão está ativa. O navegador renderiza o estado recebido do backend, mas não decide a transição pedagógica.
+
+Rotas protegidas usam credenciais vinculadas ao aluno no servidor. A chave em texto puro não é salva no SQLite; a credencial padrão é provisionada no bootstrap a partir de `APEX_ACCESS_KEY` e pode ser rotacionada ao reiniciar com nova configuração. O rate limit é persistido no SQLite para ser compartilhado entre workers Gunicorn.
 
 ## TutorCore
 

@@ -37,7 +37,9 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `ReviewLifecycle`: ativação, conclusão e reagendamento de revisões.
 - `ProcessLearningTurn`: orquestração determinística do turno pedagógico.
 - `LearningHistory`: histórico confirmado, limitado e isolado por aluno, área e conceito.
-- `StudentContext`: identidade pedagógica resolvida no servidor para o aluno padrão atual.
+- `StudentContext`: identidade pedagógica resolvida no servidor a partir da credencial autenticada, com fallback para o aluno padrão em desenvolvimento sem chave.
+- `AccessControl`: credenciais por hash vinculadas a `student_id`, com provisionamento, rotação e revogação.
+- `AccessRateLimiter`: quota fixed-window persistida em SQLite e compartilhada entre workers.
 - `LearningSessionLifecycle`: máquina de estados persistente `studying → paused → studying/reviewing`, com revisão antes de retomar e ledger imutável de transições.
 - `Session UI`: controles da página principal que refletem o estado server-side e expõem Pausar / Retomar direto / Revisar antes.
 - `LLMGateway`: fronteira única com o provider de IA, com timeout/retries deliberados, limites de geração por finalidade e telemetria sem conteúdo.
@@ -73,7 +75,9 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - a assistência atribuída à resposta do aluno vem da mensagem anterior do tutor, associada por aluno, sessão, área, conceito e turno;
 - conclusão de domínio exige pelo menos uma demonstração com assistência `independent` ou `light`, e a evidência final não pode ser `untracked`, `guided` ou `direct`;
 - conceitos legados desconhecidos são preservados como não selecionáveis e recebem nome seguro;
-- configuração de produção exige `SECRET_KEY` e `APEX_ACCESS_KEY`.
+- configuração de produção exige `SECRET_KEY` e `APEX_ACCESS_KEY`; a chave padrão é provisionada no banco apenas como hash.
+- rotas protegidas aplicam rate limit compartilhado e retornam HTTP 429 com `Retry-After` ao exceder a quota.
+- a app factory aplica CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` e `Permissions-Policy`.
 - o SDK Groq não é mais chamado diretamente pelas rotas; todas as chamadas passam pelo `LLMGateway`.
 - cada finalidade LLM possui limite de geração configurável e o provider recebe política explícita de retries.
 - logs LLM registram latência e tokens quando disponíveis, sem persistir prompt/resposta.
@@ -95,7 +99,7 @@ A rotina operacional também possui `tools/apex_validate.py`, `tools/apex_apply_
 
 Não fazem parte desta release:
 
-- autenticação e gestão multiusuário completas;
+- cadastro/self-service, recuperação de conta e gestão administrativa multiusuário completas;
 - SkillGraph avançado;
 - ChallengeEngine;
 - Workspace/IDE;

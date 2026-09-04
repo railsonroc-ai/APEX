@@ -6,6 +6,7 @@ from flask import (
     Flask,
     Blueprint,
     current_app,
+    g,
     render_template,
     request,
     jsonify,
@@ -34,7 +35,10 @@ from backend.database import (
     init_database,
 )
 
-from backend.security import verify_auth
+from backend.security import (
+    bootstrap_access_control,
+    verify_auth,
+)
 
 from backend.services.tutor_core import TutorCore
 from backend.services.learner_state import LearnerState
@@ -92,7 +96,59 @@ def create_app(config_overrides=None):
         application.config.update(config_overrides)
 
     application.register_blueprint(bp)
+    application.after_request(_apply_security_headers)
     return application
+
+
+# ============================================================
+# SEGURANCA HTTP / AUTENTICACAO
+# ============================================================
+
+def _apply_security_headers(response):
+    response.headers.setdefault(
+        "X-Content-Type-Options",
+        "nosniff",
+    )
+    response.headers.setdefault(
+        "X-Frame-Options",
+        "DENY",
+    )
+    response.headers.setdefault(
+        "Referrer-Policy",
+        "no-referrer",
+    )
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=()",
+    )
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'",
+    )
+    return response
+
+
+def _auth_failure_response():
+    if getattr(g, "apex_rate_limited", False):
+        response = jsonify(
+            {
+                "error": "Muitas requisicoes. Aguarde e tente novamente.",
+                "code": "rate_limited",
+            }
+        )
+        response.headers["Retry-After"] = str(
+            getattr(g, "apex_retry_after", 60)
+        )
+        return response, 429
+
+    return jsonify({"error": "Não autorizado"}), 401
 
 
 # ============================================================
@@ -193,7 +249,7 @@ def _resolve_session_request():
 @bp.route("/api/session", methods=["GET"])
 def session_status():
     if not verify_auth():
-        return jsonify({"error": "Não autorizado"}), 401
+        return _auth_failure_response()
 
     _, context = _resolve_session_request()
     session = LearningSessionLifecycle.get(
@@ -207,7 +263,7 @@ def session_status():
 @bp.route("/api/session/pause", methods=["POST"])
 def pause_session():
     if not verify_auth():
-        return jsonify({"error": "Não autorizado"}), 401
+        return _auth_failure_response()
 
     _, context = _resolve_session_request()
     owner = f"session-control-{uuid4().hex}"
@@ -245,7 +301,7 @@ def pause_session():
 @bp.route("/api/session/resume", methods=["POST"])
 def resume_session():
     if not verify_auth():
-        return jsonify({"error": "Não autorizado"}), 401
+        return _auth_failure_response()
 
     data, context = _resolve_session_request()
     mode = str(data.get("mode", "direct")).strip().lower()
@@ -296,12 +352,7 @@ def resume_session():
 def chat_stream():
 
     if not verify_auth():
-        return jsonify(
-            {
-                "error":
-                    "Não autorizado"
-            }
-        ), 401
+        return _auth_failure_response()
 
     data = (
         request.get_json(
@@ -735,13 +786,7 @@ def chat_stream():
 def save_note():
 
     if not verify_auth():
-
-        return jsonify(
-            {
-                "error":
-                    "Não autorizado"
-            }
-        ), 401
+        return _auth_failure_response()
 
     data = (
         request.get_json(
@@ -848,6 +893,7 @@ app = create_app()
 if __name__ == "__main__":
     with app.app_context():
         init_database()
+        bootstrap_access_control()
 
     app.run(
         host="0.0.0.0",

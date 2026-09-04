@@ -62,3 +62,26 @@ def test_start_script_bootstraps_database_before_gunicorn():
     assert script.index("init_database()") < script.index(
         "exec gunicorn backend.app:app"
     )
+
+
+def test_security_headers_are_applied_to_http_responses():
+    application = create_app({"TESTING": True})
+    client = application.test_client()
+
+    response = client.get("/")
+
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+    assert "camera=()" in response.headers["Permissions-Policy"]
+
+
+def test_start_script_bootstraps_access_control_after_database():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "start_apex.sh").read_text()
+
+    assert "bootstrap_access_control()" in script
+    assert script.index("init_database()") < script.index(
+        "bootstrap_access_control()"
+    ) < script.index("exec gunicorn backend.app:app")

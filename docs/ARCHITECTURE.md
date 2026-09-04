@@ -13,7 +13,8 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 
 - `app.py`: `create_app()`, rotas HTTP, coordenação do caso de uso e SSE; não acessa o SDK do provider diretamente e não inicializa o SQLite durante import.
 - `config.py`: ambiente, caminhos, limites e timeout.
-- `security.py`: autenticação por `X-Apex-Key`.
+- `security.py`: autenticação por `X-Apex-Key`, request identity e rate-limit enforcement.
+- `services/access_control.py`: credenciais por hash, provisionamento/revogação e quota SQLite multi-worker.
 - `database.py`: SQLite e configuração das conexões.
 - `migrations.py`: migrations ordenadas, atômicas e registradas no banco.
 - `identity.py`: identificadores estáveis do aluno e das sessões padrão.
@@ -111,6 +112,10 @@ A interface não cria uma segunda máquina de estados. `apex-api.js` apenas cons
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação
 e pode ser executada novamente com segurança durante a inicialização.
+
+A migration 13 cria `access_credentials` e `api_rate_limits`. Credenciais são vinculadas a `student_id`; somente o hash SHA-256 da API key é persistido. O bootstrap de produção transforma `APEX_ACCESS_KEY` na credencial padrão e uma rotação de configuração atualiza esse hash. Credenciais adicionais provisionam sessões determinísticas por aluno/área e podem ser revogadas sem alterar o kernel pedagógico. O rate limiter usa janela fixa no SQLite com `BEGIN IMMEDIATE`, portanto a contagem é compartilhada entre threads/workers em vez de ficar presa à memória de um processo.
+
+A app factory aplica headers HTTP defensivos a todas as respostas: CSP compatível com as dependências frontend atuais, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` e `Permissions-Policy` bloqueando câmera, microfone e geolocalização. A CSP ainda precisa permitir scripts/estilos inline e CDNs enquanto o frontend não for totalmente empacotado; remover esses allowances fica para um hardening posterior.
 
 ## Runtime LLM
 

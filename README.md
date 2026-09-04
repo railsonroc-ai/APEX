@@ -8,7 +8,7 @@ O objetivo é evoluir além de um chatbot: ensinar, verificar compreensão, adap
 
 A fundação técnica e o hardening inicial estão concluídos.
 
-O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn, um ledger imutável de evidências pedagógicas, catálogo mínimo de competências com `concept_id` estável e uma política de domínio baseada em portfólio de evidências. O backend agora expõe `create_app()` sem inicializar o SQLite durante o import; produção e testes fazem o bootstrap do banco explicitamente.
+O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação vinculada ao aluno, rate limit server-side, headers HTTP de segurança, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn, um ledger imutável de evidências pedagógicas, catálogo mínimo de competências com `concept_id` estável e uma política de domínio baseada em portfólio de evidências. O backend agora expõe `create_app()` sem inicializar o SQLite durante o import; produção e testes fazem o bootstrap do banco explicitamente.
 
 A fundação do Evidence Engine torna avaliações confirmadas auditáveis por aluno/turno, com rubrica e policy versionadas. A identidade das competências também é estável: aliases convergem para `concept_id` versionado e texto livre do LLM não funciona como chave de negócio. A `MasteryPolicy` adiciona um segundo gate: score sozinho não conclui uma competência; são exigidas evidências aplicadas suficientes, demonstrações, diversidade mínima de etapas e uma evidência atual válida. A assistência é rastreada pelo servidor: cada resposta do tutor recebe um `AssistanceEvent` derivado da ação pedagógica e a evidência seguinte herda esse nível de suporte. A tentativa do aluno existe como entidade própria (`LearningAttempt`), separada do julgamento, e uma `RubricAssessment` imutável registra os critérios usados na avaliação. A partir da migration 11, o fluxo real também registra uma `LearningTask` imutável para o turno do tutor; novas avaliações sem tarefa server-side confirmada não são produzidas pelo app, e a tentativa passa a carregar o `task_id` correspondente. A migration 12 adiciona um lifecycle persistente de sessão: o aluno pode pausar, retomar direto ou iniciar uma revisão de retomada, com transições auditáveis e bloqueio de novos turnos enquanto a sessão está pausada. A interface principal já consome esse lifecycle: exibe o estado server-side, bloqueia o campo de mensagem durante a pausa e oferece as ações **Pausar**, **Retomar direto** e **Revisar antes** sem manter uma segunda fonte de verdade no navegador.
 
@@ -53,6 +53,10 @@ Materiais históricos: `docs/legacy/`
 **Fundação técnica:** concluída.
 
 **Próxima etapa:** enriquecer tarefas com requisitos/artefatos e rubricas profissionais específicas, além de melhorar a continuidade visual da sessão, ainda sem ChallengeEngine completo ou execução de código.
+
+## Segurança de acesso
+
+Em produção, `APEX_ACCESS_KEY` é provisionada como credencial do aluno padrão durante o bootstrap. O SQLite armazena apenas o hash da chave. Credenciais adicionais podem ser vinculadas a alunos distintos pelo serviço de acesso, com sessões próprias e revogação; o frontend continua usando o header `X-Apex-Key`, sem mudança de fluxo visual.
 
 ## Runtime de IA
 

@@ -320,3 +320,18 @@ def test_process_turn_keeps_students_independent(
     assert first["current_concept"] == "variáveis"
     assert second["current_concept"] == "funções"
     assert first["last_evidence"] != second["last_evidence"]
+
+
+def test_request_context_uses_authenticated_student_identity():
+    from flask import Flask, g
+    from backend.identity import session_id_for_student
+
+    application = Flask(__name__)
+
+    with application.test_request_context("/"):
+        g.apex_student_id = SECOND_STUDENT_ID
+        assert StudentContext.resolve("ads") == {
+            "student_id": SECOND_STUDENT_ID,
+            "session_id": session_id_for_student(SECOND_STUDENT_ID, "ads"),
+            "area": "ads",
+        }

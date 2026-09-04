@@ -1,6 +1,9 @@
+from flask import g, has_request_context
+
 from backend.identity import (
     DEFAULT_STUDENT_ID,
     default_session_id,
+    session_id_for_student,
 )
 from backend.services.learner_state import LearnerState
 
@@ -19,10 +22,19 @@ class StudentContext:
     def resolve(cls, area="ads"):
         normalized_area = LearnerState.normalize_area(area)
 
+        student_id = DEFAULT_STUDENT_ID
+        if has_request_context():
+            student_id = getattr(
+                g,
+                "apex_student_id",
+                DEFAULT_STUDENT_ID,
+            )
+
         return {
-            "student_id": DEFAULT_STUDENT_ID,
-            "session_id": default_session_id(
-                normalized_area
+            "student_id": student_id,
+            "session_id": session_id_for_student(
+                student_id,
+                normalized_area,
             ),
             "area": normalized_area,
         }

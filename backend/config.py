@@ -181,6 +181,23 @@ TURN_LEASE_SECONDS = max(
 
 
 # ============================================================
+# CONTROLE DE ACESSO / RATE LIMIT
+# ============================================================
+
+AUTH_RATE_LIMIT_REQUESTS = _resolve_positive_int_env(
+    "AUTH_RATE_LIMIT_REQUESTS",
+    120,
+    maximum=100000,
+)
+
+AUTH_RATE_LIMIT_WINDOW_SECONDS = _resolve_positive_int_env(
+    "AUTH_RATE_LIMIT_WINDOW_SECONDS",
+    60,
+    maximum=86400,
+)
+
+
+# ============================================================
 # DADOS
 # ============================================================
 

@@ -81,7 +81,7 @@
     clearAccessKey();
 
     const key = window.prompt(
-      'Acesso protegido. Digite a sua chave APEX_ACCESS_KEY:'
+      'Acesso protegido. Digite sua chave de acesso APEX:'
     );
 
     if (!key) {

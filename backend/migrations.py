@@ -1879,6 +1879,44 @@ def create_learning_session_lifecycle(connection):
     """)
 
 
+def create_access_control(connection):
+    connection.execute("""
+        CREATE TABLE access_credentials (
+            credential_id TEXT PRIMARY KEY,
+            student_id TEXT NOT NULL,
+            label TEXT NOT NULL,
+            key_hash TEXT NOT NULL UNIQUE,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            revoked_at TEXT,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            CHECK(is_active IN (0, 1)),
+            CHECK(length(label) BETWEEN 1 AND 120),
+            CHECK(length(key_hash) = 64)
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_access_credentials_student_active
+        ON access_credentials (
+            student_id,
+            is_active,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE TABLE api_rate_limits (
+            subject_id TEXT PRIMARY KEY,
+            window_started_at INTEGER NOT NULL,
+            request_count INTEGER NOT NULL DEFAULT 0,
+            CHECK(request_count >= 0),
+            CHECK(window_started_at >= 0)
+        )
+    """)
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -1939,6 +1977,11 @@ MIGRATIONS = (
         12,
         "create_learning_session_lifecycle",
         create_learning_session_lifecycle,
+    ),
+    Migration(
+        13,
+        "create_access_control",
+        create_access_control,
     ),
 )
 

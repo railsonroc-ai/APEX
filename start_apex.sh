@@ -10,8 +10,10 @@ THREADS="${WEB_THREADS:-4}"
 echo "Inicializando schema do APEX..."
 python3 - <<'PYDB'
 from backend.database import init_database
+from backend.security import bootstrap_access_control
 
 init_database()
+bootstrap_access_control()
 print("Banco APEX: OK")
 PYDB
 

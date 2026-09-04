@@ -25,6 +25,7 @@ EXPECTED_MIGRATIONS = [
     (10, "create_learning_attempts_and_rubric_assessments"),
     (11, "create_learning_tasks"),
     (12, "create_learning_session_lifecycle"),
+    (13, "create_access_control"),
 ]
 
 
@@ -118,6 +119,8 @@ def test_new_database_applies_ordered_migrations(
         "learning_tasks",
         "learning_session_states",
         "learning_session_events",
+        "access_credentials",
+        "api_rate_limits",
     }.issubset(tables)
 
     assert "concept_id" in turn_columns
@@ -652,7 +655,7 @@ def test_v5_database_receives_empty_evidence_ledger(
 
         assert total == 0
         assert turns == 1
-        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
         assert connection.execute(
             "PRAGMA foreign_key_check"
         ).fetchall() == []
@@ -1034,7 +1037,7 @@ def test_v7_database_receives_empty_mastery_assessment_ledger(monkeypatch, tmp_p
         ).fetchone()[0]
         assert total == 0
         assert preserved_evidence == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1151,7 +1154,7 @@ def test_v8_database_receives_empty_assistance_ledger(monkeypatch, tmp_path):
         ).fetchone()[0]
         assert total == 0
         assert preserved_turn == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1273,7 +1276,7 @@ def test_v9_database_receives_empty_attempt_and_rubric_ledgers(monkeypatch, tmp_
         assert attempts == 0
         assert rubrics == 0
         assert preserved_turn == 1
-        assert versions == list(range(1, 13))
+        assert versions == list(range(1, 14))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1404,7 +1407,7 @@ def test_v10_database_receives_empty_task_ledger_without_inventing_links(monkeyp
 
         assert tasks == 0
         assert attempt_task is None
-        assert versions == list(range(1, 13))
+        assert versions == list(range(1, 14))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1538,7 +1541,7 @@ def test_v11_database_receives_session_runtime_without_inventing_events(
         assert states == session_count
         assert events == 0
         assert status == "studying"
-        assert versions == list(range(1, 13))
+        assert versions == list(range(1, 14))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1700,5 +1703,109 @@ def test_session_lifecycle_schema_has_runtime_and_immutable_event_guards(
             "idx_learning_session_events_session_created",
             "idx_learning_session_events_policy",
         }.issubset(indexes)
+    finally:
+        connection.close()
+
+
+def test_access_control_migration_creates_hashed_credentials_and_rate_limit_schema(
+    monkeypatch,
+    tmp_path,
+):
+    path = configure_database(
+        monkeypatch,
+        tmp_path,
+        name="access-v13-schema.db",
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        credential_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(access_credentials)"
+            ).fetchall()
+        }
+        rate_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(api_rate_limits)"
+            ).fetchall()
+        }
+        latest = connection.execute(
+            "SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1"
+        ).fetchone()
+
+        assert latest["version"] == 13
+        assert latest["name"] == "create_access_control"
+        assert {
+            "credential_id",
+            "student_id",
+            "label",
+            "key_hash",
+            "is_active",
+            "revoked_at",
+        }.issubset(credential_columns)
+        assert {
+            "subject_id",
+            "window_started_at",
+            "request_count",
+        }.issubset(rate_columns)
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_access_control_migration_rolls_back_schema_and_version(
+    monkeypatch,
+    tmp_path,
+):
+    path = configure_database(
+        monkeypatch,
+        tmp_path,
+        name="access-v13-rollback.db",
+    )
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:12],
+    )
+    database_module.init_database()
+
+    def failing(connection):
+        migrations_module.create_access_control(connection)
+        raise RuntimeError("falha depois do access control")
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:12] + (
+            Migration(13, "create_access_control", failing),
+        ),
+    )
+
+    with pytest.raises(MigrationError, match="Falha ao aplicar migração 13"):
+        database_module.init_database()
+
+    connection = connect(path)
+    try:
+        credentials = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='access_credentials'"
+        ).fetchone()
+        limits = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='api_rate_limits'"
+        ).fetchone()
+        versions = [
+            row["version"]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+        assert credentials is None
+        assert limits is None
+        assert versions == list(range(1, 13))
     finally:
         connection.close()
