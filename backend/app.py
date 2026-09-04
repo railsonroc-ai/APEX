@@ -22,6 +22,7 @@ from backend.config import (
     AI_DIALOG_TIMEOUT_SECONDS,
     MAX_CONTENT_LENGTH,
     MAX_USER_MESSAGE_CHARS,
+    MAX_NOTE_CHARS,
     MAX_HISTORY_MESSAGES,
 )
 
@@ -449,7 +450,14 @@ def save_note():
             }
         ), 400
 
-    text = text[:4000]
+    if len(text) > MAX_NOTE_CHARS:
+        return jsonify(
+            {
+                "error":
+                    "Texto da nota excede "
+                    f"o limite de {MAX_NOTE_CHARS} caracteres."
+            }
+        ), 400
 
     connection = get_db_connection()
 

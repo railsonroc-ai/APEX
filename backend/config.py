@@ -36,6 +36,13 @@ APEX_ACCESS_KEY = os.getenv(
 ).strip()
 
 
+if APP_ENV == "production" and not APEX_ACCESS_KEY:
+    raise RuntimeError(
+        "APEX_ACCESS_KEY deve ser configurada "
+        "em ambiente de produção."
+    )
+
+
 SECRET_KEY = os.getenv(
     "SECRET_KEY",
     "",
@@ -164,6 +171,7 @@ MAX_CONTENT_LENGTH = (
 )
 
 MAX_USER_MESSAGE_CHARS = 4000
+MAX_NOTE_CHARS = 4000
 
 MAX_HISTORY_MESSAGES = 8
 

@@ -146,90 +146,45 @@ def test_note_is_saved(
     )
 
 
-def test_note_is_limited_to_4000_characters(
+def test_note_over_4000_characters_is_rejected(
     monkeypatch,
     tmp_path,
 ):
-    database_path = (
-        tmp_path
-        / "notes-limit-test.db"
-    )
-
-    create_notes_database(
-        database_path
-    )
+    database_path = tmp_path / "notes-limit-test.db"
+    create_notes_database(database_path)
 
     def get_test_connection():
-        connection = sqlite3.connect(
-            str(database_path)
-        )
-
-        connection.row_factory = (
-            sqlite3.Row
-        )
-
+        connection = sqlite3.connect(str(database_path))
+        connection.row_factory = sqlite3.Row
         return connection
 
-    monkeypatch.setattr(
-        app_module,
-        "verify_auth",
-        lambda: True,
-    )
-
+    monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(
         app_module,
         "get_db_connection",
         get_test_connection,
     )
 
-    client = (
-        app_module
-        .app
-        .test_client()
-    )
-
-    original_text = (
-        "A" * 5000
-    )
-
-    response = client.post(
+    response = app_module.app.test_client().post(
         "/api/notes",
         json={
-            "text": original_text,
+            "text": "A" * 5000,
             "area": "ads",
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 400
+    assert "4000" in response.get_json()["error"]
 
-    note_id = (
-        response
-        .get_json()["id"]
-    )
-
-    connection = sqlite3.connect(
-        str(database_path)
-    )
-
+    connection = sqlite3.connect(str(database_path))
     try:
-        row = connection.execute(
-            """
-            SELECT text
-            FROM notes
-            WHERE id = ?
-            """,
-            (
-                note_id,
-            ),
-        ).fetchone()
-
+        count = connection.execute(
+            "SELECT COUNT(*) FROM notes"
+        ).fetchone()[0]
     finally:
         connection.close()
 
-    assert len(row[0]) == 4000
-    assert row[0] == (
-        original_text[:4000]
-    )
+    assert count == 0
 
 
 def test_invalid_note_area_falls_back_to_ads(
