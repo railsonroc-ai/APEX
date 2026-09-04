@@ -16,6 +16,8 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `security.py`: autenticação por `X-Apex-Key`.
 - `database.py`: SQLite e configuração das conexões.
 - `migrations.py`: migrations ordenadas, atômicas e registradas no banco.
+- `identity.py`: identificadores estáveis do aluno e das sessões padrão.
+- `services/student_context.py`: resolve a identidade no servidor; o navegador não escolhe `student_id`.
 
 ## Tutor
 
@@ -24,16 +26,16 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 
 ## Kernel pedagógico
 
-- `LearnerState`: estado pedagógico atual por área.
+- `LearnerState`: estado pedagógico atual por aluno + área.
 - `LearnerStateTransition`: mudanças por sinais e evidências.
 - `TeachingPolicy`: escolha determinística da próxima ação.
 - `ConceptTracker` e `ConceptActivation`: identificação e ativação de conceitos.
 - `EvidenceEvaluator`: contrato da avaliação semântica.
-- `ConceptProgress`: progresso persistente por conceito.
+- `ConceptProgress`: progresso persistente por aluno + área + conceito.
 - `ReviewScheduler`, `ReviewQueue` e `ReviewLifecycle`: revisão espaçada.
 - `ProcessLearningTurn`: preview e commit atômico do turno.
-- `LearningHistory`: histórico confirmado e autoritativo do servidor.
-- `LearningTurnLease`: reserva temporária cross-process por área.
+- `LearningHistory`: histórico confirmado e autoritativo, isolado por aluno.
+- `LearningTurnLease`: reserva temporária cross-process por aluno + área.
 
 ## Frontend
 
@@ -49,18 +51,22 @@ O SQLite atual usa `data/apex.db`.
 Tabelas principais:
 
 - `schema_migrations`: versões de schema já aplicadas;
-- `notes`: notas do aluno;
-- `learner_state`: estado atual por área;
-- `concept_progress`: progresso e revisão por conceito;
-- `learning_turns`: mensagem do aluno, resposta confirmada do tutor e conceito.
-- `learning_turn_leases`: reserva temporária do turno em processamento.
+- `students`: identidade estável do aluno;
+- `learning_sessions`: episódios de estudo associados ao aluno e à área;
+- `notes`: notas pertencentes ao aluno;
+- `learner_state`: estado atual por aluno + área;
+- `concept_progress`: progresso e revisão por aluno + área + conceito;
+- `learning_turns`: turnos idempotentes por aluno, associados a uma sessão;
+- `learning_turn_leases`: reserva temporária por aluno + área.
 
-O navegador não fornece o histórico usado pelo tutor. O backend lê apenas
-turnos confirmados, limita o contexto e o isola por área e conceito.
+O navegador não fornece o histórico usado pelo tutor e não escolhe livremente
+o `student_id`. O backend resolve a identidade do aluno padrão atual, lê apenas
+turnos confirmados e isola contexto, estado, revisão e idempotência por aluno.
 
-Como a versão 1.0 ainda é individual, somente um turno por área pode estar
-em processamento. A reserva fica no SQLite, funciona entre threads/workers e
-expira para permitir recuperação caso um worker seja interrompido.
+A reserva de turno usa a chave `student_id + area`: duas sessões do mesmo aluno
+na mesma área permanecem serializadas, enquanto alunos diferentes podem estudar
+a mesma área em paralelo. A lease fica no SQLite, funciona entre threads/workers
+e expira para permitir recuperação caso um worker seja interrompido.
 
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação
@@ -74,5 +80,7 @@ Testes: `pytest -q`.
 
 ## Limite atual
 
-O APEX 1.0 ainda é individual. `area` e `concept` isolam o contexto
-pedagógico, mas ainda não existe identidade multiusuário completa.
+O APEX 1.0 continua operando como produto individual, mas a fundação de identidade
+já existe: `student_id` participa das chaves pedagógicas e o aluno atual é resolvido
+no servidor. Ainda não existem cadastro, login, autorização individual, revogação,
+seleção de perfil ou gestão multiusuário completa.

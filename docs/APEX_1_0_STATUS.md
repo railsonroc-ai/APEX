@@ -24,18 +24,20 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `ReviewQueue`: seleção de revisões vencidas.
 - `ReviewLifecycle`: ativação, conclusão e reagendamento de revisões.
 - `ProcessLearningTurn`: orquestração determinística do turno pedagógico.
-- `LearningHistory`: histórico confirmado, limitado e isolado por conceito.
+- `LearningHistory`: histórico confirmado, limitado e isolado por aluno, área e conceito.
+- `StudentContext`: identidade pedagógica resolvida no servidor para o aluno padrão atual.
 
 ## Confiabilidade
 
 - persistência SQLite;
 - migrations de schema versionadas, atômicas e idempotentes;
+- identidade estável de aluno e sessão, com migração dos registros legados para o aluno padrão;
 - transações atômicas no turno pedagógico;
 - rollback quando uma gravação falha;
 - rollback quando o streaming da resposta falha;
 - proteção contra envio concorrente no frontend;
 - idempotência por `turn_id` e replay da resposta confirmada;
-- serialização server-side de turnos por área entre threads/workers;
+- serialização server-side de turnos por aluno + área entre threads/workers;
 - histórico pedagógico autoritativo no servidor;
 - descarte de histórico forjado enviado pelo navegador;
 - limite explícito de mensagens e notas;
@@ -55,7 +57,7 @@ A versão candidata foi validada com:
 
 Não fazem parte desta release:
 
-- multiusuário completo;
+- autenticação e gestão multiusuário completas;
 - SkillGraph avançado;
 - ChallengeEngine;
 - Workspace/IDE;

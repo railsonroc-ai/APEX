@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 from typing import Callable
 
+from backend.identity import (
+    DEFAULT_SESSION_IDS,
+    DEFAULT_STUDENT_ID,
+)
+
 
 class MigrationError(RuntimeError):
     pass
@@ -110,6 +115,369 @@ def create_learning_turn_leases(connection):
     """)
 
 
+def add_student_identity(connection):
+    connection.execute("""
+        CREATE TABLE students (
+            id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    connection.execute("""
+        CREATE TABLE learning_sessions (
+            id TEXT PRIMARY KEY,
+            student_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            ended_at TEXT,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            UNIQUE(student_id, id, area)
+        )
+    """)
+
+    connection.execute(
+        """
+        INSERT INTO students (id)
+        VALUES (?)
+        """,
+        (DEFAULT_STUDENT_ID,),
+    )
+
+    connection.executemany(
+        """
+        INSERT INTO learning_sessions (
+            id,
+            student_id,
+            area
+        )
+        VALUES (?, ?, ?)
+        """,
+        [
+            (
+                DEFAULT_SESSION_IDS["ads"],
+                DEFAULT_STUDENT_ID,
+                "ads",
+            ),
+            (
+                DEFAULT_SESSION_IDS["it"],
+                DEFAULT_STUDENT_ID,
+                "it",
+            ),
+        ],
+    )
+
+    connection.execute("""
+        CREATE TABLE notes_v5 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            area TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id)
+        )
+    """)
+
+    connection.execute(
+        """
+        INSERT INTO notes_v5 (
+            id,
+            student_id,
+            text,
+            area,
+            created_at
+        )
+        SELECT
+            id,
+            ?,
+            text,
+            area,
+            created_at
+        FROM notes
+        """,
+        (DEFAULT_STUDENT_ID,),
+    )
+
+    connection.execute("""
+        CREATE TABLE learner_state_v5 (
+            student_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            current_concept TEXT,
+            stage TEXT NOT NULL DEFAULT 'compreender',
+            last_evidence TEXT,
+            difficulty_count INTEGER NOT NULL DEFAULT 0,
+            mastery REAL NOT NULL DEFAULT 0.0,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(student_id, area),
+            FOREIGN KEY(student_id)
+                REFERENCES students(id)
+        )
+    """)
+
+    connection.execute(
+        """
+        INSERT INTO learner_state_v5 (
+            student_id,
+            area,
+            current_concept,
+            stage,
+            last_evidence,
+            difficulty_count,
+            mastery,
+            updated_at
+        )
+        SELECT
+            ?,
+            area,
+            current_concept,
+            stage,
+            last_evidence,
+            difficulty_count,
+            mastery,
+            updated_at
+        FROM learner_state
+        """,
+        (DEFAULT_STUDENT_ID,),
+    )
+
+    connection.execute("""
+        CREATE TABLE concept_progress_v5 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            concept TEXT NOT NULL,
+            mastery REAL NOT NULL DEFAULT 0.0,
+            difficulty_count INTEGER NOT NULL DEFAULT 0,
+            last_evidence TEXT,
+            review_count INTEGER NOT NULL DEFAULT 0,
+            next_review_at TEXT,
+            last_reviewed_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            UNIQUE(student_id, area, concept)
+        )
+    """)
+
+    connection.execute(
+        """
+        INSERT INTO concept_progress_v5 (
+            id,
+            student_id,
+            area,
+            concept,
+            mastery,
+            difficulty_count,
+            last_evidence,
+            review_count,
+            next_review_at,
+            last_reviewed_at,
+            updated_at
+        )
+        SELECT
+            id,
+            ?,
+            area,
+            concept,
+            mastery,
+            difficulty_count,
+            last_evidence,
+            review_count,
+            next_review_at,
+            last_reviewed_at,
+            updated_at
+        FROM concept_progress
+        """,
+        (DEFAULT_STUDENT_ID,),
+    )
+
+    connection.execute("""
+        CREATE TABLE learning_turns_v5 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            user_message TEXT NOT NULL,
+            assistant_message TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            concept TEXT,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(
+                    student_id,
+                    id,
+                    area
+                ),
+            UNIQUE(student_id, turn_id)
+        )
+    """)
+
+    connection.execute(
+        """
+        INSERT INTO learning_turns_v5 (
+            student_id,
+            session_id,
+            turn_id,
+            area,
+            user_message,
+            assistant_message,
+            created_at,
+            concept
+        )
+        SELECT
+            ?,
+            CASE
+                WHEN area = 'it' THEN ?
+                ELSE ?
+            END,
+            turn_id,
+            area,
+            user_message,
+            assistant_message,
+            created_at,
+            concept
+        FROM learning_turns
+        """,
+        (
+            DEFAULT_STUDENT_ID,
+            DEFAULT_SESSION_IDS["it"],
+            DEFAULT_SESSION_IDS["ads"],
+        ),
+    )
+
+    connection.execute("""
+        CREATE TABLE learning_turn_leases_v5 (
+            student_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            owner_token TEXT NOT NULL,
+            acquired_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            PRIMARY KEY(student_id, area),
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            UNIQUE(student_id, owner_token)
+        )
+    """)
+
+    connection.execute(
+        """
+        INSERT INTO learning_turn_leases_v5 (
+            student_id,
+            area,
+            owner_token,
+            acquired_at,
+            expires_at
+        )
+        SELECT
+            ?,
+            area,
+            owner_token,
+            acquired_at,
+            expires_at
+        FROM learning_turn_leases
+        """,
+        (DEFAULT_STUDENT_ID,),
+    )
+
+    connection.execute(
+        "DROP INDEX IF EXISTS "
+        "idx_learning_turns_area_concept_created_at"
+    )
+    connection.execute(
+        "DROP INDEX IF EXISTS "
+        "idx_learning_turn_leases_expires_at"
+    )
+
+    connection.execute("DROP TABLE notes")
+    connection.execute("DROP TABLE learner_state")
+    connection.execute("DROP TABLE concept_progress")
+    connection.execute("DROP TABLE learning_turns")
+    connection.execute("DROP TABLE learning_turn_leases")
+
+    connection.execute(
+        "ALTER TABLE notes_v5 RENAME TO notes"
+    )
+    connection.execute(
+        "ALTER TABLE learner_state_v5 "
+        "RENAME TO learner_state"
+    )
+    connection.execute(
+        "ALTER TABLE concept_progress_v5 "
+        "RENAME TO concept_progress"
+    )
+    connection.execute(
+        "ALTER TABLE learning_turns_v5 "
+        "RENAME TO learning_turns"
+    )
+    connection.execute(
+        "ALTER TABLE learning_turn_leases_v5 "
+        "RENAME TO learning_turn_leases"
+    )
+
+    connection.execute("""
+        CREATE INDEX
+            idx_notes_student_area_created_at
+        ON notes (
+            student_id,
+            area,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX
+            idx_concept_progress_student_area_review
+        ON concept_progress (
+            student_id,
+            area,
+            next_review_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX
+            idx_learning_turns_student_area_concept_created_at
+        ON learning_turns (
+            student_id,
+            area,
+            concept,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX
+            idx_learning_turns_session_created_at
+        ON learning_turns (
+            student_id,
+            session_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX
+            idx_learning_turn_leases_expires_at
+        ON learning_turn_leases (
+            expires_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX
+            idx_learning_sessions_student_area_started_at
+        ON learning_sessions (
+            student_id,
+            area,
+            started_at
+        )
+    """)
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -130,6 +498,11 @@ MIGRATIONS = (
         4,
         "create_learning_turn_leases",
         create_learning_turn_leases,
+    ),
+    Migration(
+        5,
+        "add_student_identity",
+        add_student_identity,
     ),
 )
 

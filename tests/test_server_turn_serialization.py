@@ -37,17 +37,17 @@ def prepare_turn(monkeypatch, learner_state):
     monkeypatch.setattr(
         app_module.LearnerState,
         "get",
-        lambda area: learner_state,
+        lambda area, **kwargs: learner_state,
     )
     monkeypatch.setattr(
         app_module.ConceptTracker,
         "build_tracking_request",
-        lambda *args: None,
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         app_module.ProcessLearningTurn,
         "preview_activation",
-        lambda *args: learner_state,
+        lambda *args, **kwargs: learner_state,
     )
     monkeypatch.setattr(
         app_module.LearningHistory,
@@ -57,12 +57,12 @@ def prepare_turn(monkeypatch, learner_state):
     monkeypatch.setattr(
         app_module.EvidenceEvaluator,
         "build_evaluation",
-        lambda *args: None,
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         app_module.ProcessLearningTurn,
         "preview_turn",
-        lambda *args: {
+        lambda *args, **kwargs: {
             "learner_state": learner_state,
             "teaching_action": "testar",
         },
@@ -206,7 +206,7 @@ def test_turn_is_rechecked_after_lease_acquisition(
 
     calls = {"find": 0}
 
-    def find_turn(turn_id):
+    def find_turn(turn_id, **kwargs):
         calls["find"] += 1
 
         if calls["find"] == 1:

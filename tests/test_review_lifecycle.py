@@ -16,7 +16,7 @@ def test_activate_due_enters_review_stage(monkeypatch):
     monkeypatch.setattr(
         lifecycle_module.ReviewQueue,
         "next_due",
-        lambda area, now=None: progress,
+        lambda area, now=None, **kwargs: progress,
     )
 
     def fake_update(area, **changes):
@@ -50,7 +50,7 @@ def test_successful_review_is_recorded_and_rescheduled(monkeypatch):
     monkeypatch.setattr(
         lifecycle_module.ConceptProgress,
         "get",
-        lambda area, concept: progress,
+        lambda area, concept, **kwargs: progress,
     )
     monkeypatch.setattr(
         lifecycle_module.ReviewScheduler,
@@ -102,7 +102,10 @@ def test_successful_review_is_recorded_and_rescheduled(monkeypatch):
     assert captured["progress"]["review_count"] == 2
     assert captured["progress"]["last_reviewed_at"] == "2026-09-03T12:00:00+00:00"
     assert captured["progress"]["next_review_at"] == "2026-09-10T12:00:00+00:00"
-    assert captured["state"] == {"stage": "concluido"}
+    assert captured["state"] == {
+        "stage": "concluido",
+        "student_id": "student_default",
+    }
 
 
 def test_review_cannot_complete_for_another_concept(monkeypatch):
@@ -115,7 +118,7 @@ def test_review_cannot_complete_for_another_concept(monkeypatch):
     monkeypatch.setattr(
         lifecycle_module.ConceptProgress,
         "get",
-        lambda area, concept: progress,
+        lambda area, concept, **kwargs: progress,
     )
     monkeypatch.setattr(
         lifecycle_module.ReviewScheduler,

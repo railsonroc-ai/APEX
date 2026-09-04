@@ -2,6 +2,11 @@ from backend.database import (
     preview_transaction,
     transaction,
 )
+from backend.identity import (
+    DEFAULT_STUDENT_ID,
+    default_session_id,
+    normalize_student_id,
+)
 from backend.services.concept_activation import ConceptActivation
 from backend.services.concept_progress import ConceptProgress
 from backend.services.concept_tracker import ConceptTracker
@@ -22,6 +27,7 @@ class ProcessLearningTurn:
         area,
         learner_state,
         identified_concept,
+        student_id=DEFAULT_STUDENT_ID,
     ):
         if not identified_concept:
             return learner_state
@@ -40,6 +46,7 @@ class ProcessLearningTurn:
         return ConceptActivation.activate(
             area,
             resolved_concept,
+            student_id=student_id,
         )
 
     @classmethod
@@ -48,12 +55,14 @@ class ProcessLearningTurn:
         area,
         learner_state,
         identified_concept,
+        student_id=DEFAULT_STUDENT_ID,
     ):
         with preview_transaction():
             return cls.activate_identified_concept(
                 area,
                 learner_state,
                 identified_concept,
+                student_id=student_id,
             )
 
     @classmethod
@@ -63,14 +72,19 @@ class ProcessLearningTurn:
         user_message,
         identified_concept,
         semantic_evidence,
+        student_id=DEFAULT_STUDENT_ID,
     ):
         with preview_transaction():
-            learner_state = LearnerState.get(area)
+            learner_state = LearnerState.get(
+                area,
+                student_id=student_id,
+            )
 
             learner_state = cls.activate_identified_concept(
                 area,
                 learner_state,
                 identified_concept,
+                student_id=student_id,
             )
 
             return cls._finalize(
@@ -78,6 +92,7 @@ class ProcessLearningTurn:
                 user_message,
                 learner_state,
                 semantic_evidence,
+                student_id=student_id,
             )
 
     @classmethod
@@ -89,6 +104,8 @@ class ProcessLearningTurn:
         semantic_evidence,
         turn_id=None,
         assistant_message=None,
+        student_id=DEFAULT_STUDENT_ID,
+        session_id=None,
     ):
         normalized_turn_id = (
             LearningHistory.normalize_turn_id(
@@ -108,16 +125,38 @@ class ProcessLearningTurn:
                 assistant_message
             )
         )
+        normalized_student_id = normalize_student_id(
+            student_id
+        )
+        normalized_session_id = (
+            LearningHistory.normalize_session_id(
+                session_id
+            )
+        )
+
+        if (
+            not normalized_session_id
+            and normalized_student_id == DEFAULT_STUDENT_ID
+        ):
+            normalized_session_id = default_session_id(
+                normalized_area
+            )
 
         if not normalized_user_message:
             raise ValueError(
                 "user_message obrigatória"
             )
 
+        if normalized_turn_id and not normalized_session_id:
+            raise ValueError(
+                "session_id obrigatória para confirmar o turno"
+            )
+
         with transaction():
             if normalized_turn_id:
                 existing = LearningHistory.find(
-                    normalized_turn_id
+                    normalized_turn_id,
+                    student_id=normalized_student_id,
                 )
 
                 if existing is not None:
@@ -143,7 +182,8 @@ class ProcessLearningTurn:
                         )
 
                     learner_state = LearnerState.get(
-                        normalized_area
+                        normalized_area,
+                        student_id=normalized_student_id,
                     )
 
                     existing = (
@@ -154,6 +194,7 @@ class ProcessLearningTurn:
                             concept=learner_state.get(
                                 "current_concept"
                             ),
+                            student_id=normalized_student_id,
                         )
                     )
 
@@ -184,13 +225,15 @@ class ProcessLearningTurn:
                 )
 
             learner_state = LearnerState.get(
-                normalized_area
+                normalized_area,
+                student_id=normalized_student_id,
             )
 
             learner_state = cls.activate_identified_concept(
                 normalized_area,
                 learner_state,
                 identified_concept,
+                student_id=normalized_student_id,
             )
 
             result = cls._finalize(
@@ -198,6 +241,7 @@ class ProcessLearningTurn:
                 normalized_user_message,
                 learner_state,
                 semantic_evidence,
+                student_id=normalized_student_id,
             )
 
             if normalized_turn_id:
@@ -209,6 +253,8 @@ class ProcessLearningTurn:
                     concept=result["learner_state"].get(
                         "current_concept"
                     ),
+                    student_id=normalized_student_id,
+                    session_id=normalized_session_id,
                 )
 
             return result
@@ -220,6 +266,7 @@ class ProcessLearningTurn:
         user_message,
         learner_state,
         semantic_evidence,
+        student_id=DEFAULT_STUDENT_ID,
     ):
         with transaction():
             return cls._finalize(
@@ -227,6 +274,7 @@ class ProcessLearningTurn:
                 user_message,
                 learner_state,
                 semantic_evidence,
+                student_id=student_id,
             )
 
     @classmethod
@@ -236,6 +284,7 @@ class ProcessLearningTurn:
         user_message,
         learner_state,
         semantic_evidence,
+        student_id=DEFAULT_STUDENT_ID,
     ):
         evidence_changes = LearnerStateTransition.from_evidence(
             learner_state,
@@ -248,6 +297,7 @@ class ProcessLearningTurn:
             learner_state = LearnerState.update(
                 area,
                 **evidence_changes,
+                student_id=student_id,
             )
 
             current_concept = learner_state.get("current_concept")
@@ -263,6 +313,7 @@ class ProcessLearningTurn:
                     last_evidence=learner_state.get(
                         "last_evidence"
                     ),
+                    student_id=student_id,
                 )
 
                 if (
@@ -275,6 +326,7 @@ class ProcessLearningTurn:
                         area,
                         current_concept,
                         learner_state,
+                        student_id=student_id,
                     )
 
                     if review_result:
@@ -293,12 +345,16 @@ class ProcessLearningTurn:
                             area,
                             current_concept,
                             **review_schedule,
+                            student_id=student_id,
                         )
 
         signals = LearnerSignals.detect(user_message)
 
         if LearnerSignals.REVIEW_REQUEST in signals:
-            due_review_state = ReviewLifecycle.activate_due(area)
+            due_review_state = ReviewLifecycle.activate_due(
+                area,
+                student_id=student_id,
+            )
 
             if due_review_state:
                 learner_state = due_review_state
@@ -312,6 +368,7 @@ class ProcessLearningTurn:
             learner_state = LearnerState.update(
                 area,
                 **state_changes,
+                student_id=student_id,
             )
 
         teaching_action = TeachingPolicy.choose_action(

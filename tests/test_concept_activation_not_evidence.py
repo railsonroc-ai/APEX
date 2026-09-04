@@ -59,13 +59,14 @@ def test_concept_activation_message_is_not_learning_evidence(
     monkeypatch.setattr(
         app_module.LearnerState,
         "get",
-        lambda area: initial_state,
+        lambda area, **kwargs: initial_state,
     )
 
     def fake_preview_activation(
         area,
         learner_state,
         identified_concept,
+        **kwargs,
     ):
         captured["identified_concept"] = (
             identified_concept
@@ -90,7 +91,8 @@ def test_concept_activation_message_is_not_learning_evidence(
         lambda area,
         user_message,
         identified_concept,
-        semantic_evidence: {
+        semantic_evidence,
+        **kwargs: {
             "learner_state": {
                 **initial_state,
                 "current_concept":

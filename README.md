@@ -8,7 +8,7 @@ O objetivo é evoluir além de um chatbot: ensinar, verificar compreensão, adap
 
 A fundação técnica e o hardening inicial estão concluídos.
 
-O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação, SQLite, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn e suíte automatizada com 19 testes.
+O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn e uma suíte automatizada com mais de 150 casos.
 
 A camada pedagógica avançada é a próxima grande fase.
 

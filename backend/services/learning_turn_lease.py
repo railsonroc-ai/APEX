@@ -5,15 +5,19 @@ from backend.database import (
     get_db_connection,
     transaction,
 )
+from backend.identity import (
+    DEFAULT_STUDENT_ID,
+    normalize_student_id,
+)
 
 
 class LearningTurnLease:
     """
     Reserva cross-process para o turno pedagógico.
 
-    A linha é persistida apenas enquanto o turno está sendo
-    processado. A expiração permite recuperação caso um worker
-    seja interrompido antes de liberar a reserva.
+    A chave de serialização é student_id + area. Assim, dois
+    alunos podem estudar a mesma área em paralelo, enquanto duas
+    sessões do mesmo aluno na mesma área continuam serializadas.
     """
 
     ALLOWED_AREAS = {
@@ -82,6 +86,7 @@ class LearningTurnLease:
         owner_token,
         now=None,
         lease_seconds=TURN_LEASE_SECONDS,
+        student_id=DEFAULT_STUDENT_ID,
     ):
         normalized_area = cls.normalize_area(
             area
@@ -90,6 +95,9 @@ class LearningTurnLease:
             cls.normalize_owner_token(
                 owner_token
             )
+        )
+        normalized_student_id = normalize_student_id(
+            student_id
         )
 
         if not normalized_owner:
@@ -128,15 +136,17 @@ class LearningTurnLease:
             cursor = connection.execute(
                 """
                 INSERT INTO learning_turn_leases (
+                    student_id,
                     area,
                     owner_token,
                     acquired_at,
                     expires_at
                 )
-                VALUES (?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT DO NOTHING
                 """,
                 (
+                    normalized_student_id,
                     normalized_area,
                     normalized_owner,
                     current_text,
@@ -147,7 +157,12 @@ class LearningTurnLease:
             return cursor.rowcount == 1
 
     @classmethod
-    def release(cls, area, owner_token):
+    def release(
+        cls,
+        area,
+        owner_token,
+        student_id=DEFAULT_STUDENT_ID,
+    ):
         normalized_area = cls.normalize_area(
             area
         )
@@ -155,6 +170,9 @@ class LearningTurnLease:
             cls.normalize_owner_token(
                 owner_token
             )
+        )
+        normalized_student_id = normalize_student_id(
+            student_id
         )
 
         if not normalized_owner:
@@ -164,10 +182,12 @@ class LearningTurnLease:
             cursor = connection.execute(
                 """
                 DELETE FROM learning_turn_leases
-                WHERE area = ?
+                WHERE student_id = ?
+                  AND area = ?
                   AND owner_token = ?
                 """,
                 (
+                    normalized_student_id,
                     normalized_area,
                     normalized_owner,
                 ),
@@ -176,9 +196,16 @@ class LearningTurnLease:
             return cursor.rowcount == 1
 
     @classmethod
-    def get(cls, area):
+    def get(
+        cls,
+        area,
+        student_id=DEFAULT_STUDENT_ID,
+    ):
         normalized_area = cls.normalize_area(
             area
+        )
+        normalized_student_id = normalize_student_id(
+            student_id
         )
         connection = get_db_connection()
 
@@ -186,14 +213,19 @@ class LearningTurnLease:
             row = connection.execute(
                 """
                 SELECT
+                    student_id,
                     area,
                     owner_token,
                     acquired_at,
                     expires_at
                 FROM learning_turn_leases
-                WHERE area = ?
+                WHERE student_id = ?
+                  AND area = ?
                 """,
-                (normalized_area,),
+                (
+                    normalized_student_id,
+                    normalized_area,
+                ),
             ).fetchone()
 
             return (

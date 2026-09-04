@@ -14,6 +14,7 @@ def create_notes_database(path):
         """
         CREATE TABLE notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
             text TEXT NOT NULL,
             area TEXT NOT NULL,
             created_at TEXT NOT NULL
@@ -33,6 +34,16 @@ def test_note_rejects_empty_text(
         app_module,
         "verify_auth",
         lambda: True,
+    )
+
+    monkeypatch.setattr(
+        app_module.StudentContext,
+        "resolve",
+        lambda area: {
+            "student_id": "student_default",
+            "session_id": f"session_default_{area}",
+            "area": area,
+        },
     )
 
     client = (
@@ -88,6 +99,16 @@ def test_note_is_saved(
     )
 
     monkeypatch.setattr(
+        app_module.StudentContext,
+        "resolve",
+        lambda area: {
+            "student_id": "student_default",
+            "session_id": f"session_default_{area}",
+            "area": area,
+        },
+    )
+
+    monkeypatch.setattr(
         app_module,
         "get_db_connection",
         get_test_connection,
@@ -127,6 +148,7 @@ def test_note_is_saved(
         row = connection.execute(
             """
             SELECT
+                student_id,
                 text,
                 area
             FROM notes
@@ -141,6 +163,7 @@ def test_note_is_saved(
         connection.close()
 
     assert row == (
+        "student_default",
         "Minha nota de teste",
         "ads",
     )
@@ -159,6 +182,15 @@ def test_note_over_4000_characters_is_rejected(
         return connection
 
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
+    monkeypatch.setattr(
+        app_module.StudentContext,
+        "resolve",
+        lambda area: {
+            "student_id": "student_default",
+            "session_id": f"session_default_{area}",
+            "area": area,
+        },
+    )
     monkeypatch.setattr(
         app_module,
         "get_db_connection",
@@ -215,6 +247,16 @@ def test_invalid_note_area_falls_back_to_ads(
         app_module,
         "verify_auth",
         lambda: True,
+    )
+
+    monkeypatch.setattr(
+        app_module.StudentContext,
+        "resolve",
+        lambda area: {
+            "student_id": "student_default",
+            "session_id": f"session_default_{area}",
+            "area": area,
+        },
     )
 
     monkeypatch.setattr(

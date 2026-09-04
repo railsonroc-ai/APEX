@@ -1,5 +1,10 @@
 from backend.config import MAX_HISTORY_MESSAGES
 from backend.database import get_db_connection
+from backend.identity import (
+    DEFAULT_STUDENT_ID,
+    default_session_id,
+    normalize_student_id,
+)
 
 
 class LearningHistory:
@@ -54,10 +59,24 @@ class LearningHistory:
 
         return normalized or None
 
+    @staticmethod
+    def normalize_session_id(session_id):
+        if session_id is None:
+            return None
+
+        return str(session_id).strip() or None
+
     @classmethod
-    def find(cls, turn_id):
+    def find(
+        cls,
+        turn_id,
+        student_id=DEFAULT_STUDENT_ID,
+    ):
         normalized_turn_id = cls.normalize_turn_id(
             turn_id
+        )
+        normalized_student_id = normalize_student_id(
+            student_id
         )
 
         if not normalized_turn_id:
@@ -69,6 +88,8 @@ class LearningHistory:
             row = connection.execute(
                 """
                 SELECT
+                    student_id,
+                    session_id,
                     turn_id,
                     area,
                     user_message,
@@ -76,9 +97,13 @@ class LearningHistory:
                     concept,
                     created_at
                 FROM learning_turns
-                WHERE turn_id = ?
+                WHERE student_id = ?
+                  AND turn_id = ?
                 """,
-                (normalized_turn_id,),
+                (
+                    normalized_student_id,
+                    normalized_turn_id,
+                ),
             ).fetchone()
 
             return (
@@ -98,6 +123,8 @@ class LearningHistory:
         user_message,
         assistant_message,
         concept=None,
+        student_id=DEFAULT_STUDENT_ID,
+        session_id=None,
     ):
         normalized_turn_id = cls.normalize_turn_id(
             turn_id
@@ -112,6 +139,20 @@ class LearningHistory:
         normalized_concept = cls.normalize_concept(
             concept
         )
+        normalized_student_id = normalize_student_id(
+            student_id
+        )
+        normalized_session_id = cls.normalize_session_id(
+            session_id
+        )
+
+        if (
+            not normalized_session_id
+            and normalized_student_id == DEFAULT_STUDENT_ID
+        ):
+            normalized_session_id = default_session_id(
+                normalized_area
+            )
 
         if not normalized_turn_id:
             raise ValueError(
@@ -123,21 +164,30 @@ class LearningHistory:
                 "user_message obrigatória"
             )
 
+        if not normalized_session_id:
+            raise ValueError(
+                "session_id obrigatória"
+            )
+
         connection = get_db_connection()
 
         try:
             connection.execute(
                 """
                 INSERT INTO learning_turns (
+                    student_id,
+                    session_id,
                     turn_id,
                     area,
                     user_message,
                     assistant_message,
                     concept
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    normalized_student_id,
+                    normalized_session_id,
                     normalized_turn_id,
                     normalized_area,
                     normalized_user,
@@ -151,7 +201,8 @@ class LearningHistory:
             connection.close()
 
         return cls.find(
-            normalized_turn_id
+            normalized_turn_id,
+            student_id=normalized_student_id,
         )
 
     @classmethod
@@ -160,6 +211,7 @@ class LearningHistory:
         turn_id,
         assistant_message,
         concept=None,
+        student_id=DEFAULT_STUDENT_ID,
     ):
         normalized_turn_id = cls.normalize_turn_id(
             turn_id
@@ -170,13 +222,17 @@ class LearningHistory:
         normalized_concept = cls.normalize_concept(
             concept
         )
+        normalized_student_id = normalize_student_id(
+            student_id
+        )
 
         if (
             not normalized_turn_id
             or not normalized_assistant
         ):
             return cls.find(
-                normalized_turn_id
+                normalized_turn_id,
+                student_id=normalized_student_id,
             )
 
         connection = get_db_connection()
@@ -191,7 +247,8 @@ class LearningHistory:
                         concept,
                         ?
                     )
-                WHERE turn_id = ?
+                WHERE student_id = ?
+                  AND turn_id = ?
                   AND (
                       assistant_message IS NULL
                       OR TRIM(assistant_message) = ''
@@ -200,6 +257,7 @@ class LearningHistory:
                 (
                     normalized_assistant,
                     normalized_concept,
+                    normalized_student_id,
                     normalized_turn_id,
                 ),
             )
@@ -209,7 +267,8 @@ class LearningHistory:
             connection.close()
 
         return cls.find(
-            normalized_turn_id
+            normalized_turn_id,
+            student_id=normalized_student_id,
         )
 
     @classmethod
@@ -218,10 +277,14 @@ class LearningHistory:
         area,
         concept=None,
         limit=MAX_HISTORY_MESSAGES,
+        student_id=DEFAULT_STUDENT_ID,
     ):
         normalized_area = cls.normalize_area(area)
         normalized_concept = cls.normalize_concept(
             concept
+        )
+        normalized_student_id = normalize_student_id(
+            student_id
         )
 
         try:
@@ -258,14 +321,16 @@ class LearningHistory:
                         user_message,
                         assistant_message
                     FROM learning_turns
-                    WHERE area = ?
+                    WHERE student_id = ?
+                      AND area = ?
                       AND concept = ?
                       AND assistant_message IS NOT NULL
                       AND TRIM(assistant_message) != ''
-                    ORDER BY created_at DESC, rowid DESC
+                    ORDER BY created_at DESC, id DESC
                     LIMIT ?
                     """,
                     (
+                        normalized_student_id,
                         normalized_area,
                         normalized_concept,
                         turn_limit,
@@ -279,14 +344,16 @@ class LearningHistory:
                         user_message,
                         assistant_message
                     FROM learning_turns
-                    WHERE area = ?
+                    WHERE student_id = ?
+                      AND area = ?
                       AND concept IS NULL
                       AND assistant_message IS NOT NULL
                       AND TRIM(assistant_message) != ''
-                    ORDER BY created_at DESC, rowid DESC
+                    ORDER BY created_at DESC, id DESC
                     LIMIT ?
                     """,
                     (
+                        normalized_student_id,
                         normalized_area,
                         turn_limit,
                     ),

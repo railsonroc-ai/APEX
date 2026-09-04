@@ -15,7 +15,7 @@ def test_identified_concept_reaches_activation_during_switch(
 
     captured = {}
 
-    def fake_activate(area, concept):
+    def fake_activate(area, concept, **kwargs):
         captured["area"] = area
         captured["concept"] = concept
 

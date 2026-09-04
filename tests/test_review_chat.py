@@ -40,16 +40,16 @@ def test_review_request_activates_due_review(monkeypatch):
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
     monkeypatch.setattr(app_module, "Groq", FakeGroq)
-    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial)
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: initial)
     monkeypatch.setattr(
         app_module.ConceptTracker,
         "build_tracking_request",
-        lambda *args: None,
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         app_module.EvidenceEvaluator,
         "build_evaluation",
-        lambda *args: None,
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         app_module.LearnerSignals,
@@ -57,7 +57,7 @@ def test_review_request_activates_due_review(monkeypatch):
         lambda message: {app_module.LearnerSignals.REVIEW_REQUEST},
     )
 
-    def activate(area):
+    def activate(area, **kwargs):
         captured["activated"] = area
         return review
 
@@ -101,7 +101,7 @@ def test_demonstrated_review_completes_lifecycle(monkeypatch):
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
     monkeypatch.setattr(app_module, "Groq", FakeGroq)
-    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial)
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: initial)
 
     def update_state(area, **changes):
         return {**initial, **changes}
@@ -117,7 +117,7 @@ def test_demonstrated_review_completes_lifecycle(monkeypatch):
         },
     )
 
-    def complete(area, concept, state):
+    def complete(area, concept, state, **kwargs):
         captured["complete"] = (area, concept, state["stage"])
         return {
             "state": {**state, "stage": "concluido"},
@@ -150,7 +150,7 @@ def test_demonstrated_review_completes_lifecycle(monkeypatch):
     monkeypatch.setattr(
         app_module.LearningHistory,
         "get_messages",
-        lambda area, concept=None: server_history,
+        lambda area, concept=None, **kwargs: server_history,
     )
 
     response = app_module.app.test_client().post(

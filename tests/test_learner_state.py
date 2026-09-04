@@ -9,13 +9,15 @@ def create_learner_database(path):
     connection.row_factory = sqlite3.Row
     connection.execute("""
         CREATE TABLE learner_state (
-            area TEXT PRIMARY KEY,
+            student_id TEXT NOT NULL,
+            area TEXT NOT NULL,
             current_concept TEXT,
             stage TEXT NOT NULL,
             last_evidence TEXT,
             difficulty_count INTEGER NOT NULL,
             mastery REAL NOT NULL,
-            updated_at TEXT
+            updated_at TEXT,
+            PRIMARY KEY(student_id, area)
         )
     """)
     connection.commit()

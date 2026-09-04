@@ -72,7 +72,7 @@ def test_backend_forwards_turn_id_to_commit(
     monkeypatch.setattr(
         app_module.LearnerState,
         "get",
-        lambda area: initial_state,
+        lambda area, **kwargs: initial_state,
     )
 
     monkeypatch.setattr(
@@ -100,11 +100,16 @@ def test_backend_forwards_turn_id_to_commit(
         semantic_evidence,
         turn_id=None,
         assistant_message=None,
+        student_id=None,
+        session_id=None,
+        **kwargs,
     ):
         captured["turn_id"] = turn_id
         captured["assistant_message"] = (
             assistant_message
         )
+        captured["student_id"] = student_id
+        captured["session_id"] = session_id
 
         return {
             "learner_state":
@@ -182,6 +187,7 @@ def test_backend_forwards_turn_id_to_commit(
                 "history": [],
                 "area": "ads",
                 "turn_id": "turn-end-to-end-001",
+                "student_id": "student_attacker",
             },
         )
     )
@@ -201,6 +207,9 @@ def test_backend_forwards_turn_id_to_commit(
         captured["assistant_message"]
         == "Resposta confirmada."
     )
+
+    assert captured["student_id"] == "student_default"
+    assert captured["session_id"] == "session_default_ads"
 
     assert '"done": true' in body.lower()
 
@@ -232,17 +241,17 @@ def test_empty_stream_does_not_commit_or_confirm_turn(
     monkeypatch.setattr(
         app_module.LearnerState,
         "get",
-        lambda area: learner_state,
+        lambda area, **kwargs: learner_state,
     )
     monkeypatch.setattr(
         app_module.ConceptTracker,
         "build_tracking_request",
-        lambda *args: None,
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         app_module.ProcessLearningTurn,
         "preview_activation",
-        lambda *args: learner_state,
+        lambda *args, **kwargs: learner_state,
     )
     monkeypatch.setattr(
         app_module.LearningHistory,
@@ -252,12 +261,12 @@ def test_empty_stream_does_not_commit_or_confirm_turn(
     monkeypatch.setattr(
         app_module.EvidenceEvaluator,
         "build_evaluation",
-        lambda *args: None,
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         app_module.ProcessLearningTurn,
         "preview_turn",
-        lambda *args: {
+        lambda *args, **kwargs: {
             "learner_state": learner_state,
             "teaching_action": "testar",
         },

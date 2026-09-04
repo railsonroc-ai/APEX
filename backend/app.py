@@ -48,6 +48,7 @@ from backend.services.review_scheduler import ReviewScheduler
 from backend.services.concept_activation import ConceptActivation
 from backend.services.review_lifecycle import ReviewLifecycle
 from backend.services.process_learning_turn import ProcessLearningTurn
+from backend.services.student_context import StudentContext
 
 
 # ============================================================
@@ -215,6 +216,10 @@ def chat_stream():
         )
     )
 
+    student_context = StudentContext.resolve(area)
+    student_id = student_context["student_id"]
+    session_id = student_context["session_id"]
+
     if not user_message:
         return jsonify(
             {
@@ -237,7 +242,8 @@ def chat_stream():
 
     def find_confirmed_response():
         existing_turn = LearningHistory.find(
-            turn_id
+            turn_id,
+            student_id=student_id,
         )
 
         if existing_turn is None:
@@ -298,6 +304,7 @@ def chat_stream():
                 LearningTurnLease.acquire(
                     area,
                     lease_owner,
+                    student_id=student_id,
                 )
             )
 
@@ -337,7 +344,10 @@ def chat_stream():
                 timeout=AI_DIALOG_TIMEOUT_SECONDS,
             )
 
-            learner_state = LearnerState.get(area)
+            learner_state = LearnerState.get(
+                area,
+                student_id=student_id,
+            )
             tracking_request = ConceptTracker.build_tracking_request(
                 user_message, learner_state, area
             )
@@ -374,6 +384,7 @@ def chat_stream():
                 area,
                 learner_state,
                 identified_concept,
+                student_id=student_id,
             )
 
             history = LearningHistory.get_messages(
@@ -381,6 +392,7 @@ def chat_stream():
                 concept=learner_state.get(
                     "current_concept"
                 ),
+                student_id=student_id,
             )
 
             evidence_evaluation = None
@@ -425,6 +437,7 @@ def chat_stream():
                 user_message,
                 identified_concept,
                 semantic_evidence,
+                student_id=student_id,
             )
             learner_state = turn_result["learner_state"]
             teaching_action = turn_result["teaching_action"]
@@ -496,6 +509,8 @@ def chat_stream():
                 semantic_evidence,
                 turn_id=turn_id,
                 assistant_message=assistant_message,
+                student_id=student_id,
+                session_id=session_id,
             )
 
             yield sse(
@@ -524,6 +539,7 @@ def chat_stream():
                     LearningTurnLease.release(
                         area,
                         lease_owner,
+                        student_id=student_id,
                     )
                 except Exception:
                     app.logger.exception(
@@ -583,6 +599,9 @@ def save_note():
         )
     )
 
+    student_context = StudentContext.resolve(area)
+    student_id = student_context["student_id"]
+
     if not text:
 
         return jsonify(
@@ -609,12 +628,14 @@ def save_note():
         cursor = connection.execute(
             """
             INSERT INTO notes (
+                student_id,
                 text,
                 area
             )
-            VALUES (?, ?)
+            VALUES (?, ?, ?)
             """,
             (
+                student_id,
                 text,
                 area,
             ),

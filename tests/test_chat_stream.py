@@ -76,7 +76,7 @@ def test_chat_uses_pedagogical_state(monkeypatch):
     captured = {}
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
-    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: state)
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: state)
     monkeypatch.setattr(app_module.TeachingPolicy, "choose_action", lambda value: "testar")
     def fake_build_messages(user_message, history=None, area="ads", learner_state=None, teaching_action=None):
         captured["learner_state"] = learner_state
@@ -115,7 +115,7 @@ def test_difficulty_signal_updates_state_before_policy(monkeypatch):
     captured = {}
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
-    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial_state)
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: initial_state)
 
     def fake_update(area, **changes):
         captured["changes"] = changes
@@ -146,7 +146,11 @@ def test_difficulty_signal_updates_state_before_policy(monkeypatch):
     response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert captured["changes"] == {"difficulty_count": 1, "stage": "corrigir"}
+    assert captured["changes"] == {
+        "difficulty_count": 1,
+        "stage": "corrigir",
+        "student_id": "student_default",
+    }
     assert captured["policy_state"] == updated_state
 
 
@@ -157,9 +161,9 @@ def test_identified_concept_updates_state_before_policy(monkeypatch):
     captured = {}
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
-    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial_state)
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: initial_state)
 
-    def fake_activate(area, concept):
+    def fake_activate(area, concept, **kwargs):
         captured["activation"] = (area, concept)
         return updated_state
 
@@ -206,7 +210,7 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
     captured = {"evidence_calls": 0}
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
-    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial_state)
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: initial_state)
 
     def fake_update(area, **changes):
         captured["changes"] = changes
@@ -254,7 +258,7 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
     monkeypatch.setattr(
         app_module.LearningHistory,
         "get_messages",
-        lambda area, concept=None: history,
+        lambda area, concept=None, **kwargs: history,
     )
 
     client = app_module.app.test_client()
@@ -274,6 +278,7 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
         "difficulty_count": 0,
         "stage": "fixar",
         "last_evidence": "Explicou corretamente.",
+        "student_id": "student_default",
     }
     assert captured["policy_state"] == updated_state
     assert captured["evidence_calls"] == 1
@@ -294,7 +299,7 @@ def test_completed_concept_schedules_review(monkeypatch):
 
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
-    monkeypatch.setattr(app_module.LearnerState, "get", lambda area: initial)
+    monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: initial)
     monkeypatch.setattr(app_module.LearnerState, "update", lambda area, **changes: completed)
 
     def fake_progress(area, concept, **changes):
@@ -336,7 +341,7 @@ def test_completed_concept_schedules_review(monkeypatch):
     monkeypatch.setattr(
         app_module.LearningHistory,
         "get_messages",
-        lambda area, concept=None: server_history,
+        lambda area, concept=None, **kwargs: server_history,
     )
 
     response = app_module.app.test_client().post(
@@ -351,5 +356,6 @@ def test_completed_concept_schedules_review(monkeypatch):
 
     assert response.status_code == 200
     assert captured["progress"][-1] == {
-        "next_review_at": "2026-09-04T12:00:00+00:00"
+        "next_review_at": "2026-09-04T12:00:00+00:00",
+        "student_id": "student_default",
     }

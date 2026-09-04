@@ -1,4 +1,8 @@
 from backend.database import get_db_connection
+from backend.identity import (
+    DEFAULT_STUDENT_ID,
+    normalize_student_id,
+)
 
 
 class LearnerState:
@@ -20,16 +24,30 @@ class LearnerState:
         return stage if stage in cls.ALLOWED_STAGES else "compreender"
 
     @classmethod
-    def get(cls, area="ads"):
+    def get(
+        cls,
+        area="ads",
+        student_id=DEFAULT_STUDENT_ID,
+    ):
         area = cls.normalize_area(area)
+        student_id = normalize_student_id(student_id)
         connection = get_db_connection()
         try:
             row = connection.execute(
-                "SELECT * FROM learner_state WHERE area = ?",
-                (area,),
+                """
+                SELECT *
+                FROM learner_state
+                WHERE student_id = ?
+                  AND area = ?
+                """,
+                (
+                    student_id,
+                    area,
+                ),
             ).fetchone()
             if row is None:
                 return {
+                    "student_id": student_id,
                     "area": area,
                     "current_concept": None,
                     "stage": "compreender",
@@ -67,9 +85,14 @@ class LearnerState:
         last_evidence=None,
         difficulty_count=None,
         mastery=None,
+        student_id=DEFAULT_STUDENT_ID,
     ):
         area = cls.normalize_area(area)
-        current = cls.get(area)
+        student_id = normalize_student_id(student_id)
+        current = cls.get(
+            area,
+            student_id=student_id,
+        )
         concept = current["current_concept"] if current_concept is None else str(current_concept).strip() or None
         stage = current["stage"] if stage is None else cls.normalize_stage(stage)
         evidence = current["last_evidence"] if last_evidence is None else str(last_evidence).strip() or None
@@ -77,24 +100,42 @@ class LearnerState:
         mastery_value = current["mastery"] if mastery is None else cls.normalize_mastery(mastery)
         connection = get_db_connection()
         try:
-            connection.execute("""
+            connection.execute(
+                """
                 INSERT INTO learner_state (
-                    area, current_concept, stage, last_evidence,
-                    difficulty_count, mastery, updated_at
+                    student_id,
+                    area,
+                    current_concept,
+                    stage,
+                    last_evidence,
+                    difficulty_count,
+                    mastery,
+                    updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(area) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(student_id, area) DO UPDATE SET
                     current_concept = excluded.current_concept,
                     stage = excluded.stage,
                     last_evidence = excluded.last_evidence,
                     difficulty_count = excluded.difficulty_count,
                     mastery = excluded.mastery,
                     updated_at = CURRENT_TIMESTAMP
-            """,
-                (area, concept, stage, evidence, difficulty, mastery_value),
+                """,
+                (
+                    student_id,
+                    area,
+                    concept,
+                    stage,
+                    evidence,
+                    difficulty,
+                    mastery_value,
+                ),
             )
             connection.commit()
         finally:
             connection.close()
 
-        return cls.get(area)
+        return cls.get(
+            area,
+            student_id=student_id,
+        )

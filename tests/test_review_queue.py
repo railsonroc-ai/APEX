@@ -13,7 +13,7 @@ def test_due_returns_only_due_reviews(monkeypatch):
     monkeypatch.setattr(
         review_queue_module.ConceptProgress,
         "list_scheduled",
-        lambda area: scheduled,
+        lambda area, **kwargs: scheduled,
     )
 
     now = datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc)
@@ -32,7 +32,7 @@ def test_next_due_returns_first_due_review(monkeypatch):
     monkeypatch.setattr(
         ReviewQueue,
         "due",
-        lambda area, now=None: due,
+        lambda area, now=None, **kwargs: due,
     )
 
     assert ReviewQueue.next_due("ads")["concept"] == "variáveis"
@@ -42,7 +42,7 @@ def test_next_due_returns_none_when_queue_is_empty(monkeypatch):
     monkeypatch.setattr(
         ReviewQueue,
         "due",
-        lambda area, now=None: [],
+        lambda area, now=None, **kwargs: [],
     )
 
     assert ReviewQueue.next_due("ads") is None

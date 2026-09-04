@@ -10,6 +10,7 @@ def create_concept_progress_database(path):
     connection.execute("""
         CREATE TABLE concept_progress (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
             area TEXT NOT NULL,
             concept TEXT NOT NULL,
             mastery REAL NOT NULL DEFAULT 0.0,
@@ -19,7 +20,7 @@ def create_concept_progress_database(path):
             next_review_at TEXT,
             last_reviewed_at TEXT,
             updated_at TEXT,
-            UNIQUE(area, concept)
+            UNIQUE(student_id, area, concept)
         )
     """)
     connection.commit()

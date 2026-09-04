@@ -11,9 +11,11 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `security.py` — autenticação por `X-Apex-Key`.
 - `prompts/tutor.py` — prompt pedagógico do tutor.
 - `services/tutor_core.py` — preparação e proteção do contexto.
+- `identity.py` — IDs estáveis do aluno e das sessões padrão do APEX individual.
+- `services/student_context.py` — resolução server-side da identidade pedagógica.
 - `services/process_learning_turn.py` — preview e commit do turno pedagógico.
 - `services/learning_history.py` — histórico confirmado no servidor.
-- `services/learning_turn_lease.py` — serialização de turnos por área entre workers.
+- `services/learning_turn_lease.py` — serialização de turnos por aluno + área entre workers.
 - `templates/index.html` — interface principal.
 - `static/js/chat-engine.js` — estado da conversa e interface.
 - `static/js/apex-api.js` — HTTP, autenticação, notas e SSE.

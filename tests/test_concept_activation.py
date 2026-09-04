@@ -15,7 +15,7 @@ def test_new_concept_starts_clean(monkeypatch):
     monkeypatch.setattr(
         activation_module.ConceptProgress,
         "get",
-        lambda area, concept: progress,
+        lambda area, concept, **kwargs: progress,
     )
 
     def fake_update(area, **changes):
@@ -49,7 +49,7 @@ def test_known_concept_restores_progress(monkeypatch):
     monkeypatch.setattr(
         activation_module.ConceptProgress,
         "get",
-        lambda area, concept: progress,
+        lambda area, concept, **kwargs: progress,
     )
 
     def fake_update(area, **changes):
@@ -78,12 +78,12 @@ def test_invalid_concept_preserves_current_state(monkeypatch):
     monkeypatch.setattr(
         activation_module.ConceptProgress,
         "get",
-        lambda area, concept: None,
+        lambda area, concept, **kwargs: None,
     )
     monkeypatch.setattr(
         activation_module.LearnerState,
         "get",
-        lambda area: current,
+        lambda area, **kwargs: current,
     )
 
     assert ConceptActivation.activate("ads", "") == current

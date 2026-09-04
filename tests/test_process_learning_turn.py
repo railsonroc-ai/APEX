@@ -13,8 +13,12 @@ def test_activates_identified_concept(monkeypatch):
         lambda state, concept: "variáveis",
     )
 
-    def fake_activate(area, concept):
-        captured["activation"] = (area, concept)
+    def fake_activate(area, concept, **kwargs):
+        captured["activation"] = (
+            area,
+            concept,
+            kwargs.get("student_id"),
+        )
         return activated
 
     monkeypatch.setattr(
@@ -30,7 +34,11 @@ def test_activates_identified_concept(monkeypatch):
     )
 
     assert result == activated
-    assert captured["activation"] == ("ads", "variáveis")
+    assert captured["activation"] == (
+        "ads",
+        "variáveis",
+        "student_default",
+    )
 
 
 def test_finalize_completed_concept_schedules_review(monkeypatch):
@@ -106,7 +114,8 @@ def test_finalize_completed_concept_schedules_review(monkeypatch):
     assert result["learner_state"] == completed
     assert result["teaching_action"] == "avancar"
     assert captured[-1] == {
-        "next_review_at": "2026-09-04T12:00:00+00:00"
+        "next_review_at": "2026-09-04T12:00:00+00:00",
+        "student_id": "student_default",
     }
 
 
@@ -133,7 +142,7 @@ def test_finalize_review_request_activates_due_review(monkeypatch):
     monkeypatch.setattr(
         turn_module.ReviewLifecycle,
         "activate_due",
-        lambda area: review,
+        lambda area, **kwargs: review,
     )
     monkeypatch.setattr(
         turn_module.LearnerStateTransition,
