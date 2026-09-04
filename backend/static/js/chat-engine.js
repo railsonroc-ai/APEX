@@ -785,11 +785,6 @@
             );
 
             finalized = true;
-
-            addToHistory(
-              'assistant',
-              fullText
-            );
           },
 
 
@@ -806,27 +801,32 @@
 
 
       /*
-       * Proteção para streams que terminam
-       * sem enviar explicitamente {"done": true}.
+       * O backend só confirma um turno concluído
+       * quando envia explicitamente {"done": true}.
+       *
+       * EOF sem confirmação significa que o turno
+       * pode ter sofrido rollback no servidor.
        */
       if (
-        fullText
-        && !finalized
+        !finalized
         && !streamError
       ) {
-        finalizeBotMessage(
+        streamError = true;
+
+        showBotError(
           content,
-          bubble,
-          fullText
-        );
-
-        finalized = true;
-
-        addToHistory(
-          'assistant',
-          fullText
+          'Resposta interrompida antes da confirmação do servidor.'
         );
       }
+
+      if (
+        finalized
+        && !streamError
+      ) {
+        return fullText;
+      }
+
+      return null;
 
     } catch (error) {
       streamError = true;
@@ -836,6 +836,8 @@
         error.message
         || 'Sem conexão com o servidor.'
       );
+
+      return null;
 
     } finally {
       if (button) {
@@ -925,20 +927,27 @@
       );
 
 
-    addToHistory(
-      'user',
-      text
-    );
-
-
     sendingMessage = true;
 
     try {
-      await streamChat(
-        text,
-        sendButton,
-        historyForRequest
-      );
+      const assistantText =
+        await streamChat(
+          text,
+          sendButton,
+          historyForRequest
+        );
+
+      if (assistantText !== null) {
+        addToHistory(
+          'user',
+          text
+        );
+
+        addToHistory(
+          'assistant',
+          assistantText
+        );
+      }
     } finally {
       sendingMessage = false;
     }
