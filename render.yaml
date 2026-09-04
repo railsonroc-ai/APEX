@@ -3,14 +3,24 @@ services:
     name: apex
     runtime: python
 
+    numInstances: 1
+
     buildCommand: pip install -r requirements.txt
     startCommand: ./start_apex.sh
 
     healthCheckPath: /health
 
+    disk:
+      name: apex-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+
     envVars:
       - key: APP_ENV
         value: production
+
+      - key: APEX_DATA_DIR
+        value: /opt/render/project/src/data
 
       - key: GROQ_MODEL
         value: groq/compound
