@@ -72,6 +72,99 @@
             border-radius: 4px;
         }
 
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        #session-status-badge {
+            font-size: 0.8rem;
+            padding: 5px 9px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            color: #cbd5e1;
+            background: #0f172a;
+        }
+
+        #session-status-badge[data-status="studying"] {
+            color: #bbf7d0;
+            border-color: #166534;
+            background: #052e16;
+        }
+
+        #session-status-badge[data-status="paused"] {
+            color: #fde68a;
+            border-color: #92400e;
+            background: #451a03;
+        }
+
+        #session-status-badge[data-status="reviewing"] {
+            color: #bfdbfe;
+            border-color: #1d4ed8;
+            background: #172554;
+        }
+
+        .session-control-btn {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 7px 10px;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--text-color);
+            background: #0f172a;
+        }
+
+        .session-control-btn:hover:not(:disabled) {
+            border-color: var(--accent-color);
+        }
+
+        .session-control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .session-panel {
+            margin: 12px 20px 0;
+            padding: 14px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: #111827;
+        }
+
+        .session-panel[hidden] {
+            display: none;
+        }
+
+        .session-panel-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .session-panel-detail {
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            line-height: 1.45;
+        }
+
+        .session-panel-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        #resume-direct-btn {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        #resume-review-btn {
+            background: #334155;
+        }
+
         #chat-container {
             flex: 1;
             display: flex;
@@ -190,8 +283,14 @@
             cursor: pointer;
         }
 
-        button#send-btn:hover {
+        button#send-btn:hover:not(:disabled) {
             background-color: #2563eb;
+        }
+
+        button#send-btn:disabled,
+        textarea:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
         }
 
         .stream-cursor::after {
@@ -253,6 +352,22 @@
         #toast.show {
             display: block;
         }
+
+        @media (max-width: 640px) {
+            header {
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .header-actions {
+                max-width: 70%;
+            }
+
+            .session-panel {
+                margin-left: 12px;
+                margin-right: 12px;
+            }
+        }
     </style>
 </head>
 
@@ -270,15 +385,72 @@
     <header>
         <h1>⚡ APEX Tutor</h1>
 
-        <div
-            id="memory-badge"
-            data-count="0"
-        >
-            🧠 0 msgs
+        <div class="header-actions">
+            <span
+                id="session-status-badge"
+                data-status="loading"
+                aria-live="polite"
+            >
+                Sessão: carregando
+            </span>
+
+            <button
+                id="pause-btn"
+                class="session-control-btn"
+                type="button"
+                disabled
+            >
+                ⏸ Pausar
+            </button>
+
+            <div
+                id="memory-badge"
+                data-count="0"
+            >
+                🧠 0 msgs
+            </div>
         </div>
     </header>
 
     <div id="chat-container">
+
+        <section
+            id="session-panel"
+            class="session-panel"
+            hidden
+            aria-live="polite"
+        >
+            <div
+                id="session-panel-title"
+                class="session-panel-title"
+            ></div>
+
+            <div
+                id="session-panel-detail"
+                class="session-panel-detail"
+            ></div>
+
+            <div
+                id="session-panel-actions"
+                class="session-panel-actions"
+            >
+                <button
+                    id="resume-direct-btn"
+                    class="session-control-btn"
+                    type="button"
+                >
+                    ▶ Retomar direto
+                </button>
+
+                <button
+                    id="resume-review-btn"
+                    class="session-control-btn"
+                    type="button"
+                >
+                    ↻ Revisar antes
+                </button>
+            </div>
+        </section>
 
         <div id="messages">
 

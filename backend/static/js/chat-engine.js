@@ -62,6 +62,57 @@
       'user-input'
     );
 
+  const sendButton =
+    document.getElementById(
+      'send-btn'
+    );
+
+  const pauseButton =
+    document.getElementById(
+      'pause-btn'
+    );
+
+  const resumeDirectButton =
+    document.getElementById(
+      'resume-direct-btn'
+    );
+
+  const resumeReviewButton =
+    document.getElementById(
+      'resume-review-btn'
+    );
+
+  const sessionStatusBadge =
+    document.getElementById(
+      'session-status-badge'
+    );
+
+  const sessionPanel =
+    document.getElementById(
+      'session-panel'
+    );
+
+  const sessionPanelTitle =
+    document.getElementById(
+      'session-panel-title'
+    );
+
+  const sessionPanelDetail =
+    document.getElementById(
+      'session-panel-detail'
+    );
+
+  const sessionPanelActions =
+    document.getElementById(
+      'session-panel-actions'
+    );
+
+  let sessionRuntime = {
+    status: 'loading'
+  };
+
+  let sessionControlBusy = false;
+
 
   // ==========================================================
   // VALIDAÇÃO DOS MÓDULOS
@@ -73,6 +124,12 @@
       && typeof Api.streamChat
         === 'function'
       && typeof Api.saveNote
+        === 'function'
+      && typeof Api.getSession
+        === 'function'
+      && typeof Api.pauseSession
+        === 'function'
+      && typeof Api.resumeSession
         === 'function'
       && TTS
       && typeof TTS.speak
@@ -116,6 +173,331 @@
           sendMessage();
         }
       }
+    );
+  }
+
+
+  // ==========================================================
+  // CICLO DA SESSÃO
+  // ==========================================================
+
+  function sessionStatus() {
+    return String(
+      sessionRuntime
+      && sessionRuntime.status
+      || 'unknown'
+    );
+  }
+
+
+  function chatBlockedBySession() {
+    return sessionStatus() === 'paused';
+  }
+
+
+  function syncInputAvailability() {
+    const blocked =
+      chatBlockedBySession();
+
+    const loading =
+      sessionStatus() === 'loading';
+
+    const busy =
+      sendingMessage
+      || sessionControlBusy
+      || loading;
+
+    if (input) {
+      input.disabled =
+        blocked || loading;
+
+      if (blocked) {
+        input.placeholder =
+          'Sessão pausada. Escolha como deseja retomar.';
+      } else if (sessionStatus() === 'reviewing') {
+        input.placeholder =
+          'Responda à revisão de retomada...';
+      } else {
+        input.placeholder =
+          'Digite sua dúvida aqui...';
+      }
+    }
+
+    if (sendButton) {
+      sendButton.disabled =
+        blocked || busy;
+    }
+
+    if (pauseButton) {
+      pauseButton.disabled =
+        sessionStatus() !== 'studying'
+        || busy;
+    }
+
+    if (resumeDirectButton) {
+      resumeDirectButton.disabled =
+        sessionStatus() !== 'paused'
+        || busy;
+    }
+
+    if (resumeReviewButton) {
+      resumeReviewButton.disabled =
+        sessionStatus() !== 'paused'
+        || busy;
+    }
+  }
+
+
+  function renderSessionRuntime(
+    runtime
+  ) {
+    sessionRuntime =
+      runtime
+      && typeof runtime === 'object'
+        ? runtime
+        : { status: 'unknown' };
+
+    const status =
+      sessionStatus();
+
+    if (sessionStatusBadge) {
+      sessionStatusBadge.dataset.status =
+        status;
+
+      const labels = {
+        studying: 'Sessão: estudando',
+        paused: 'Sessão: pausada',
+        reviewing: 'Sessão: revisão',
+        loading: 'Sessão: carregando',
+        unknown: 'Sessão: indisponível'
+      };
+
+      sessionStatusBadge.textContent =
+        labels[status]
+        || labels.unknown;
+    }
+
+    if (pauseButton) {
+      pauseButton.hidden =
+        status !== 'studying';
+    }
+
+    if (sessionPanel) {
+      const showPanel =
+        status === 'paused'
+        || status === 'reviewing';
+
+      sessionPanel.hidden =
+        !showPanel;
+
+      if (showPanel) {
+        const concept =
+          String(
+            sessionRuntime.resume_concept
+            || ''
+          ).trim();
+
+        if (status === 'paused') {
+          if (sessionPanelTitle) {
+            sessionPanelTitle.textContent =
+              'Estudo pausado';
+          }
+
+          if (sessionPanelDetail) {
+            sessionPanelDetail.textContent =
+              concept
+                ? `Você pausou em ${concept}. Retome direto ou faça uma revisão curta antes de continuar.`
+                : 'Retome direto ou faça uma revisão curta antes de continuar.';
+          }
+
+          if (sessionPanelActions) {
+            sessionPanelActions.hidden = false;
+          }
+        } else {
+          if (sessionPanelTitle) {
+            sessionPanelTitle.textContent =
+              'Revisão antes de retomar';
+          }
+
+          if (sessionPanelDetail) {
+            sessionPanelDetail.textContent =
+              'Conclua esta revisão curta. Quando a evidência for suficiente, o APEX restaura automaticamente o ponto em que você parou.';
+          }
+
+          if (sessionPanelActions) {
+            sessionPanelActions.hidden = true;
+          }
+        }
+      }
+    }
+
+    syncInputAvailability();
+  }
+
+
+  async function refreshSessionRuntime(
+    { quiet = false } = {}
+  ) {
+    if (
+      !Api
+      || typeof Api.getSession !== 'function'
+    ) {
+      renderSessionRuntime({
+        status: 'unknown'
+      });
+      return null;
+    }
+
+    try {
+      const result =
+        await Api.getSession(AREA);
+
+      if (
+        !result
+        || !result.ok
+        || !result.session
+      ) {
+        throw new Error(
+          'Estado de sessão inválido.'
+        );
+      }
+
+      renderSessionRuntime(
+        result.session
+      );
+
+      return result.session;
+    } catch (error) {
+      renderSessionRuntime({
+        status: 'unknown'
+      });
+
+      if (!quiet) {
+        toast(
+          error.message
+          || 'Não foi possível consultar a sessão.'
+        );
+      }
+
+      return null;
+    }
+  }
+
+
+  async function pauseLearningSession() {
+    if (
+      sendingMessage
+      || sessionControlBusy
+    ) {
+      toast(
+        'Aguarde o turno atual terminar antes de pausar.'
+      );
+      return;
+    }
+
+    sessionControlBusy = true;
+    syncInputAvailability();
+
+    try {
+      const result =
+        await Api.pauseSession(AREA);
+
+      renderSessionRuntime(
+        result.session
+      );
+
+      toast('Estudo pausado.');
+    } catch (error) {
+      toast(
+        error.message
+        || 'Não foi possível pausar.'
+      );
+
+      await refreshSessionRuntime({
+        quiet: true
+      });
+    } finally {
+      sessionControlBusy = false;
+      syncInputAvailability();
+    }
+  }
+
+
+  async function resumeLearningSession(
+    mode
+  ) {
+    if (sessionControlBusy) {
+      return;
+    }
+
+    sessionControlBusy = true;
+    syncInputAvailability();
+
+    try {
+      const result =
+        await Api.resumeSession(
+          AREA,
+          mode
+        );
+
+      renderSessionRuntime(
+        result.session
+      );
+
+      if (mode === 'review') {
+        toast(
+          'Revisão de retomada iniciada.'
+        );
+
+        if (input) {
+          input.value =
+            'Quero revisar antes de retomar.';
+        }
+
+        await sendMessage();
+      } else {
+        toast(
+          'Estudo retomado do ponto em que você parou.'
+        );
+
+        if (input) {
+          input.focus();
+        }
+      }
+    } catch (error) {
+      toast(
+        error.message
+        || 'Não foi possível retomar.'
+      );
+
+      await refreshSessionRuntime({
+        quiet: true
+      });
+    } finally {
+      sessionControlBusy = false;
+      syncInputAvailability();
+    }
+  }
+
+
+  if (pauseButton) {
+    pauseButton.addEventListener(
+      'click',
+      pauseLearningSession
+    );
+  }
+
+  if (resumeDirectButton) {
+    resumeDirectButton.addEventListener(
+      'click',
+      () => resumeLearningSession('direct')
+    );
+  }
+
+  if (resumeReviewButton) {
+    resumeReviewButton.addEventListener(
+      'click',
+      () => resumeLearningSession('review')
     );
   }
 
@@ -856,12 +1238,12 @@
       return null;
 
     } finally {
-      if (button) {
-        button.disabled =
-          false;
-      }
+      syncInputAvailability();
 
-      if (input) {
+      if (
+        input
+        && !input.disabled
+      ) {
         input.focus();
       }
     }
@@ -886,6 +1268,14 @@
     }
 
 
+    if (chatBlockedBySession()) {
+      toast(
+        'A sessão está pausada. Escolha como deseja retomar.'
+      );
+      return;
+    }
+
+
     if (!modulesReady()) {
       toast(
         'Os módulos do APEX não foram carregados corretamente.'
@@ -901,12 +1291,6 @@
     if (!text) {
       return;
     }
-
-
-    const sendButton =
-      document.getElementById(
-        'send-btn'
-      );
 
 
     if (sendButton) {
@@ -949,9 +1333,14 @@
           'assistant',
           assistantText
         );
+
+        await refreshSessionRuntime({
+          quiet: true
+        });
       }
     } finally {
       sendingMessage = false;
+      syncInputAvailability();
     }
   }
 
@@ -1004,12 +1393,17 @@
   // ==========================================================
 
   updateBadge();
+  renderSessionRuntime({
+    status: 'loading'
+  });
 
 
   if (!modulesReady()) {
     console.error(
       'APEX: apex-api.js ou apex-tts.js não foi carregado corretamente.'
     );
+  } else {
+    refreshSessionRuntime();
   }
 
 

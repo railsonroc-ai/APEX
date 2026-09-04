@@ -172,6 +172,84 @@
 
 
   // ==========================================================
+  // SESSÃO DE APRENDIZAGEM
+  // ==========================================================
+
+  async function readJsonResponse(response) {
+    let data = {};
+
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+
+    if (!response.ok) {
+      const error = new Error(
+        data.error
+        || `HTTP ${response.status}`
+      );
+
+      error.status = response.status;
+      error.code = data.code || null;
+      throw error;
+    }
+
+    return data;
+  }
+
+
+  async function getSession(area) {
+    const query = new URLSearchParams({
+      area: String(area || 'ads'),
+    });
+
+    const response = await fetchWithAuth(
+      `/api/session?${query.toString()}`,
+      {
+        method: 'GET',
+      }
+    );
+
+    return readJsonResponse(response);
+  }
+
+
+  async function pauseSession(area) {
+    const response = await fetchWithAuth(
+      '/api/session/pause',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          area: String(area || 'ads'),
+        }),
+      }
+    );
+
+    return readJsonResponse(response);
+  }
+
+
+  async function resumeSession(
+    area,
+    mode
+  ) {
+    const response = await fetchWithAuth(
+      '/api/session/resume',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          area: String(area || 'ads'),
+          mode: String(mode || 'direct'),
+        }),
+      }
+    );
+
+    return readJsonResponse(response);
+  }
+
+
+  // ==========================================================
   // SSE
   // ==========================================================
 
@@ -356,6 +434,9 @@
     isAuthError,
     requestAccessKey,
     saveNote,
+    getSession,
+    pauseSession,
+    resumeSession,
     streamChat,
   };
 

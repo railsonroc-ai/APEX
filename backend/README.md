@@ -34,8 +34,8 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `services/learning_turn_lease.py` — serialização de turnos por aluno + área entre workers.
 - `services/learning_session_lifecycle.py` — estado persistente de sessão, pausa/retomada e revisão antes de retomar, com ledger imutável de transições.
 - `templates/index.html` — interface principal.
-- `static/js/chat-engine.js` — estado da conversa e interface.
-- `static/js/apex-api.js` — HTTP, autenticação, notas e SSE.
+- `static/js/chat-engine.js` — estado da conversa, streaming e controles visuais do lifecycle da sessão.
+- `static/js/apex-api.js` — HTTP, autenticação, notas, lifecycle da sessão e SSE.
 - `static/js/apex-tts.js` — síntese de voz no navegador.
 
 ## Rotas atuais
@@ -47,6 +47,8 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `/api/session/pause` — pausa a sessão com serialização pelo mesmo lease dos turnos.
 - `/api/session/resume` — retoma direto ou inicia revisão antes da retomada.
 - `/api/notes` — salva notas no SQLite.
+
+A interface consulta o lifecycle no servidor ao abrir a página e depois de cada turno confirmado. Em `paused`, o campo de mensagem fica desabilitado e aparecem apenas as opções de retomada; em `reviewing`, o painel informa que a revisão está ativa. O navegador renderiza o estado recebido do backend, mas não decide a transição pedagógica.
 
 ## TutorCore
 

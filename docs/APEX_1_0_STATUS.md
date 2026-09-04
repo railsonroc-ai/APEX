@@ -39,6 +39,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `LearningHistory`: histórico confirmado, limitado e isolado por aluno, área e conceito.
 - `StudentContext`: identidade pedagógica resolvida no servidor para o aluno padrão atual.
 - `LearningSessionLifecycle`: máquina de estados persistente `studying → paused → studying/reviewing`, com revisão antes de retomar e ledger imutável de transições.
+- `Session UI`: controles da página principal que refletem o estado server-side e expõem Pausar / Retomar direto / Revisar antes.
 
 ## Confiabilidade
 
@@ -49,12 +50,13 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - tarefa e tentativa também são distintas: `learning_tasks` preserva o que o tutor realmente apresentou e novas tentativas do fluxo real carregam o `task_id` correspondente;
 - a rubrica semântica v2 não aceita `demonstrated` como decisão global autoatribuída pela LLM: o backend deriva o outcome a partir de três critérios estruturados;
 - identidade estável de aluno e sessão, com migração dos registros legados para o aluno padrão;
-- pausa e retomada são estado server-side persistente; novos turnos são bloqueados durante `paused`, e a opção `review` restaura a etapa anterior somente depois de uma evidência demonstrada;
+- pausa e retomada são estado server-side persistente; novos turnos são bloqueados durante `paused`, a interface também bloqueia o envio nesse estado, e a opção `review` restaura a etapa anterior somente depois de uma evidência demonstrada;
 - transições de pausa/retomada geram `learning_session_events` imutáveis e são serializadas pelo mesmo lease aluno+área usado pelos turnos;
 - transações atômicas no turno pedagógico;
 - rollback quando uma gravação falha;
 - rollback quando o streaming da resposta falha;
 - proteção contra envio concorrente no frontend;
+- controles de sessão ficam indisponíveis durante turno/ação de lifecycle e o frontend ressincroniza o estado pelo servidor depois de cada turno confirmado;
 - idempotência por `turn_id` e replay da resposta confirmada;
 - serialização server-side de turnos por aluno + área entre threads/workers;
 - histórico pedagógico autoritativo no servidor;

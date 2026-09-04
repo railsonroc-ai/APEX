@@ -52,8 +52,8 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 
 ## Frontend
 
-- `chat-engine.js`: conversa e interface.
-- `apex-api.js`: HTTP, autenticação, notas e SSE.
+- `chat-engine.js`: conversa, streaming e projeção visual do lifecycle da sessão.
+- `apex-api.js`: HTTP, autenticação, notas, lifecycle da sessão e SSE.
 - `apex-tts.js`: síntese de voz.
 - `index.html`: página principal.
 
@@ -104,6 +104,8 @@ A migration 10 separa formalmente a ação do aluno do julgamento semântico. `l
 A migration 11 cria `learning_tasks` e adiciona `task_id` opcional a `learning_attempts`. O `TaskPolicy` transforma a ação pedagógica controlada pelo servidor em um tipo de tarefa e um contrato de geração; `TutorCore` recebe esse contrato para terminar o turno com uma única microtarefa quando a ação é avaliável. Depois que a resposta do tutor é confirmada, o backend persiste a `LearningTask` usando o texto real do turno, sem pedir à LLM que invente identidade, rubrica ou nível de assistência. No turno seguinte, o app só monta uma nova avaliação semântica se localizar essa tarefa pelo mesmo aluno, sessão, conceito e `source_turn_id`; o `LearningAttempt` resultante recebe o `task_id`. Tentativas anteriores à migration 11 permanecem com `task_id = NULL`, sem retropreenchimento fictício. `AttemptPolicy` v2 e `EvidencePolicy` v5 marcam essa mudança de contrato.
 
 A migration 12 cria `learning_session_states` e `learning_session_events`. O lifecycle é controlado no servidor: `pause` captura o conceito e a etapa atuais; `resume` em modo `direct` volta a `studying` sem alterar o estado pedagógico, enquanto `review` coloca a sessão em `reviewing` e move temporariamente o `LearnerState` para `reencontrar`. Uma evidência aplicada com outcome `demonstrated` conclui essa revisão e restaura a etapa capturada. Enquanto `paused`, novos turnos são recusados; pause/resume usam o mesmo `LearningTurnLease` de aluno+área e o chat revalida o estado depois de adquirir a lease para fechar a janela de corrida. Eventos anteriores à migration 12 não são inventados: sessões existentes recebem apenas estado inicial `studying`.
+
+A interface não cria uma segunda máquina de estados. `apex-api.js` apenas consulta e solicita transições; `chat-engine.js` mantém uma cópia transitória para renderização e sempre a substitui pela resposta server-side. Ao carregar, o envio fica temporariamente indisponível até a primeira consulta de sessão. Em `paused`, textarea e envio são bloqueados; em `reviewing`, a revisão é iniciada por um turno explícito e, depois de cada resposta confirmada, o frontend consulta novamente o lifecycle para refletir automaticamente a conclusão da revisão.
 
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação
