@@ -66,6 +66,10 @@ from backend.services.llm_gateway import (
     LLMProviderError,
 )
 from backend.services.observability import Observability
+from backend.services.data_lifecycle import (
+    DataLifecycle,
+    DataLifecycleError,
+)
 
 
 # ============================================================
@@ -925,6 +929,83 @@ def chat_stream():
                 "no",
         },
     )
+
+
+# ============================================================
+# PRIVACIDADE / CICLO DE VIDA DOS DADOS
+# ============================================================
+
+@bp.route("/api/privacy/export", methods=["GET"])
+def privacy_export():
+    if not verify_auth():
+        return _auth_failure_response()
+
+    context = StudentContext.resolve("ads")
+    _bind_observability_context(context)
+
+    try:
+        payload = DataLifecycle.export_student(context["student_id"])
+    except DataLifecycleError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+    body = DataLifecycle.to_json_bytes(payload)
+    Observability.event(
+        current_app.logger,
+        "privacy_export_completed",
+        export_format_version=DataLifecycle.EXPORT_FORMAT_VERSION,
+        size_bytes=len(body),
+    )
+
+    response = Response(
+        body,
+        status=200,
+        mimetype="application/json",
+    )
+    response.headers["Content-Disposition"] = (
+        "attachment; filename=apex-student-export.json"
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@bp.route("/api/privacy/data", methods=["DELETE"])
+def privacy_delete():
+    if not verify_auth():
+        return _auth_failure_response()
+
+    data = request.get_json(silent=True) or {}
+    confirmation = str(data.get("confirmation", "")).strip()
+    if confirmation != DataLifecycle.DELETE_CONFIRMATION:
+        return jsonify(
+            {
+                "error": "Confirmação explícita obrigatória.",
+                "code": "confirmation_required",
+            }
+        ), 400
+
+    context = StudentContext.resolve("ads")
+    _bind_observability_context(context)
+    student_id = context["student_id"]
+
+    try:
+        result = DataLifecycle.delete_student(student_id)
+    except DataLifecycleError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+    Observability.event(
+        current_app.logger,
+        "privacy_delete_completed",
+        receipt_id=result["receipt_id"],
+        policy_version=result["policy_version"],
+    )
+
+    return jsonify(
+        {
+            "ok": True,
+            "receipt_id": result["receipt_id"],
+            "message": "Dados do aluno excluídos.",
+        }
+    ), 200
 
 
 # ============================================================

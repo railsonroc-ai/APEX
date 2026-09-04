@@ -26,6 +26,7 @@ EXPECTED_MIGRATIONS = [
     (11, "create_learning_tasks"),
     (12, "create_learning_session_lifecycle"),
     (13, "create_access_control"),
+    (14, "enable_privacy_lifecycle"),
 ]
 
 
@@ -121,6 +122,7 @@ def test_new_database_applies_ordered_migrations(
         "learning_session_events",
         "access_credentials",
         "api_rate_limits",
+        "privacy_deletion_authorizations",
     }.issubset(tables)
 
     assert "concept_id" in turn_columns
@@ -655,7 +657,7 @@ def test_v5_database_receives_empty_evidence_ledger(
 
         assert total == 0
         assert turns == 1
-        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+        assert [row["version"] for row in versions] == list(range(1, 15))
         assert connection.execute(
             "PRAGMA foreign_key_check"
         ).fetchall() == []
@@ -1037,7 +1039,7 @@ def test_v7_database_receives_empty_mastery_assessment_ledger(monkeypatch, tmp_p
         ).fetchone()[0]
         assert total == 0
         assert preserved_evidence == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+        assert versions == list(range(1, 15))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1154,7 +1156,7 @@ def test_v8_database_receives_empty_assistance_ledger(monkeypatch, tmp_path):
         ).fetchone()[0]
         assert total == 0
         assert preserved_turn == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+        assert versions == list(range(1, 15))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1276,7 +1278,7 @@ def test_v9_database_receives_empty_attempt_and_rubric_ledgers(monkeypatch, tmp_
         assert attempts == 0
         assert rubrics == 0
         assert preserved_turn == 1
-        assert versions == list(range(1, 14))
+        assert versions == list(range(1, 15))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1407,7 +1409,7 @@ def test_v10_database_receives_empty_task_ledger_without_inventing_links(monkeyp
 
         assert tasks == 0
         assert attempt_task is None
-        assert versions == list(range(1, 14))
+        assert versions == list(range(1, 15))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1541,7 +1543,7 @@ def test_v11_database_receives_session_runtime_without_inventing_events(
         assert states == session_count
         assert events == 0
         assert status == "studying"
-        assert versions == list(range(1, 14))
+        assert versions == list(range(1, 15))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1732,12 +1734,12 @@ def test_access_control_migration_creates_hashed_credentials_and_rate_limit_sche
                 "PRAGMA table_info(api_rate_limits)"
             ).fetchall()
         }
-        latest = connection.execute(
-            "SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1"
+        applied = connection.execute(
+            "SELECT version, name FROM schema_migrations WHERE version = 13"
         ).fetchone()
 
-        assert latest["version"] == 13
-        assert latest["name"] == "create_access_control"
+        assert applied["version"] == 13
+        assert applied["name"] == "create_access_control"
         assert {
             "credential_id",
             "student_id",
@@ -1807,5 +1809,97 @@ def test_access_control_migration_rolls_back_schema_and_version(
         assert credentials is None
         assert limits is None
         assert versions == list(range(1, 13))
+    finally:
+        connection.close()
+
+
+
+def test_privacy_lifecycle_migration_authorizes_only_explicit_student_deletion(
+    monkeypatch,
+    tmp_path,
+):
+    path = configure_database(
+        monkeypatch,
+        tmp_path,
+        name="privacy-v14-schema.db",
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        latest = connection.execute(
+            "SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1"
+        ).fetchone()
+        tables = {
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        trigger_sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='evidence_events_no_delete'"
+        ).fetchone()["sql"]
+
+        assert latest["version"] == 14
+        assert latest["name"] == "enable_privacy_lifecycle"
+        assert "privacy_deletion_authorizations" in tables
+        assert "privacy_deletion_authorizations" in trigger_sql
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_privacy_lifecycle_migration_rolls_back_trigger_changes(
+    monkeypatch,
+    tmp_path,
+):
+    path = configure_database(
+        monkeypatch,
+        tmp_path,
+        name="privacy-v14-rollback.db",
+    )
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:13],
+    )
+    database_module.init_database()
+
+    def failing(connection):
+        migrations_module.enable_privacy_lifecycle(connection)
+        raise RuntimeError("falha depois do privacy lifecycle")
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:13] + (
+            Migration(14, "enable_privacy_lifecycle", failing),
+        ),
+    )
+
+    with pytest.raises(MigrationError, match="Falha ao aplicar migração 14"):
+        database_module.init_database()
+
+    connection = connect(path)
+    try:
+        privacy_table = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='privacy_deletion_authorizations'"
+        ).fetchone()
+        trigger_sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='evidence_events_no_delete'"
+        ).fetchone()["sql"]
+        versions = [
+            row["version"]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+
+        assert privacy_table is None
+        assert "privacy_deletion_authorizations" not in trigger_sql
+        assert versions == list(range(1, 14))
     finally:
         connection.close()

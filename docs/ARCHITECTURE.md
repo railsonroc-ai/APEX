@@ -144,3 +144,12 @@ O APEX 1.0 continua operando como produto individual, mas a fundação de identi
 já existe: `student_id` participa das chaves pedagógicas e o aluno atual é resolvido
 no servidor. Ainda não existem cadastro, login, autorização individual, revogação,
 seleção de perfil ou gestão multiusuário completa. O ledger de evidências, o catálogo de conceitos, o ledger de assistência e a `MasteryPolicy` tornam a conclusão explicável e resistente a uma única classificação. O nível de ajuda já é mensurado no contrato server-side do turno e as tentativas/rubricas básicas já são auditáveis. Ainda faltam requisitos/artefatos estruturados por tipo de tarefa, rubricas profissionais específicas e uma política de retenção mais rica; o ChallengeEngine completo continua fora deste estágio.
+
+
+## Privacidade e ciclo de vida de dados
+
+O limite de privacidade fica no adapter HTTP + `DataLifecycle`; o navegador nunca envia um `student_id` para exportar ou excluir. A identidade vem exclusivamente da credencial já autenticada.
+
+A exportação é uma projeção read-only das tabelas pertencentes ao aluno e omite `key_hash`, rate-limit interno e catálogo global. A exclusão é uma operação destrutiva explícita e transacional. Como os ledgers pedagógicos são imutáveis por design, a migration 14 não remove essa proteção: ela cria uma autorização temporária por `student_id` que os triggers consultam apenas durante o fluxo de privacidade. Sem esse marcador, `UPDATE`/`DELETE` dos ledgers continuam proibidos.
+
+Retenção não roda como side effect do startup. O CLI de retenção calcula candidatos de forma conservadora — conta não padrão, sem credencial ativa e inativa além da janela — e permanece em dry-run até receber `--apply`. Isso separa política de retenção de disponibilidade do serviço e evita exclusão silenciosa durante deploy/restart.

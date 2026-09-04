@@ -54,6 +54,10 @@ def verify_auth():
         return False
 
     if not APEX_ACCESS_KEY:
+        try:
+            AccessControl.ensure_student_runtime(DEFAULT_STUDENT_ID)
+        except sqlite3.Error:
+            return False
         _set_auth_context(
             DEFAULT_STUDENT_ID,
             "development-default",
@@ -89,6 +93,10 @@ def verify_auth():
         student_id = DEFAULT_STUDENT_ID
         credential_id = "environment-default"
         source = "environment-fallback"
+        try:
+            AccessControl.ensure_student_runtime(student_id)
+        except sqlite3.Error:
+            return False
     else:
         return False
 

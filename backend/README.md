@@ -12,6 +12,7 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `services/access_control.py` — credenciais persistidas por hash, rotação/revogação e quota SQLite compartilhada entre workers.
 - `services/llm_gateway.py` — adapter único para Groq, limites por finalidade e telemetria segura.
 - `services/observability.py` — contexto de request/turno, pseudonimização de identidade e eventos JSON sem conteúdo pedagógico sensível.
+- `services/data_lifecycle.py` — exportação, exclusão transacional do aluno e seleção/aplicação controlada de retenção.
 - `prompts/tutor.py` — prompt pedagógico do tutor.
 - `services/tutor_core.py` — preparação e proteção do contexto.
 - `identity.py` — IDs estáveis do aluno e das sessões padrão do APEX individual.
@@ -50,6 +51,8 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `/api/session/pause` — pausa a sessão com serialização pelo mesmo lease dos turnos.
 - `/api/session/resume` — retoma direto ou inicia revisão antes da retomada.
 - `/api/notes` — salva notas no SQLite.
+- `/api/privacy/export` — exporta somente os dados do aluno autenticado em JSON, sem hashes de credenciais.
+- `/api/privacy/data` — exclui os dados do aluno autenticado após confirmação explícita.
 
 A interface consulta o lifecycle no servidor ao abrir a página e depois de cada turno confirmado. Em `paused`, o campo de mensagem fica desabilitado e aparecem apenas as opções de retomada; em `reviewing`, o painel informa que a revisão está ativa. O navegador renderiza o estado recebido do backend, mas não decide a transição pedagógica.
 
@@ -80,3 +83,12 @@ O servidor de produção utiliza Gunicorn através de `start_apex.sh`. O script 
 Valide a configuração com:
 
     gunicorn backend.app:app --check-config
+
+
+## Privacidade e retenção
+
+A migration 14 cria `privacy_deletion_authorizations` e altera apenas os triggers de `DELETE` dos ledgers imutáveis. Fora de uma autorização temporária para o `student_id` específico, `DELETE` continua abortando como antes. `DataLifecycle.delete_student()` cria a autorização e remove todos os registros dependentes dentro da mesma transação; qualquer falha faz rollback inclusive da autorização.
+
+A exportação inclui identidade, sessões, estado, progresso, turnos, tarefas, tentativas, rubricas, evidências, mastery, assistência, eventos de sessão, notas e metadados de credenciais. `key_hash` e valores secretos nunca entram no arquivo.
+
+`tools/apex_retention.py` é dry-run por padrão. Candidatos precisam estar além de `PRIVACY_RETENTION_DAYS`, não podem ser `student_default` e não podem possuir credencial ativa. A remoção só ocorre com `--apply`; o APEX não executa retenção automaticamente no startup.

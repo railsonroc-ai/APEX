@@ -198,6 +198,22 @@ AUTH_RATE_LIMIT_WINDOW_SECONDS = _resolve_positive_int_env(
 
 
 # ============================================================
+# PRIVACIDADE / RETENCAO
+# ============================================================
+
+PRIVACY_RETENTION_DAYS = _resolve_positive_int_env(
+    "PRIVACY_RETENTION_DAYS",
+    365,
+    maximum=3650,
+)
+
+if PRIVACY_RETENTION_DAYS < 30:
+    raise RuntimeError(
+        "PRIVACY_RETENTION_DAYS deve ser pelo menos 30."
+    )
+
+
+# ============================================================
 # DADOS
 # ============================================================
 

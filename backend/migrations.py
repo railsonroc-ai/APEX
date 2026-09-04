@@ -1917,6 +1917,45 @@ def create_access_control(connection):
     """)
 
 
+def enable_privacy_lifecycle(connection):
+    connection.execute("""
+        CREATE TABLE privacy_deletion_authorizations (
+            student_id TEXT PRIMARY KEY,
+            receipt_id TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    immutable_tables = (
+        ("evidence_events", "evidence_events_no_delete"),
+        ("mastery_assessments", "mastery_assessments_no_delete"),
+        ("assistance_events", "assistance_events_no_delete"),
+        ("learning_attempts", "learning_attempts_no_delete"),
+        ("rubric_assessments", "rubric_assessments_no_delete"),
+        ("learning_tasks", "learning_tasks_no_delete"),
+        ("learning_session_events", "learning_session_events_no_delete"),
+    )
+
+    for table, trigger in immutable_tables:
+        connection.execute(f"DROP TRIGGER {trigger}")
+        connection.execute(
+            f"""
+            CREATE TRIGGER {trigger}
+            BEFORE DELETE ON {table}
+            WHEN NOT EXISTS (
+                SELECT 1
+                FROM privacy_deletion_authorizations p
+                WHERE p.student_id = OLD.student_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, '{table} are immutable');
+            END
+            """
+        )
+
+
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -1982,6 +2021,11 @@ MIGRATIONS = (
         13,
         "create_access_control",
         create_access_control,
+    ),
+    Migration(
+        14,
+        "enable_privacy_lifecycle",
+        enable_privacy_lifecycle,
     ),
 )
 

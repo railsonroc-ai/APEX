@@ -58,3 +58,14 @@ def test_llm_limits_accept_valid_values():
         }
     )
     assert result.returncode == 0
+
+
+def test_privacy_retention_rejects_window_below_30_days():
+    result = _import_config_with({"PRIVACY_RETENTION_DAYS": "29"})
+    assert result.returncode != 0
+    assert "PRIVACY_RETENTION_DAYS" in result.stderr
+
+
+def test_privacy_retention_accepts_valid_window():
+    result = _import_config_with({"PRIVACY_RETENTION_DAYS": "365"})
+    assert result.returncode == 0

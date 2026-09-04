@@ -14,6 +14,8 @@ def test_create_app_exposes_expected_routes_without_database_bootstrap():
     assert "/health" in rules
     assert "/chat/stream" in rules
     assert "/api/session" in rules
+    assert "/api/privacy/export" in rules
+    assert "/api/privacy/data" in rules
 
 def test_import_backend_app_does_not_create_sqlite_database(tmp_path):
     isolated_data = tmp_path / "import-only"

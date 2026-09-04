@@ -45,6 +45,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `LLMGateway`: fronteira única com o provider de IA, com timeout/retries deliberados, limites de geração por finalidade e telemetria sem conteúdo.
 - `create_app()`: factory Flask sem efeitos de persistência no import; bootstrap de produção e pytest inicializam o SQLite explicitamente em ambientes separados.
 - `Observability`: correlação por `request_id`/`turn_id`, eventos JSON e referências pseudonimizadas de identidade, sem conteúdo pedagógico sensível nos logs.
+- `DataLifecycle`: exportação do aluno, exclusão transacional completa e retenção administrativa explícita/dry-run.
 
 ## Confiabilidade
 
@@ -84,6 +85,8 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - logs LLM registram latência e tokens quando disponíveis, sem persistir prompt/resposta.
 - importar `backend.app` não executa migrations nem cria `apex.db`; a suíte pytest força um diretório SQLite temporário próprio.
 - cada resposta HTTP recebe `X-Apex-Request-ID`; logs operacionais estruturados correlacionam requests, turnos, chamadas LLM, transições de sessão e falhas sem registrar mensagens, prompts, respostas, notas ou chaves.
+- exportação de privacidade nunca inclui `key_hash`; exclusão de aluno exige confirmação explícita e usa uma autorização transacional temporária que não enfraquece a imutabilidade normal dos ledgers.
+- retenção administrativa não roda automaticamente; o CLI é dry-run por padrão e só considera contas não padrão sem credencial ativa.
 
 ## Validação da release
 

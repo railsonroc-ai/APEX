@@ -112,6 +112,21 @@ class AccessControl:
             )
 
     @classmethod
+    def ensure_student_runtime(cls, student_id):
+        normalized_student = str(student_id or "").strip()
+        if not normalized_student:
+            raise ValueError("student_id obrigatorio")
+
+        connection = get_db_connection()
+        try:
+            cls._ensure_student_runtime(connection, normalized_student)
+            connection.commit()
+        finally:
+            connection.close()
+
+        return normalized_student
+
+    @classmethod
     def create_credential(cls, student_id, label, raw_key):
         key_hash = cls.hash_key(raw_key)
         normalized_label = str(label or "").strip()
