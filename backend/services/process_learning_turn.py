@@ -11,6 +11,8 @@ from backend.services.concept_activation import ConceptActivation
 from backend.services.concept_progress import ConceptProgress
 from backend.services.concept_tracker import ConceptTracker
 from backend.services.evidence_evaluator import EvidenceEvaluator
+from backend.services.evidence_event import EvidenceEvent
+from backend.services.evidence_policy import EvidencePolicy
 from backend.services.learner_signals import LearnerSignals
 from backend.services.learner_state import LearnerState
 from backend.services.learner_state_transition import LearnerStateTransition
@@ -106,6 +108,9 @@ class ProcessLearningTurn:
         assistant_message=None,
         student_id=DEFAULT_STUDENT_ID,
         session_id=None,
+        evidence_context=None,
+        assistance_level=EvidencePolicy.ASSISTANCE_UNTRACKED,
+        artifact_ref=None,
     ):
         normalized_turn_id = (
             LearningHistory.normalize_turn_id(
@@ -236,6 +241,14 @@ class ProcessLearningTurn:
                 student_id=normalized_student_id,
             )
 
+            state_before_evidence = dict(learner_state)
+            evidence_applied = bool(
+                LearnerStateTransition.from_evidence(
+                    state_before_evidence,
+                    semantic_evidence,
+                )
+            )
+
             result = cls._finalize(
                 normalized_area,
                 normalized_user_message,
@@ -257,7 +270,84 @@ class ProcessLearningTurn:
                     session_id=normalized_session_id,
                 )
 
+                cls._record_evidence_event(
+                    normalized_turn_id=normalized_turn_id,
+                    normalized_area=normalized_area,
+                    normalized_user_message=normalized_user_message,
+                    normalized_student_id=normalized_student_id,
+                    normalized_session_id=normalized_session_id,
+                    semantic_evidence=semantic_evidence,
+                    evidence_context=evidence_context,
+                    state_before_evidence=state_before_evidence,
+                    state_after=result["learner_state"],
+                    applied=evidence_applied,
+                    assistance_level=assistance_level,
+                    artifact_ref=artifact_ref,
+                )
+
             return result
+
+    @classmethod
+    def _record_evidence_event(
+        cls,
+        *,
+        normalized_turn_id,
+        normalized_area,
+        normalized_user_message,
+        normalized_student_id,
+        normalized_session_id,
+        semantic_evidence,
+        evidence_context,
+        state_before_evidence,
+        state_after,
+        applied,
+        assistance_level,
+        artifact_ref,
+    ):
+        if (
+            not isinstance(semantic_evidence, dict)
+            or not isinstance(evidence_context, dict)
+        ):
+            return None
+
+        context_answer = LearningHistory.normalize_message(
+            evidence_context.get("student_answer")
+        )
+
+        if context_answer != normalized_user_message:
+            raise ValueError(
+                "evidence_context não corresponde ao turno confirmado"
+            )
+
+        context_concept = LearningHistory.normalize_concept(
+            evidence_context.get("concept")
+        )
+        state_concept = LearningHistory.normalize_concept(
+            state_before_evidence.get("current_concept")
+        )
+
+        if not context_concept or context_concept != state_concept:
+            raise ValueError(
+                "evidence_context não corresponde ao conceito ativo"
+            )
+
+        return EvidenceEvent.record(
+            turn_id=normalized_turn_id,
+            area=normalized_area,
+            concept=context_concept,
+            stage_before=evidence_context.get("stage"),
+            stage_after=state_after.get("stage"),
+            semantic_evidence=semantic_evidence,
+            tutor_message=evidence_context.get("tutor_message"),
+            student_answer=context_answer,
+            mastery_before=state_before_evidence.get("mastery"),
+            mastery_after=state_after.get("mastery"),
+            applied=applied,
+            student_id=normalized_student_id,
+            session_id=normalized_session_id,
+            assistance_level=assistance_level,
+            artifact_ref=artifact_ref,
+        )
 
     @classmethod
     def finalize(

@@ -30,3 +30,9 @@ def test_stream_commits_before_done_confirmation():
         < commit_position
         < done_position
     )
+
+
+def test_stream_forwards_authoritative_evidence_context_to_commit():
+    source = Path("backend/app.py").read_text()
+
+    assert "evidence_context=evidence_evaluation" in source

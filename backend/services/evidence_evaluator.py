@@ -1,4 +1,5 @@
 from backend.services.learner_signals import LearnerSignals
+from backend.services.evidence_policy import EvidencePolicy
 
 
 class EvidenceEvaluator:
@@ -75,6 +76,14 @@ class EvidenceEvaluator:
             return None
         system = (
             "Avalie semanticamente a evidência de aprendizagem do aluno. "
+            f"Rubrica {EvidencePolicy.RUBRIC_ID} v{EvidencePolicy.RUBRIC_VERSION}. "
+            "Critérios: (1) responder ao que o tutor pediu, "
+            "(2) manter correção conceitual e "
+            "(3) demonstrar compreensão/aplicação, não apenas concordância. "
+            "Use demonstrated somente quando os três critérios forem materialmente atendidos; "
+            "partial quando houver progresso correto porém incompleto; "
+            "misconception quando houver erro conceitual relevante; "
+            "insufficient quando não houver evidência suficiente para julgar. "
             "Não considere declarações como entendi como prova suficiente. "
             "Responda somente JSON com outcome, confidence e evidence. "
             "outcome deve ser insufficient, partial, demonstrated ou misconception."

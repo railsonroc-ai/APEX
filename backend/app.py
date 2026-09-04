@@ -511,6 +511,7 @@ def chat_stream():
                 assistant_message=assistant_message,
                 student_id=student_id,
                 session_id=session_id,
+                evidence_context=evidence_evaluation,
             )
 
             yield sse(

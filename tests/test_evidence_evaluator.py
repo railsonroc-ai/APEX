@@ -65,5 +65,7 @@ def test_builds_semantic_evaluation_messages():
     result = EvidenceEvaluator.build_evaluation_messages(evaluation)
     assert len(result) == 2
     assert result[0]["role"] == "system"
+    assert "Rubrica semantic_evidence v1" in result[0]["content"]
+    assert "três critérios" in result[0]["content"]
     assert result[1]["role"] == "user"
     assert "Conceito: variáveis" in result[1]["content"]

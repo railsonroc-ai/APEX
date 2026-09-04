@@ -14,6 +14,9 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `identity.py` — IDs estáveis do aluno e das sessões padrão do APEX individual.
 - `services/student_context.py` — resolução server-side da identidade pedagógica.
 - `services/process_learning_turn.py` — preview e commit do turno pedagógico.
+- `services/evidence_evaluator.py` — avaliação semântica com rubrica versionada.
+- `services/evidence_policy.py` — IDs/versões de rubrica, política e assistência.
+- `services/evidence_event.py` — ledger imutável das avaliações confirmadas.
 - `services/learning_history.py` — histórico confirmado no servidor.
 - `services/learning_turn_lease.py` — serialização de turnos por aluno + área entre workers.
 - `templates/index.html` — interface principal.
@@ -41,6 +44,10 @@ Os testes ficam em `tests/`.
 Execute:
 
     pytest -q
+
+Gate automatizado:
+
+    python3 tools/apex_validate.py
 
 ## Produção
 

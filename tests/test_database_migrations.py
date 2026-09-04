@@ -18,6 +18,7 @@ EXPECTED_MIGRATIONS = [
     (3, "add_learning_turn_concept"),
     (4, "create_learning_turn_leases"),
     (5, "add_student_identity"),
+    (6, "create_evidence_events"),
 ]
 
 
@@ -101,6 +102,7 @@ def test_new_database_applies_ordered_migrations(
         "learning_turn_leases",
         "students",
         "learning_sessions",
+        "evidence_events",
     }.issubset(tables)
 
     assert "concept" in turn_columns
@@ -565,5 +567,151 @@ def test_identity_migration_rolls_back_schema_and_data_together(
             3,
             4,
         ]
+    finally:
+        connection.close()
+
+
+def test_v5_database_receives_empty_evidence_ledger(
+    monkeypatch,
+    tmp_path,
+):
+    path = configure_database(
+        monkeypatch,
+        tmp_path,
+        name="v5-to-v6.db",
+    )
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:5],
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    connection.execute(
+        """
+        INSERT INTO learning_turns (
+            student_id,
+            session_id,
+            turn_id,
+            area,
+            user_message,
+            assistant_message,
+            concept
+        )
+        VALUES (
+            'student_default',
+            'session_default_ads',
+            'turn-before-ledger',
+            'ads',
+            'Pergunta',
+            'Resposta',
+            'variáveis'
+        )
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations,
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        total = connection.execute(
+            "SELECT COUNT(*) FROM evidence_events"
+        ).fetchone()[0]
+        versions = connection.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        ).fetchall()
+        turns = connection.execute(
+            "SELECT COUNT(*) FROM learning_turns"
+        ).fetchone()[0]
+
+        assert total == 0
+        assert turns == 1
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6]
+        assert connection.execute(
+            "PRAGMA foreign_key_check"
+        ).fetchall() == []
+        assert connection.execute(
+            "PRAGMA integrity_check"
+        ).fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_evidence_migration_rolls_back_schema_and_version_together(
+    monkeypatch,
+    tmp_path,
+):
+    path = configure_database(
+        monkeypatch,
+        tmp_path,
+        name="evidence-rollback.db",
+    )
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:5],
+    )
+    database_module.init_database()
+
+    def failing_evidence_migration(connection):
+        migrations_module.create_evidence_events(connection)
+        raise RuntimeError("falha depois do ledger")
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:5]
+        + (
+            Migration(
+                6,
+                "create_evidence_events",
+                failing_evidence_migration,
+            ),
+        ),
+    )
+
+    with pytest.raises(
+        MigrationError,
+        match="Falha ao aplicar migração 6",
+    ):
+        database_module.init_database()
+
+    connection = connect(path)
+    try:
+        table = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'evidence_events'
+            """
+        ).fetchone()
+        trigger = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'trigger'
+              AND name = 'evidence_events_no_update'
+            """
+        ).fetchone()
+        versions = connection.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        ).fetchall()
+
+        assert table is None
+        assert trigger is None
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5]
     finally:
         connection.close()

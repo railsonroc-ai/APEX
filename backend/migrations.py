@@ -478,6 +478,107 @@ def add_student_identity(connection):
     """)
 
 
+def create_evidence_events(connection):
+    connection.execute("""
+        CREATE TABLE evidence_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id TEXT NOT NULL UNIQUE,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            concept TEXT NOT NULL,
+            stage_before TEXT NOT NULL,
+            stage_after TEXT NOT NULL,
+            outcome TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            evidence_text TEXT,
+            tutor_message TEXT NOT NULL,
+            student_answer TEXT NOT NULL,
+            assistance_level TEXT NOT NULL DEFAULT 'untracked',
+            artifact_ref TEXT,
+            rubric_id TEXT NOT NULL,
+            rubric_version INTEGER NOT NULL,
+            policy_id TEXT NOT NULL,
+            policy_version INTEGER NOT NULL,
+            source TEXT NOT NULL,
+            applied INTEGER NOT NULL,
+            mastery_before REAL NOT NULL,
+            mastery_after REAL NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(
+                    student_id,
+                    id,
+                    area
+                ),
+            FOREIGN KEY(student_id, turn_id)
+                REFERENCES learning_turns(
+                    student_id,
+                    turn_id
+                ),
+            UNIQUE(student_id, turn_id),
+            CHECK(area IN ('ads', 'it')),
+            CHECK(outcome IN (
+                'insufficient',
+                'partial',
+                'demonstrated',
+                'misconception'
+            )),
+            CHECK(confidence >= 0.0 AND confidence <= 1.0),
+            CHECK(assistance_level IN (
+                'untracked',
+                'independent',
+                'light',
+                'guided',
+                'direct'
+            )),
+            CHECK(rubric_version > 0),
+            CHECK(policy_version > 0),
+            CHECK(applied IN (0, 1)),
+            CHECK(mastery_before >= 0.0 AND mastery_before <= 1.0),
+            CHECK(mastery_after >= 0.0 AND mastery_after <= 1.0)
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_evidence_events_student_concept_created
+        ON evidence_events (
+            student_id,
+            area,
+            concept,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_evidence_events_policy
+        ON evidence_events (
+            policy_id,
+            policy_version,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER evidence_events_no_update
+        BEFORE UPDATE ON evidence_events
+        BEGIN
+            SELECT RAISE(ABORT, 'evidence_events are immutable');
+        END
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER evidence_events_no_delete
+        BEFORE DELETE ON evidence_events
+        BEGIN
+            SELECT RAISE(ABORT, 'evidence_events are immutable');
+        END
+    """)
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -503,6 +604,11 @@ MIGRATIONS = (
         5,
         "add_student_identity",
         add_student_identity,
+    ),
+    Migration(
+        6,
+        "create_evidence_events",
+        create_evidence_events,
     ),
 )
 

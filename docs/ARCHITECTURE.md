@@ -30,7 +30,9 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `LearnerStateTransition`: mudanças por sinais e evidências.
 - `TeachingPolicy`: escolha determinística da próxima ação.
 - `ConceptTracker` e `ConceptActivation`: identificação e ativação de conceitos.
-- `EvidenceEvaluator`: contrato da avaliação semântica.
+- `EvidenceEvaluator`: contrato da avaliação semântica e rubrica versionada.
+- `EvidenceEvent`: ledger imutável de avaliações confirmadas.
+- `EvidencePolicy`: IDs/versões de rubrica e política, além do nível de assistência registrado.
 - `ConceptProgress`: progresso persistente por aluno + área + conceito.
 - `ReviewScheduler`, `ReviewQueue` e `ReviewLifecycle`: revisão espaçada.
 - `ProcessLearningTurn`: preview e commit atômico do turno.
@@ -57,7 +59,8 @@ Tabelas principais:
 - `learner_state`: estado atual por aluno + área;
 - `concept_progress`: progresso e revisão por aluno + área + conceito;
 - `learning_turns`: turnos idempotentes por aluno, associados a uma sessão;
-- `learning_turn_leases`: reserva temporária por aluno + área.
+- `learning_turn_leases`: reserva temporária por aluno + área;
+- `evidence_events`: avaliações imutáveis ligadas ao aluno, sessão e turno confirmado.
 
 O navegador não fornece o histórico usado pelo tutor e não escolhe livremente
 o `student_id`. O backend resolve a identidade do aluno padrão atual, lê apenas
@@ -67,6 +70,8 @@ A reserva de turno usa a chave `student_id + area`: duas sessões do mesmo aluno
 na mesma área permanecem serializadas, enquanto alunos diferentes podem estudar
 a mesma área em paralelo. A lease fica no SQLite, funciona entre threads/workers
 e expira para permitir recuperação caso um worker seja interrompido.
+
+A migration 6 cria o ledger `evidence_events`, protegido por triggers contra `UPDATE` e `DELETE`. O evento registra outcome, confiança, contexto avaliado, rubrica/policy versionadas, assistência, artefato opcional, flag de aplicação e mastery antes/depois. O nível de ajuda permanece `untracked` enquanto o APEX ainda não mede scaffolding explicitamente; nenhum valor de autonomia é inventado.
 
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação
@@ -78,9 +83,13 @@ Produção: Gunicorn via `start_apex.sh`.
 
 Testes: `pytest -q`.
 
+Gate automatizado: `python3 tools/apex_validate.py`.
+
+Aplicação segura de pacotes futuros: `python3 tools/apex_apply_update.py <pacote> <sha256> <head>`; a migração do banco real permanece em uma segunda ação explícita com `python3 tools/apex_migrate_real.py`. Nenhum desses scripts faz commit ou push.
+
 ## Limite atual
 
 O APEX 1.0 continua operando como produto individual, mas a fundação de identidade
 já existe: `student_id` participa das chaves pedagógicas e o aluno atual é resolvido
 no servidor. Ainda não existem cadastro, login, autorização individual, revogação,
-seleção de perfil ou gestão multiusuário completa.
+seleção de perfil ou gestão multiusuário completa. O ledger de evidências agora torna as decisões atuais auditáveis, mas a política de mastery ainda deve evoluir para múltiplas evidências, variedade, independência, retenção e assistência medida explicitamente.
