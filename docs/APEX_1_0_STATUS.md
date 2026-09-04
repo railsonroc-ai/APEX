@@ -77,7 +77,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - a assistência atribuída à resposta do aluno vem da mensagem anterior do tutor, associada por aluno, sessão, área, conceito e turno;
 - conclusão de domínio exige pelo menos uma demonstração com assistência `independent` ou `light`, e a evidência final não pode ser `untracked`, `guided` ou `direct`;
 - conceitos legados desconhecidos são preservados como não selecionáveis e recebem nome seguro;
-- configuração de produção exige `SECRET_KEY` e `APEX_ACCESS_KEY`; a chave padrão é provisionada no banco apenas como hash.
+- configuração de produção exige `SECRET_KEY`; o APEX 1.0 individual não exige senha ou chave de acesso do usuário.
 - rotas protegidas aplicam rate limit compartilhado e retornam HTTP 429 com `Retry-After` ao exceder a quota.
 - a app factory aplica CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` e `Permissions-Policy`.
 - o SDK Groq não é mais chamado diretamente pelas rotas; todas as chamadas passam pelo `LLMGateway`.

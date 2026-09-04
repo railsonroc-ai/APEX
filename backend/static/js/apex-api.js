@@ -5,7 +5,6 @@
  * e o backend Flask do APEX.
  *
  * Responsabilidades:
- * - autenticação X-Apex-Key;
  * - requisições HTTP;
  * - salvamento de notas;
  * - leitura do stream SSE do tutor.
@@ -13,97 +12,23 @@
 (function () {
   'use strict';
 
-  const ACCESS_KEY_STORAGE = 'apex_key';
-
-
   // ==========================================================
-  // AUTENTICAÇÃO
+  // HTTP
   // ==========================================================
-
-  function getAccessKey() {
-    return (
-      localStorage.getItem(
-        ACCESS_KEY_STORAGE
-      )
-      || ''
-    );
-  }
-
-
-  function setAccessKey(key) {
-    const normalized = String(
-      key || ''
-    ).trim();
-
-    if (!normalized) {
-      return;
-    }
-
-    localStorage.setItem(
-      ACCESS_KEY_STORAGE,
-      normalized
-    );
-  }
-
-
-  function clearAccessKey() {
-    localStorage.removeItem(
-      ACCESS_KEY_STORAGE
-    );
-  }
-
 
   function getHeaders() {
-    const headers = {
+    return {
       'Content-Type':
         'application/json'
     };
-
-    const key = getAccessKey();
-
-    if (key) {
-      headers['X-Apex-Key'] = key;
-    }
-
-    return headers;
   }
 
 
-  function isAuthError(status) {
-    return (
-      status === 401
-      || status === 403
-    );
-  }
-
-
-  function requestAccessKey() {
-    clearAccessKey();
-
-    const key = window.prompt(
-      'Acesso protegido. Digite sua chave de acesso APEX:'
-    );
-
-    if (!key) {
-      return false;
-    }
-
-    setAccessKey(key);
-
-    return true;
-  }
-
-
-  // ==========================================================
-  // FETCH COM RETENTATIVA DE AUTENTICAÇÃO
-  // ==========================================================
-
-  async function fetchWithAuth(
+  async function fetchApi(
     url,
-    options = {},
-    allowRetry = true
+    options = {}
   ) {
-    const response = await fetch(
+    return fetch(
       url,
       {
         ...options,
@@ -114,20 +39,6 @@
         },
       }
     );
-
-    if (
-      isAuthError(response.status)
-      && allowRetry
-      && requestAccessKey()
-    ) {
-      return fetchWithAuth(
-        url,
-        options,
-        false
-      );
-    }
-
-    return response;
   }
 
 
@@ -140,7 +51,7 @@
     area
   ) {
     const response =
-      await fetchWithAuth(
+      await fetchApi(
         '/api/notes',
         {
           method: 'POST',
@@ -204,7 +115,7 @@
       area: String(area || 'ads'),
     });
 
-    const response = await fetchWithAuth(
+    const response = await fetchApi(
       `/api/session?${query.toString()}`,
       {
         method: 'GET',
@@ -216,7 +127,7 @@
 
 
   async function pauseSession(area) {
-    const response = await fetchWithAuth(
+    const response = await fetchApi(
       '/api/session/pause',
       {
         method: 'POST',
@@ -234,7 +145,7 @@
     area,
     mode
   ) {
-    const response = await fetchWithAuth(
+    const response = await fetchApi(
       '/api/session/resume',
       {
         method: 'POST',
@@ -317,7 +228,7 @@
     handlers = {}
   ) {
     const response =
-      await fetchWithAuth(
+      await fetchApi(
         '/chat/stream',
         {
           method: 'POST',
@@ -427,12 +338,7 @@
   // ==========================================================
 
   window.ApexApi = {
-    getAccessKey,
-    setAccessKey,
-    clearAccessKey,
     getHeaders,
-    isAuthError,
-    requestAccessKey,
     saveNote,
     getSession,
     pauseSession,

@@ -4,11 +4,11 @@ import sys
 from pathlib import Path
 
 
-def test_production_requires_access_key():
+def test_production_does_not_require_access_key():
     root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
     env["APP_ENV"] = "production"
-    env["APEX_ACCESS_KEY"] = ""
+    env.pop("APEX_ACCESS_KEY", None)
     env["SECRET_KEY"] = "teste-secret-key"
 
     result = subprocess.run(
@@ -19,8 +19,7 @@ def test_production_requires_access_key():
         text=True,
     )
 
-    assert result.returncode != 0
-    assert "APEX_ACCESS_KEY" in result.stderr
+    assert result.returncode == 0
 
 
 def _import_config_with(env_overrides):

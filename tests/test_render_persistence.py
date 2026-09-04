@@ -58,7 +58,6 @@ def test_render_keeps_required_production_secrets():
 
     for key in (
         "GROQ_API_KEY",
-        "APEX_ACCESS_KEY",
         "SECRET_KEY",
     ):
         assert re.search(

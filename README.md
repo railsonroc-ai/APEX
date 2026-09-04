@@ -62,7 +62,7 @@ Materiais históricos: `docs/legacy/`
 
 ## Segurança de acesso
 
-Em produção, `APEX_ACCESS_KEY` é provisionada como credencial do aluno padrão durante o bootstrap. O SQLite armazena apenas o hash da chave. Credenciais adicionais podem ser vinculadas a alunos distintos pelo serviço de acesso, com sessões próprias e revogação; o frontend continua usando o header `X-Apex-Key`, sem mudança de fluxo visual.
+O APEX 1.0 opera em modo individual aberto: a interface não pede senha, chave de acesso ou login. A identidade pedagógica é resolvida no servidor como o aluno padrão, mantendo sessões e dados sob o mesmo modelo interno.
 
 ## Runtime de IA
 

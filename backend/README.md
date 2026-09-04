@@ -56,7 +56,7 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 
 A interface consulta o lifecycle no servidor ao abrir a página e depois de cada turno confirmado. Em `paused`, o campo de mensagem fica desabilitado e aparecem apenas as opções de retomada; em `reviewing`, o painel informa que a revisão está ativa. O navegador renderiza o estado recebido do backend, mas não decide a transição pedagógica.
 
-Rotas protegidas usam credenciais vinculadas ao aluno no servidor. A chave em texto puro não é salva no SQLite; a credencial padrão é provisionada no bootstrap a partir de `APEX_ACCESS_KEY` e pode ser rotacionada ao reiniciar com nova configuração. O rate limit é persistido no SQLite para ser compartilhado entre workers Gunicorn. Cada resposta HTTP também recebe `X-Apex-Request-ID`; eventos `apex_event` correlacionam requests, turnos, LLM e transições de sessão sem registrar mensagens, prompts, respostas, notas ou segredos.
+O APEX 1.0 individual não exige autenticação do usuário: as rotas resolvem o aluno padrão no servidor e a interface não solicita senha ou chave. Cada resposta HTTP recebe `X-Apex-Request-ID`; eventos `apex_event` correlacionam requests, turnos, LLM e transições de sessão sem registrar mensagens, prompts, respostas, notas ou segredos.
 
 ## TutorCore
 

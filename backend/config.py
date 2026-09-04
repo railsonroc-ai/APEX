@@ -56,19 +56,6 @@ def resolve_log_level():
 LOG_LEVEL = resolve_log_level()
 
 
-APEX_ACCESS_KEY = os.getenv(
-    "APEX_ACCESS_KEY",
-    "",
-).strip()
-
-
-if APP_ENV == "production" and not APEX_ACCESS_KEY:
-    raise RuntimeError(
-        "APEX_ACCESS_KEY deve ser configurada "
-        "em ambiente de produção."
-    )
-
-
 SECRET_KEY = os.getenv(
     "SECRET_KEY",
     "",
@@ -203,23 +190,6 @@ TURN_LEASE_SECONDS = max(
         AI_DIALOG_TIMEOUT_SECONDS
         * 3
     ),
-)
-
-
-# ============================================================
-# CONTROLE DE ACESSO / RATE LIMIT
-# ============================================================
-
-AUTH_RATE_LIMIT_REQUESTS = _resolve_positive_int_env(
-    "AUTH_RATE_LIMIT_REQUESTS",
-    120,
-    maximum=100000,
-)
-
-AUTH_RATE_LIMIT_WINDOW_SECONDS = _resolve_positive_int_env(
-    "AUTH_RATE_LIMIT_WINDOW_SECONDS",
-    60,
-    maximum=86400,
 )
 
 

@@ -1,25 +1,9 @@
 from backend.app import app
 from backend.config import (
-    APEX_ACCESS_KEY,
     MAX_HISTORY_MESSAGES,
     MAX_USER_MESSAGE_CHARS,
 )
 
-
-def auth_headers():
-    """
-    Retorna a autenticação configurada no ambiente local.
-
-    Se não houver chave configurada em desenvolvimento,
-    nenhum cabeçalho adicional é necessário.
-    """
-
-    if not APEX_ACCESS_KEY:
-        return {}
-
-    return {
-        "X-Apex-Key": APEX_ACCESS_KEY,
-    }
 
 
 def test_home_returns_200():
@@ -70,7 +54,6 @@ def test_chat_rejects_empty_message():
             "message": "",
             "history": [],
         },
-        headers=auth_headers(),
     )
 
     assert response.status_code == 400
@@ -94,7 +77,6 @@ def test_chat_rejects_message_above_limit():
                 ),
             "history": [],
         },
-        headers=auth_headers(),
     )
 
     assert response.status_code == 400
