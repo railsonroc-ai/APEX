@@ -11,7 +11,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 
 ## Backend
 
-- `app.py`: rotas HTTP, coordenação do caso de uso e SSE; não acessa o SDK do provider diretamente.
+- `app.py`: `create_app()`, rotas HTTP, coordenação do caso de uso e SSE; não acessa o SDK do provider diretamente e não inicializa o SQLite durante import.
 - `config.py`: ambiente, caminhos, limites e timeout.
 - `security.py`: autenticação por `X-Apex-Key`.
 - `database.py`: SQLite e configuração das conexões.
@@ -118,9 +118,9 @@ O `LLMGateway` é a única camada autorizada a importar o SDK Groq. O adapter ex
 
 ## Produção e testes
 
-Produção: Gunicorn via `start_apex.sh`.
+Produção: Gunicorn via `start_apex.sh`. O bootstrap executa `init_database()` antes de iniciar os workers; importar `backend.app:app` não abre nem migra o SQLite.
 
-Testes: `pytest -q`.
+Testes: `pytest -q`. `tests/conftest.py` força um `APEX_DATA_DIR` temporário e inicializa somente esse banco, tornando a suíte hermética em relação a `data/apex.db`.
 
 Gate automatizado: `python3 tools/apex_validate.py`.
 

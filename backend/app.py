@@ -4,6 +4,8 @@ from uuid import uuid4
 
 from flask import (
     Flask,
+    Blueprint,
+    current_app,
     render_template,
     request,
     jsonify,
@@ -61,27 +63,36 @@ from backend.services.llm_gateway import (
 
 
 # ============================================================
-# FLASK
+# HTTP ADAPTER / APP FACTORY
 # ============================================================
 
-app = Flask(
-    __name__,
-    template_folder=str(TEMPLATE_DIR),
-    static_folder=str(STATIC_DIR),
-)
-
-app.config["SECRET_KEY"] = SECRET_KEY
-
-app.config["MAX_CONTENT_LENGTH"] = (
-    MAX_CONTENT_LENGTH
-)
+bp = Blueprint("apex", __name__)
 
 
-# ============================================================
-# BANCO DE DADOS
-# ============================================================
+def create_app(config_overrides=None):
+    """Cria uma instância Flask sem efeitos de persistência no import.
 
-init_database()
+    A inicialização/migração do banco é responsabilidade explícita do
+    bootstrap de execução ou do chamador de teste.
+    """
+
+    application = Flask(
+        __name__,
+        template_folder=str(TEMPLATE_DIR),
+        static_folder=str(STATIC_DIR),
+    )
+
+    application.config.from_mapping(
+        SECRET_KEY=SECRET_KEY,
+        MAX_CONTENT_LENGTH=MAX_CONTENT_LENGTH,
+        APP_ENV=APP_ENV,
+    )
+
+    if config_overrides:
+        application.config.update(config_overrides)
+
+    application.register_blueprint(bp)
+    return application
 
 
 # ============================================================
@@ -108,7 +119,7 @@ def sse(data):
 # HOME
 # ============================================================
 
-@app.route("/")
+@bp.route("/")
 def index():
     return render_template(
         "index.html",
@@ -120,7 +131,7 @@ def index():
 # HEALTH CHECK
 # ============================================================
 
-@app.route(
+@bp.route(
     "/health",
     methods=["GET"],
 )
@@ -150,7 +161,7 @@ def health():
 
     except sqlite3.Error:
 
-        app.logger.exception(
+        current_app.logger.exception(
             "Falha no health check"
         )
 
@@ -179,7 +190,7 @@ def _resolve_session_request():
     return data, context
 
 
-@app.route("/api/session", methods=["GET"])
+@bp.route("/api/session", methods=["GET"])
 def session_status():
     if not verify_auth():
         return jsonify({"error": "Não autorizado"}), 401
@@ -193,7 +204,7 @@ def session_status():
     return jsonify({"ok": True, "session": session}), 200
 
 
-@app.route("/api/session/pause", methods=["POST"])
+@bp.route("/api/session/pause", methods=["POST"])
 def pause_session():
     if not verify_auth():
         return jsonify({"error": "Não autorizado"}), 401
@@ -231,7 +242,7 @@ def pause_session():
     return jsonify({"ok": True, "session": session}), 200
 
 
-@app.route("/api/session/resume", methods=["POST"])
+@bp.route("/api/session/resume", methods=["POST"])
 def resume_session():
     if not verify_auth():
         return jsonify({"error": "Não autorizado"}), 401
@@ -278,7 +289,7 @@ def resume_session():
 # CHAT
 # ============================================================
 
-@app.route(
+@bp.route(
     "/chat/stream",
     methods=["POST"],
 )
@@ -501,7 +512,7 @@ def chat_stream():
                 timeout_seconds=AI_DIALOG_TIMEOUT_SECONDS,
                 max_retries=LLM_MAX_RETRIES,
                 max_tokens_by_purpose=LLM_MAX_TOKENS_BY_PURPOSE,
-                logger=app.logger,
+                logger=current_app.logger,
             )
 
             learner_state = LearnerState.get(
@@ -528,7 +539,7 @@ def chat_stream():
                         purpose=LLMGateway.PURPOSE_CONCEPT_IDENTIFICATION,
                     )
                 except LLMProviderError:
-                    app.logger.exception(
+                    current_app.logger.exception(
                         "Falha na identificacao semantica do conceito"
                     )
 
@@ -600,7 +611,7 @@ def chat_stream():
                         purpose=LLMGateway.PURPOSE_EVIDENCE_EVALUATION,
                     )
                 except LLMProviderError:
-                    app.logger.exception(
+                    current_app.logger.exception(
                         "Falha na avaliacao semantica da evidencia"
                     )
 
@@ -675,7 +686,7 @@ def chat_stream():
 
         except Exception:
 
-            app.logger.exception(
+            current_app.logger.exception(
                 "Falha no streaming do tutor"
             )
 
@@ -696,7 +707,7 @@ def chat_stream():
                         student_id=student_id,
                     )
                 except Exception:
-                    app.logger.exception(
+                    current_app.logger.exception(
                         "Falha ao liberar reserva do turno"
                     )
 
@@ -717,7 +728,7 @@ def chat_stream():
 # NOTAS
 # ============================================================
 
-@app.route(
+@bp.route(
     "/api/notes",
     methods=["POST"],
 )
@@ -801,7 +812,7 @@ def save_note():
 
     except sqlite3.Error:
 
-        app.logger.exception(
+        current_app.logger.exception(
             "Falha ao salvar nota"
         )
 
@@ -826,10 +837,17 @@ def save_note():
 
 
 # ============================================================
-# EXECUÇÃO LOCAL
+# WSGI / EXECUÇÃO LOCAL
 # ============================================================
 
+# Compatibilidade com gunicorn backend.app:app e com os testes existentes.
+# Criar este objeto NÃO abre nem migra o SQLite.
+app = create_app()
+
+
 if __name__ == "__main__":
+    with app.app_context():
+        init_database()
 
     app.run(
         host="0.0.0.0",

@@ -4,7 +4,7 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 
 ## Componentes
 
-- `app.py` — rotas HTTP, SSE e orquestração.
+- `app.py` — app factory, rotas HTTP, SSE e orquestração; importar o módulo não inicializa o SQLite.
 - `config.py` — variáveis de ambiente, caminhos e limites.
 - `database.py` — conexões e inicialização do SQLite.
 - `migrations.py` — evolução versionada e atômica do schema SQLite.
@@ -59,7 +59,7 @@ o navegador não é fonte de verdade para a conversa pedagógica.
 
 ## Testes
 
-Os testes ficam em `tests/`.
+Os testes ficam em `tests/`. `tests/conftest.py` força `APP_ENV=test`, cria um diretório SQLite temporário por execução e inicializa esse banco explicitamente antes da coleta. Importar `backend.app` não cria nem migra o banco.
 
 Execute:
 
@@ -71,7 +71,7 @@ Gate automatizado:
 
 ## Produção
 
-O servidor de produção utiliza Gunicorn através de `start_apex.sh`.
+O servidor de produção utiliza Gunicorn através de `start_apex.sh`. O script inicializa/migra o SQLite explicitamente antes de iniciar os workers; o import WSGI `backend.app:app` permanece sem efeito de persistência.
 
 Valide a configuração com:
 

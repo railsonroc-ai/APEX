@@ -41,6 +41,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `LearningSessionLifecycle`: máquina de estados persistente `studying → paused → studying/reviewing`, com revisão antes de retomar e ledger imutável de transições.
 - `Session UI`: controles da página principal que refletem o estado server-side e expõem Pausar / Retomar direto / Revisar antes.
 - `LLMGateway`: fronteira única com o provider de IA, com timeout/retries deliberados, limites de geração por finalidade e telemetria sem conteúdo.
+- `create_app()`: factory Flask sem efeitos de persistência no import; bootstrap de produção e pytest inicializam o SQLite explicitamente em ambientes separados.
 
 ## Confiabilidade
 
@@ -76,6 +77,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - o SDK Groq não é mais chamado diretamente pelas rotas; todas as chamadas passam pelo `LLMGateway`.
 - cada finalidade LLM possui limite de geração configurável e o provider recebe política explícita de retries.
 - logs LLM registram latência e tokens quando disponíveis, sem persistir prompt/resposta.
+- importar `backend.app` não executa migrations nem cria `apex.db`; a suíte pytest força um diretório SQLite temporário próprio.
 
 ## Validação da release
 
