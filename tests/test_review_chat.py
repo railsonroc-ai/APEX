@@ -156,6 +156,27 @@ def test_demonstrated_review_completes_lifecycle(monkeypatch):
         "get_messages",
         lambda area, concept=None, **kwargs: server_history,
     )
+    monkeypatch.setattr(
+        app_module.LearningHistory,
+        "latest_confirmed_turn",
+        lambda *args, **kwargs: {
+            "turn_id": "source-review-turn",
+            "assistant_message": "Explique novamente o conceito.",
+        },
+    )
+    monkeypatch.setattr(
+        app_module.LearningTask,
+        "find_by_source_turn",
+        lambda *args, **kwargs: {
+            "task_id": "task-review",
+            "source_turn_id": "source-review-turn",
+            "area": "ads",
+            "concept_id": "ads.variables",
+            "stage": "reencontrar",
+            "task_kind": "retention",
+            "prompt_text": "Explique novamente o conceito.",
+        },
+    )
 
     response = app_module.app.test_client().post(
         "/chat/stream",

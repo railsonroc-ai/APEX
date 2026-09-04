@@ -269,6 +269,19 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
             "assistant_message": "Explique o que é uma variável.",
         },
     )
+    monkeypatch.setattr(
+        app_module.LearningTask,
+        "find_by_source_turn",
+        lambda *args, **kwargs: {
+            "task_id": "task-semantic",
+            "source_turn_id": "source-semantic-turn",
+            "area": "ads",
+            "concept_id": "ads.variables",
+            "stage": "testar",
+            "task_kind": "practice",
+            "prompt_text": "Explique o que é uma variável.",
+        },
+    )
 
     client = app_module.app.test_client()
     response = client.post(
@@ -377,6 +390,19 @@ def test_completed_concept_schedules_review(monkeypatch):
         lambda *args, **kwargs: {
             "turn_id": "source-completion-turn",
             "assistant_message": "Aplique o conceito.",
+        },
+    )
+    monkeypatch.setattr(
+        app_module.LearningTask,
+        "find_by_source_turn",
+        lambda *args, **kwargs: {
+            "task_id": "task-completion",
+            "source_turn_id": "source-completion-turn",
+            "area": "ads",
+            "concept_id": "ads.variables",
+            "stage": "fixar",
+            "task_kind": "consolidation",
+            "prompt_text": "Aplique o conceito.",
         },
     )
 

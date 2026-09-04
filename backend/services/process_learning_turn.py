@@ -19,12 +19,14 @@ from backend.services.learner_state import LearnerState
 from backend.services.learner_state_transition import LearnerStateTransition
 from backend.services.learning_history import LearningHistory
 from backend.services.learning_attempt import LearningAttempt
+from backend.services.learning_task import LearningTask
 from backend.services.mastery_assessment import MasteryAssessment
 from backend.services.mastery_policy import MasteryPolicy
 from backend.services.review_lifecycle import ReviewLifecycle
 from backend.services.rubric_assessment import RubricAssessment
 from backend.services.review_scheduler import ReviewScheduler
 from backend.services.teaching_policy import TeachingPolicy
+from backend.services.task_policy import TaskPolicy
 
 
 class ProcessLearningTurn:
@@ -385,6 +387,24 @@ class ProcessLearningTurn:
                     session_id=normalized_session_id,
                 )
 
+                active_concept_id = result["learner_state"].get(
+                    "current_concept_id"
+                )
+                if (
+                    active_concept_id
+                    and TaskPolicy.is_assessable_action(effective_action)
+                ):
+                    LearningTask.record(
+                        source_turn_id=normalized_turn_id,
+                        area=normalized_area,
+                        concept_id=active_concept_id,
+                        stage=result["learner_state"].get("stage"),
+                        teaching_action=effective_action,
+                        prompt_text=normalized_assistant_message,
+                        student_id=normalized_student_id,
+                        session_id=normalized_session_id,
+                    )
+
             return result
 
     @classmethod
@@ -466,6 +486,7 @@ class ProcessLearningTurn:
             student_id=normalized_student_id,
             session_id=normalized_session_id,
             source_turn_id=evidence_context.get("source_turn_id"),
+            task_id=evidence_context.get("task_id"),
             assistance_level=assistance_level,
             artifact_ref=artifact_ref,
         )

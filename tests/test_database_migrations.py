@@ -23,6 +23,7 @@ EXPECTED_MIGRATIONS = [
     (8, "create_mastery_assessments"),
     (9, "create_assistance_events"),
     (10, "create_learning_attempts_and_rubric_assessments"),
+    (11, "create_learning_tasks"),
 ]
 
 
@@ -113,6 +114,7 @@ def test_new_database_applies_ordered_migrations(
         "assistance_events",
         "learning_attempts",
         "rubric_assessments",
+        "learning_tasks",
     }.issubset(tables)
 
     assert "concept_id" in turn_columns
@@ -647,7 +649,7 @@ def test_v5_database_receives_empty_evidence_ledger(
 
         assert total == 0
         assert turns == 1
-        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         assert connection.execute(
             "PRAGMA foreign_key_check"
         ).fetchall() == []
@@ -1029,7 +1031,7 @@ def test_v7_database_receives_empty_mastery_assessment_ledger(monkeypatch, tmp_p
         ).fetchone()[0]
         assert total == 0
         assert preserved_evidence == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1146,7 +1148,7 @@ def test_v8_database_receives_empty_assistance_ledger(monkeypatch, tmp_path):
         ).fetchone()[0]
         assert total == 0
         assert preserved_turn == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1268,7 +1270,7 @@ def test_v9_database_receives_empty_attempt_and_rubric_ledgers(monkeypatch, tmp_
         assert attempts == 0
         assert rubrics == 0
         assert preserved_turn == 1
-        assert versions == list(range(1, 11))
+        assert versions == list(range(1, 12))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1330,5 +1332,132 @@ def test_attempt_rubric_migration_rolls_back_schema_and_version(monkeypatch, tmp
         assert attempt_table is None
         assert rubric_table is None
         assert versions == list(range(1, 10))
+    finally:
+        connection.close()
+
+
+def test_v10_database_receives_empty_task_ledger_without_inventing_links(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="v10-to-v11.db")
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:10],
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO learning_turns (
+                student_id, session_id, turn_id, area,
+                user_message, assistant_message, concept_id
+            ) VALUES (
+                'student_default', 'session_default_ads', 'turn-v10-before-v11',
+                'ads', 'Pergunta', 'Tarefa antiga', 'ads.variables'
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO learning_attempts (
+                attempt_id, student_id, session_id, turn_id, source_turn_id,
+                area, concept_id, stage, attempt_kind, student_answer, artifact_ref,
+                assistance_level, policy_id, policy_version
+            ) VALUES (
+                'attempt-v10-before-v11', 'student_default', 'session_default_ads',
+                'turn-v10-before-v11', NULL, 'ads', 'ads.variables', 'testar',
+                'practice', 'Pergunta', NULL, 'untracked', 'learning_attempt', 1
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations,
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        tasks = connection.execute(
+            "SELECT COUNT(*) FROM learning_tasks"
+        ).fetchone()[0]
+        attempt_task = connection.execute(
+            "SELECT task_id FROM learning_attempts WHERE attempt_id='attempt-v10-before-v11'"
+        ).fetchone()[0]
+        versions = [
+            row["version"]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+
+        assert tasks == 0
+        assert attempt_task is None
+        assert versions == list(range(1, 12))
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_learning_task_migration_rolls_back_schema_and_version(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="task-v11-rollback.db")
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:10],
+    )
+    database_module.init_database()
+
+    def failing(connection):
+        migrations_module.create_learning_tasks(connection)
+        raise RuntimeError("falha depois do ledger de tarefas")
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:10]
+        + (
+            Migration(11, "create_learning_tasks", failing),
+        ),
+    )
+
+    with pytest.raises(MigrationError, match="Falha ao aplicar migração 11"):
+        database_module.init_database()
+
+    connection = connect(path)
+    try:
+        task_table = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='learning_tasks'
+            """
+        ).fetchone()
+        attempt_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(learning_attempts)"
+            ).fetchall()
+        }
+        versions = [
+            row["version"]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+
+        assert task_table is None
+        assert "task_id" not in attempt_columns
+        assert versions == list(range(1, 11))
     finally:
         connection.close()

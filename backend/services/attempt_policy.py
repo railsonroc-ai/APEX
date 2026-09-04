@@ -2,7 +2,7 @@ class AttemptPolicy:
     """Classifica de forma determinística o tipo pedagógico de uma tentativa."""
 
     POLICY_ID = "learning_attempt"
-    POLICY_VERSION = 1
+    POLICY_VERSION = 2
 
     STAGE_TO_KIND = {
         "compreender": "comprehension",

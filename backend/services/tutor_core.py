@@ -4,6 +4,7 @@ from backend.config import (
 from backend.prompts.tutor import TUTOR_SYSTEM_PROMPT
 from backend.services.concept_catalog import ConceptCatalog
 from backend.services.assistance_policy import AssistancePolicy
+from backend.services.task_policy import TaskPolicy
 
 
 class TutorCore:
@@ -111,6 +112,14 @@ class TutorCore:
                 "Não aumente o nível de ajuda além deste contrato e não "
                 "declare outro nível de assistência.\n"
             )
+            task_contract = TaskPolicy.contract_for_action(teaching_action)
+            if task_contract["assessable"]:
+                pedagogical_context += (
+                    "Contrato de tarefa avaliável controlado pelo servidor: "
+                    f"{task_contract['instruction']}\n"
+                    "A tarefa deve avaliar somente o conceito ativo e não deve "
+                    "empilhar múltiplas novidades ou múltiplas perguntas.\n"
+                )
 
         return (
             f"{TUTOR_SYSTEM_PROMPT}\n\n"

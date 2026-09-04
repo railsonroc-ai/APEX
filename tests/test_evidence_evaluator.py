@@ -1,10 +1,22 @@
 from backend.services.evidence_evaluator import EvidenceEvaluator
 
 
+def task_context(stage="testar", prompt="Explique o que é uma variável."):
+    return {
+        "task_id": "task-test",
+        "source_turn_id": "source-turn",
+        "task_kind": "practice",
+        "area": "ads",
+        "concept_id": "ads.variables",
+        "stage": stage,
+        "prompt_text": prompt,
+    }
+
+
 def test_builds_evaluation_when_applicable():
     state = {"area": "ads", "current_concept_id": "ads.variables", "current_concept": "variáveis", "stage": "testar"}
     history = [{"role": "assistant", "content": "Explique o que é uma variável."}]
-    result = EvidenceEvaluator.build_evaluation("É um espaço usado para guardar um valor.", history, state)
+    result = EvidenceEvaluator.build_evaluation("É um espaço usado para guardar um valor.", history, state, task_context=task_context())
     assert result["concept_id"] == "ads.variables"
     assert result["concept"] == "variáveis"
     assert result["stage"] == "testar"
@@ -14,7 +26,7 @@ def test_builds_evaluation_when_applicable():
 def test_control_message_is_not_evaluated():
     state = {"area": "ads", "current_concept_id": "ads.variables", "current_concept": "variáveis", "stage": "testar"}
     history = [{"role": "assistant", "content": "Explique o que é uma variável."}]
-    result = EvidenceEvaluator.build_evaluation("Pode me testar?", history, state)
+    result = EvidenceEvaluator.build_evaluation("Pode me testar?", history, state, task_context=task_context())
     assert result is None
 
 
@@ -32,13 +44,17 @@ def test_comprehension_stage_is_evaluated():
         "É um espaço usado para guardar um valor.",
         history,
         state,
+        task_context=task_context(
+            stage="compreender",
+            prompt="Explique com suas palavras o que é uma variável.",
+        ),
     )
     assert result is not None
     assert result["concept"] == "variáveis"
     assert result["stage"] == "compreender"
 
 
-def test_without_previous_tutor_message_is_not_evaluated():
+def test_without_server_task_is_not_evaluated():
     state = {"area": "ads", "current_concept_id": "ads.variables", "current_concept": "variáveis", "stage": "testar"}
     history = [{"role": "user", "content": "Quero estudar variáveis."}]
     result = EvidenceEvaluator.build_evaluation("Uma variável guarda um valor.", history, state)
@@ -91,6 +107,8 @@ def test_parses_semantic_evaluation_response():
 
 def test_builds_semantic_evaluation_messages():
     evaluation = {
+        "task_id": "task-test",
+        "task_kind": "practice",
         "concept": "variáveis",
         "stage": "testar",
         "tutor_message": "Explique o que é uma variável.",
@@ -104,6 +122,8 @@ def test_builds_semantic_evaluation_messages():
     assert "conceptual_correctness" in result[0]["content"]
     assert "understanding_application" in result[0]["content"]
     assert result[1]["role"] == "user"
+    assert "Tarefa: task-test" in result[1]["content"]
+    assert "Tipo: practice" in result[1]["content"]
     assert "Conceito: variáveis" in result[1]["content"]
 
 

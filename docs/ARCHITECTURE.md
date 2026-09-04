@@ -34,6 +34,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `ConceptCatalog`, `ConceptTracker` e `ConceptActivation`: catálogo, seleção por ID estável e ativação segura de conceitos.
 - `EvidenceEvaluator`: coleta classificações estruturadas por critério.
 - `AttemptPolicy` e `LearningAttempt`: classificam e preservam a tentativa do aluno antes da avaliação.
+- `TaskPolicy` e `LearningTask`: definem e preservam a tarefa avaliável criada por um turno confirmado do tutor.
 - `RubricPolicy`: deriva deterministicamente o outcome a partir dos critérios da rubrica v2.
 - `RubricAssessment`: snapshot imutável dos critérios e da origem do outcome.
 - `EvidenceEvent`: ledger imutável de avaliações confirmadas.
@@ -74,6 +75,7 @@ Tabelas principais:
 - `evidence_events`: avaliações imutáveis ligadas ao aluno, sessão, turno e `concept_id` confirmado;
 - `mastery_assessments`: decisões imutáveis da política de domínio ligadas ao evento de evidência e ao turno;
 - `assistance_events`: assistência imutável de cada resposta do tutor, derivada da ação pedagógica controlada pelo servidor;
+- `learning_tasks`: tarefa imutável apresentada pelo tutor, ligada ao turno-fonte, conceito, etapa, ação pedagógica, assistência e rubrica;
 - `learning_attempts`: tentativa imutável do aluno, ligada ao turno confirmado e opcionalmente ao turno-fonte do tutor;
 - `rubric_assessments`: critérios imutáveis que sustentam a avaliação da tentativa e apontam para a evidência correspondente.
 
@@ -96,6 +98,8 @@ A migration 9 cria `assistance_events`, também imutável. A classificação nã
 
 A migration 10 separa formalmente a ação do aluno do julgamento semântico. `learning_attempts` registra a tentativa confirmada, o estágio, o tipo pedagógico, a assistência observada, o artefato opcional e o turno-fonte do tutor. `rubric_assessments` registra os três critérios da rubrica — resposta à tarefa, correção conceitual e compreensão/aplicação —, sua completude, confiança e origem do outcome. Ambos os ledgers são protegidos contra `UPDATE` e `DELETE`. Na rubrica `semantic_evidence` v2, a LLM deixa de escolher diretamente o outcome global: ela classifica os critérios e `RubricPolicy` deriva `demonstrated`, `partial`, `misconception` ou `insufficient` no servidor. Respostas históricas/internas sem critérios continuam auditáveis como `legacy_outcome`, sem fingir que possuem uma rubrica completa.
 
+A migration 11 cria `learning_tasks` e adiciona `task_id` opcional a `learning_attempts`. O `TaskPolicy` transforma a ação pedagógica controlada pelo servidor em um tipo de tarefa e um contrato de geração; `TutorCore` recebe esse contrato para terminar o turno com uma única microtarefa quando a ação é avaliável. Depois que a resposta do tutor é confirmada, o backend persiste a `LearningTask` usando o texto real do turno, sem pedir à LLM que invente identidade, rubrica ou nível de assistência. No turno seguinte, o app só monta uma nova avaliação semântica se localizar essa tarefa pelo mesmo aluno, sessão, conceito e `source_turn_id`; o `LearningAttempt` resultante recebe o `task_id`. Tentativas anteriores à migration 11 permanecem com `task_id = NULL`, sem retropreenchimento fictício. `AttemptPolicy` v2 e `EvidencePolicy` v5 marcam essa mudança de contrato.
+
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação
 e pode ser executada novamente com segurança durante a inicialização.
@@ -115,4 +119,4 @@ Aplicação segura de pacotes futuros: `python3 tools/apex_apply_update.py <paco
 O APEX 1.0 continua operando como produto individual, mas a fundação de identidade
 já existe: `student_id` participa das chaves pedagógicas e o aluno atual é resolvido
 no servidor. Ainda não existem cadastro, login, autorização individual, revogação,
-seleção de perfil ou gestão multiusuário completa. O ledger de evidências, o catálogo de conceitos, o ledger de assistência e a `MasteryPolicy` tornam a conclusão explicável e resistente a uma única classificação. O nível de ajuda já é mensurado no contrato server-side do turno e as tentativas/rubricas básicas já são auditáveis. Ainda faltam atividades/desafios estruturados, rubricas profissionais específicas por tipo de atividade e uma política de retenção mais rica.
+seleção de perfil ou gestão multiusuário completa. O ledger de evidências, o catálogo de conceitos, o ledger de assistência e a `MasteryPolicy` tornam a conclusão explicável e resistente a uma única classificação. O nível de ajuda já é mensurado no contrato server-side do turno e as tentativas/rubricas básicas já são auditáveis. Ainda faltam requisitos/artefatos estruturados por tipo de tarefa, rubricas profissionais específicas e uma política de retenção mais rica; o ChallengeEngine completo continua fora deste estágio.

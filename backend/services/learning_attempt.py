@@ -6,6 +6,7 @@ from backend.services.attempt_policy import AttemptPolicy
 from backend.services.concept_catalog import ConceptCatalog
 from backend.services.evidence_policy import EvidencePolicy
 from backend.services.learning_history import LearningHistory
+from backend.services.learning_task import LearningTask
 
 
 class LearningAttempt:
@@ -36,6 +37,7 @@ class LearningAttempt:
         student_id=DEFAULT_STUDENT_ID,
         session_id=None,
         source_turn_id=None,
+        task_id=None,
         assistance_level=EvidencePolicy.ASSISTANCE_UNTRACKED,
         artifact_ref=None,
     ):
@@ -45,6 +47,7 @@ class LearningAttempt:
         normalized_session_id = LearningHistory.normalize_session_id(session_id)
         normalized_source_turn_id = LearningHistory.normalize_turn_id(source_turn_id)
         normalized_answer = LearningHistory.normalize_message(student_answer)
+        normalized_task_id = task_id.strip() if isinstance(task_id, str) else None
 
         if not normalized_session_id and normalized_student_id == DEFAULT_STUDENT_ID:
             normalized_session_id = default_session_id(normalized_area)
@@ -94,6 +97,22 @@ class LearningAttempt:
             if not source_turn.get("assistant_message"):
                 raise ValueError("source_turn_id não possui resposta do tutor")
 
+        if normalized_task_id:
+            task = LearningTask.find(
+                normalized_task_id,
+                student_id=normalized_student_id,
+            )
+            if task is None:
+                raise ValueError("task_id não encontrado")
+            if task.get("session_id") != normalized_session_id:
+                raise ValueError("task_id pertence a outra sessão")
+            if task.get("area") != normalized_area:
+                raise ValueError("task_id pertence a outra área")
+            if task.get("concept_id") != definition["concept_id"]:
+                raise ValueError("task_id pertence a outro conceito")
+            if task.get("source_turn_id") != normalized_source_turn_id:
+                raise ValueError("task_id não corresponde ao turno fonte")
+
         normalized_artifact_ref = cls._normalize_optional_text(artifact_ref)
         normalized_assistance = EvidencePolicy.normalize_assistance_level(
             assistance_level
@@ -110,6 +129,7 @@ class LearningAttempt:
                     session_id,
                     turn_id,
                     source_turn_id,
+                    task_id,
                     area,
                     concept_id,
                     stage,
@@ -120,7 +140,7 @@ class LearningAttempt:
                     policy_id,
                     policy_version
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     attempt_id,
@@ -128,6 +148,7 @@ class LearningAttempt:
                     normalized_session_id,
                     normalized_turn_id,
                     normalized_source_turn_id,
+                    normalized_task_id,
                     normalized_area,
                     definition["concept_id"],
                     stage,

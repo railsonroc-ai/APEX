@@ -118,6 +118,7 @@ def test_concept_activation_message_is_not_learning_evidence(
         user_message,
         history,
         learner_state,
+        task_context=None,
     ):
         captured["evidence_calls"] += 1
         return None

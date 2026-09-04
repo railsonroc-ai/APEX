@@ -144,3 +144,25 @@ def test_system_message_includes_server_controlled_assistance_contract():
     assert "Nível de assistência controlado pelo servidor: independent" in system
     assert "sem fornecer a resposta" in system
     assert "não declare outro nível de assistência" in system
+
+
+def test_system_message_includes_server_controlled_task_contract():
+    state = {
+        "area": "ads",
+        "current_concept_id": "ads.variables",
+        "current_concept": "variáveis",
+        "stage": "testar",
+        "mastery": 0.4,
+        "difficulty_count": 0,
+    }
+
+    system = TutorCore.build_system_message(
+        "ads",
+        learner_state=state,
+        teaching_action="testar",
+    )
+
+    assert "Contrato de tarefa avaliável controlado pelo servidor" in system
+    assert "uma única tarefa curta" in system
+    assert "somente o conceito ativo" in system
+    assert "múltiplas perguntas" in system

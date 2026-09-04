@@ -21,6 +21,8 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `services/rubric_policy.py` — contrato versionado dos critérios e derivação determinística do outcome.
 - `services/attempt_policy.py` — classificação determinística do tipo pedagógico de tentativa.
 - `services/learning_attempt.py` — ledger imutável da tentativa do aluno antes do julgamento.
+- `services/task_policy.py` — contrato server-side que classifica tarefas avaliáveis por ação pedagógica.
+- `services/learning_task.py` — ledger imutável da tarefa concreta apresentada pelo tutor e vinculada ao turno-fonte.
 - `services/rubric_assessment.py` — ledger imutável dos critérios que sustentam a avaliação.
 - `services/evidence_policy.py` — IDs/versões de rubrica, política e assistência.
 - `services/evidence_event.py` — ledger imutável das avaliações confirmadas.

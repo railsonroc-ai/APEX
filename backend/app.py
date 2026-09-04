@@ -40,6 +40,7 @@ from backend.services.teaching_policy import TeachingPolicy
 from backend.services.learner_signals import LearnerSignals
 from backend.services.learner_state_transition import LearnerStateTransition
 from backend.services.learning_history import LearningHistory
+from backend.services.learning_task import LearningTask
 from backend.services.learning_turn_lease import LearningTurnLease
 from backend.services.concept_tracker import ConceptTracker
 from backend.services.evidence_evaluator import EvidenceEvaluator
@@ -398,20 +399,26 @@ def chat_stream():
 
             evidence_evaluation = None
             if not tracking_request:
+                source_turn = LearningHistory.latest_confirmed_turn(
+                    area,
+                    concept_id=learner_state.get("current_concept_id"),
+                    student_id=student_id,
+                    session_id=session_id,
+                )
+                task_context = None
+                if source_turn is not None:
+                    task_context = LearningTask.find_by_source_turn(
+                        source_turn["turn_id"],
+                        student_id=student_id,
+                        session_id=session_id,
+                    )
+
                 evidence_evaluation = EvidenceEvaluator.build_evaluation(
                     user_message,
                     history,
                     learner_state,
+                    task_context=task_context,
                 )
-                if evidence_evaluation:
-                    source_turn = LearningHistory.latest_confirmed_turn(
-                        area,
-                        concept_id=learner_state.get("current_concept_id"),
-                        student_id=student_id,
-                        session_id=session_id,
-                    )
-                    if source_turn is not None:
-                        evidence_evaluation["source_turn_id"] = source_turn["turn_id"]
 
             evidence_messages = None
             if evidence_evaluation:

@@ -1560,6 +1560,147 @@ def create_learning_attempts_and_rubric_assessments(connection):
     """)
 
 
+def create_learning_tasks(connection):
+    connection.execute("""
+        CREATE TABLE learning_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL UNIQUE,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            source_turn_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            teaching_action TEXT NOT NULL,
+            task_kind TEXT NOT NULL,
+            prompt_text TEXT NOT NULL,
+            assistance_level TEXT NOT NULL,
+            rubric_id TEXT NOT NULL,
+            rubric_version INTEGER NOT NULL,
+            policy_id TEXT NOT NULL,
+            policy_version INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(student_id, id, area),
+            FOREIGN KEY(student_id, source_turn_id)
+                REFERENCES learning_turns(student_id, turn_id),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            UNIQUE(student_id, source_turn_id),
+            CHECK(area IN ('ads', 'it')),
+            CHECK(stage IN (
+                'ler',
+                'compreender',
+                'explicar',
+                'testar',
+                'corrigir',
+                'fixar',
+                'concluido',
+                'reencontrar'
+            )),
+            CHECK(teaching_action IN (
+                'testar',
+                'revisar',
+                'verificar',
+                'consolidar',
+                'explicar',
+                'corrigir'
+            )),
+            CHECK(task_kind IN (
+                'practice',
+                'retention',
+                'verification',
+                'consolidation',
+                'guided_check',
+                'correction_retry'
+            )),
+            CHECK(assistance_level IN (
+                'independent',
+                'light',
+                'guided',
+                'direct'
+            )),
+            CHECK(rubric_version > 0),
+            CHECK(policy_version > 0)
+        )
+    """)
+
+    connection.execute("""
+        CREATE UNIQUE INDEX idx_learning_tasks_student_task
+        ON learning_tasks (student_id, task_id)
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_tasks_student_concept_created
+        ON learning_tasks (
+            student_id,
+            session_id,
+            area,
+            concept_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_tasks_policy
+        ON learning_tasks (
+            policy_id,
+            policy_version,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER learning_tasks_no_update
+        BEFORE UPDATE ON learning_tasks
+        BEGIN
+            SELECT RAISE(ABORT, 'learning_tasks are immutable');
+        END
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER learning_tasks_no_delete
+        BEFORE DELETE ON learning_tasks
+        BEGIN
+            SELECT RAISE(ABORT, 'learning_tasks are immutable');
+        END
+    """)
+
+    connection.execute("""
+        ALTER TABLE learning_attempts
+        ADD COLUMN task_id TEXT
+            REFERENCES learning_tasks(task_id)
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_attempts_task
+        ON learning_attempts (student_id, task_id)
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER learning_attempts_task_scope_insert
+        BEFORE INSERT ON learning_attempts
+        WHEN NEW.task_id IS NOT NULL
+        BEGIN
+            SELECT CASE
+                WHEN NOT EXISTS (
+                    SELECT 1
+                    FROM learning_tasks t
+                    WHERE t.task_id = NEW.task_id
+                      AND t.student_id = NEW.student_id
+                      AND t.session_id = NEW.session_id
+                      AND t.area = NEW.area
+                      AND t.concept_id = NEW.concept_id
+                      AND t.source_turn_id = NEW.source_turn_id
+                )
+                THEN RAISE(ABORT, 'learning_attempt task scope mismatch')
+            END;
+        END
+    """)
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -1610,6 +1751,11 @@ MIGRATIONS = (
         10,
         "create_learning_attempts_and_rubric_assessments",
         create_learning_attempts_and_rubric_assessments,
+    ),
+    Migration(
+        11,
+        "create_learning_tasks",
+        create_learning_tasks,
     ),
 )
 

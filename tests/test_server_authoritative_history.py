@@ -100,6 +100,7 @@ def test_chat_uses_only_server_history_and_persists_response(
         user_message,
         history,
         learner_state,
+        task_context=None,
     ):
         captured["evidence_history"] = history
         return None

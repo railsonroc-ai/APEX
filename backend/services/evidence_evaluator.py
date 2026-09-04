@@ -56,11 +56,16 @@ class EvidenceEvaluator:
         return None
 
     @classmethod
-    def build_evaluation(cls, user_message, history, state):
+    def build_evaluation(
+        cls,
+        user_message,
+        history,
+        state,
+        task_context=None,
+    ):
         if not cls.is_applicable(state):
             return None
-        tutor_message = cls.last_assistant_message(history)
-        if not tutor_message:
+        if not isinstance(task_context, dict):
             return None
         if not isinstance(user_message, str) or not user_message.strip():
             return None
@@ -75,11 +80,30 @@ class EvidenceEvaluator:
         if definition is None:
             return None
 
+        task_id = task_context.get("task_id")
+        source_turn_id = task_context.get("source_turn_id")
+        tutor_message = task_context.get("prompt_text")
+
+        if not all(
+            isinstance(value, str) and value.strip()
+            for value in (task_id, source_turn_id, tutor_message)
+        ):
+            return None
+        if task_context.get("area") != state.get("area", "ads"):
+            return None
+        if task_context.get("concept_id") != definition["concept_id"]:
+            return None
+        if task_context.get("stage") != state.get("stage"):
+            return None
+
         return {
+            "task_id": task_id.strip(),
+            "source_turn_id": source_turn_id.strip(),
+            "task_kind": task_context.get("task_kind"),
             "concept_id": definition["concept_id"],
             "concept": definition["canonical_name"],
             "stage": state["stage"],
-            "tutor_message": tutor_message,
+            "tutor_message": tutor_message.strip(),
             "student_answer": user_message.strip(),
         }
 
@@ -106,7 +130,15 @@ class EvidenceEvaluator:
             "criteria deve conter exatamente task_response, conceptual_correctness "
             "e understanding_application."
         )
-        user = f"Conceito: {concept}\nTutor: {tutor}\nAluno: {student}"
+        task_id = evaluation.get("task_id")
+        task_kind = evaluation.get("task_kind")
+        user = (
+            f"Tarefa: {task_id}\n"
+            f"Tipo: {task_kind or 'não informado'}\n"
+            f"Conceito: {concept}\n"
+            f"Tutor: {tutor}\n"
+            f"Aluno: {student}"
+        )
         return [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
