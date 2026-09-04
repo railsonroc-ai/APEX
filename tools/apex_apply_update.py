@@ -3,6 +3,8 @@ import argparse
 from datetime import datetime
 import hashlib
 import os
+import re
+import unicodedata
 from pathlib import Path
 import shutil
 import sqlite3
@@ -42,6 +44,141 @@ def sha256(path):
             digest.update(chunk)
     return digest.hexdigest()
 
+
+
+def _fold_text(value):
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).lower()
+
+
+def read_update_manifest(archive):
+    try:
+        member = archive.getmember(MANIFEST_NAME)
+    except KeyError as exc:
+        raise RuntimeError(
+            f"pacote sem manifesto canonico {MANIFEST_NAME}"
+        ) from exc
+
+    source = archive.extractfile(member)
+    if source is None:
+        raise RuntimeError("manifesto canonico nao pode ser lido")
+    return source.read().decode("utf-8")
+
+
+def parse_manifest_files(text):
+    lines = str(text or "").splitlines()
+    files = []
+    in_files = False
+
+    for raw in lines:
+        line = raw.strip()
+        folded = _fold_text(line)
+
+        if folded == "arquivos:":
+            in_files = True
+            continue
+
+        if not in_files:
+            continue
+
+        if not line:
+            if files:
+                break
+            continue
+
+        if line.startswith("- "):
+            files.append(line[2:].strip())
+            continue
+
+        if files:
+            break
+
+    return files
+
+
+def manifest_requires_migration(text):
+    for raw in str(text or "").splitlines():
+        line = raw.strip()
+        folded = _fold_text(line)
+
+        if folded.startswith("migration nova:"):
+            value = folded.split(":", 1)[1].strip()
+            if value in {"nao", "nenhuma", "none", "false"}:
+                return False
+            return bool(value)
+
+        if folded.startswith("migration de banco:"):
+            value = folded.split(":", 1)[1].strip()
+            if value.startswith("nenhuma") or "sem migration" in value:
+                return False
+            if value:
+                return True
+
+        if "sem migration nova" in folded:
+            return False
+
+    return None
+
+
+def validate_update_manifest(archive, members):
+    rogue_manifests = [
+        member.name
+        for member in members
+        if member.name != MANIFEST_NAME
+        and member.name.upper().endswith("_MANIFEST.TXT")
+    ]
+    if rogue_manifests:
+        raise RuntimeError(
+            "manifesto fora do nome canonico: "
+            + ", ".join(sorted(rogue_manifests))
+        )
+
+    text = read_update_manifest(archive)
+    listed = parse_manifest_files(text)
+    if not listed:
+        raise RuntimeError(
+            "manifesto deve declarar a secao 'Arquivos:' com lista '- caminho'"
+        )
+
+    actual = {
+        member.name
+        for member in members
+        if member.name != MANIFEST_NAME
+    }
+    declared = set(listed)
+
+    if len(listed) != len(declared):
+        raise RuntimeError("manifesto contem arquivos duplicados")
+
+    if declared != actual:
+        missing = sorted(declared - actual)
+        extra = sorted(actual - declared)
+        raise RuntimeError(
+            "conteudo do pacote diverge do manifesto; "
+            f"ausentes={missing}; extras={extra}"
+        )
+
+    declared_count = None
+    for raw in text.splitlines():
+        match = re.match(
+            r"^\s*Arquivos de projeto\s*:\s*(\d+)\s*$",
+            raw,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            declared_count = int(match.group(1))
+            break
+
+    if declared_count is not None and declared_count != len(actual):
+        raise RuntimeError(
+            f"manifesto declara {declared_count} arquivos, pacote contem {len(actual)}"
+        )
+
+    return {
+        "text": text,
+        "files": tuple(listed),
+        "requires_migration": manifest_requires_migration(text),
+    }
 
 def safe_members(archive):
     members = []
@@ -161,6 +298,7 @@ def main():
 
     with tarfile.open(package, "r:gz") as archive:
         members = safe_members(archive)
+        manifest = validate_update_manifest(archive, members)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = Path("/public") / f"APEX_BACKUP_{head}_{stamp}"
@@ -249,10 +387,17 @@ def main():
         run(["git", "diff", "--check"], cwd=root)
 
         print("\nAPEX UPDATE: APLICADA E VALIDADA")
-        print("Banco real: NÃO MIGRADO")
         print("Backup:", backup_dir)
-        print("Próxima ação: python3 tools/apex_migrate_real.py")
-        print("Não faça commit antes da migração real.")
+
+        if manifest["requires_migration"] is False:
+            print("Banco real: SEM MIGRAÇÃO NOVA")
+            print("Próxima ação: python3 tools/apex_validate.py")
+            print("Não execute tools/apex_migrate_real.py para este pacote.")
+            print("Não faça commit antes da validação no repositório real.")
+        else:
+            print("Banco real: NÃO MIGRADO")
+            print("Próxima ação: python3 tools/apex_migrate_real.py")
+            print("Não faça commit antes da migração real.")
     finally:
         shutil.rmtree(stage, ignore_errors=True)
 

@@ -136,6 +136,8 @@ Testes: `pytest -q`. `tests/conftest.py` força um `APEX_DATA_DIR` temporário e
 
 Gate automatizado: `python3 tools/apex_validate.py`.
 
+Gate de Release Candidate: `python3 tools/apex_release_gate.py`. Ele nunca usa `data/apex.db`: executa a suíte, uma seleção explícita de jornadas/falhas críticas e uma reconstrução de SQLite temporário usando exatamente `MIGRATIONS`. Por padrão também exige working tree limpo.
+
 Aplicação segura de pacotes futuros: `python3 tools/apex_apply_update.py <pacote> <sha256> <head>`; a migração do banco real permanece em uma segunda ação explícita com `python3 tools/apex_migrate_real.py`. Nenhum desses scripts faz commit ou push.
 
 ## Limite atual
@@ -153,3 +155,10 @@ O limite de privacidade fica no adapter HTTP + `DataLifecycle`; o navegador nunc
 A exportação é uma projeção read-only das tabelas pertencentes ao aluno e omite `key_hash`, rate-limit interno e catálogo global. A exclusão é uma operação destrutiva explícita e transacional. Como os ledgers pedagógicos são imutáveis por design, a migration 14 não remove essa proteção: ela cria uma autorização temporária por `student_id` que os triggers consultam apenas durante o fluxo de privacidade. Sem esse marcador, `UPDATE`/`DELETE` dos ledgers continuam proibidos.
 
 Retenção não roda como side effect do startup. O CLI de retenção calcula candidatos de forma conservadora — conta não padrão, sem credencial ativa e inativa além da janela — e permanece em dry-run até receber `--apply`. Isso separa política de retenção de disponibilidade do serviço e evita exclusão silenciosa durante deploy/restart.
+
+
+## Contrato E2E e confiabilidade
+
+O hardening v19 trata as jornadas como contratos entre camadas, não como testes unitários justapostos. A jornada pedagógica real usa as implementações de `ProcessLearningTurn`, `LearningTask`, `LearningAttempt`, `RubricAssessment`, `EvidenceEvent`, `MasteryAssessment`, `ConceptProgress` e SQLite; apenas o provider externo é substituído por fake determinística nos cenários HTTP.
+
+O contrato operacional de pacote também faz parte da confiabilidade. `APEX_UPDATE_MANIFEST.txt` é o único manifesto aceito; a seção `Arquivos:` precisa representar exatamente os arquivos do tarball. Um arquivo `_MANIFEST.txt` adicional ou conteúdo não declarado faz a aplicação falhar antes do staging. O manifesto também informa se há migration nova, removendo a antiga orientação genérica de sempre executar `apex_migrate_real.py`.

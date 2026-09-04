@@ -6,7 +6,7 @@ O objetivo é evoluir além de um chatbot: ensinar, verificar compreensão, adap
 
 ## Estado atual
 
-A fundação técnica e o hardening inicial estão concluídos.
+A fundação técnica e os blocos estruturais do APEX 1.0 estão concluídos; o projeto entrou em hardening de Release Candidate.
 
 O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação vinculada ao aluno, rate limit server-side, headers HTTP de segurança, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn, um ledger imutável de evidências pedagógicas, catálogo mínimo de competências com `concept_id` estável e uma política de domínio baseada em portfólio de evidências. O backend agora expõe `create_app()` sem inicializar o SQLite durante o import; produção e testes fazem o bootstrap do banco explicitamente. A observabilidade operacional usa `request_id`/`turn_id` correlacionados e eventos estruturados sem conteúdo sensível. A camada de privacidade permite exportar os dados do aluno, excluir transacionalmente seus registros e executar retenção administrativa em dry-run por padrão.
 
@@ -30,11 +30,17 @@ Ou rode o gate automatizado sem tocar no banco real:
 
     python3 tools/apex_validate.py
 
+Depois do commit candidato a release, rode também o gate de Release Candidate:
+
+    python3 tools/apex_release_gate.py
+
+Esse segundo gate exige working tree limpo, repete a suíte completa, executa jornadas/falhas críticas e reconstrói um banco temporário pela cadeia inteira de migrations.
+
 Use `.env.example` como referência de configuração e nunca versione `.env`.
 
 ## Próxima fase
 
-O kernel adaptativo principal já está implementado. A reta final do APEX 1.0 concentra-se em privacidade operacional, testes E2E de jornadas completas e hardening final.
+O kernel adaptativo principal e o ciclo de privacidade já estão implementados. A reta final do APEX 1.0 concentra-se em executar o gate de Release Candidate, corrigir qualquer regressão encontrada e realizar a auditoria técnica final.
 
 Depois da auditoria final da 1.0 serão adicionadas experiências de formação profissional, incluindo projetos, debugging, manutenção de código, Git, testes, APIs, bancos de dados, refatoração, code review, logs, deploy e problemas realistas.
 
@@ -52,7 +58,7 @@ Materiais históricos: `docs/legacy/`
 
 **Fundação técnica:** concluída.
 
-**Próxima etapa:** fechar privacidade/E2E e executar a auditoria técnica final do APEX 1.0, ainda sem ChallengeEngine completo ou execução de código.
+**Próxima etapa:** executar o Release Candidate e a auditoria técnica final do APEX 1.0, ainda sem ChallengeEngine completo ou execução de código.
 
 ## Segurança de acesso
 
@@ -72,3 +78,10 @@ Cada resposta HTTP recebe `X-Apex-Request-ID`. Eventos operacionais são emitido
 `GET /api/privacy/export` gera um JSON dos dados pertencentes ao aluno autenticado, sem exportar hashes de credenciais. `DELETE /api/privacy/data` exige a confirmação literal `EXCLUIR MEUS DADOS` e remove, em uma única transação, identidade, sessões, histórico, notas, tarefas, tentativas, rubricas, evidências, mastery, assistência e credenciais daquele aluno. Ledgers continuam imutáveis fora desse fluxo.
 
 A retenção administrativa é deliberadamente manual: `python3 tools/apex_retention.py` apenas lista candidatos por padrão. Somente contas não padrão, sem credencial ativa e além da janela configurada podem entrar na lista. A flag `--apply` é necessária para executar exclusões.
+
+
+## E2E e Release Candidate
+
+O v19 adiciona jornadas determinísticas que atravessam a cadeia pedagógica real: `LearningTask → LearningAttempt → RubricAssessment → EvidenceEvent → MasteryAssessment → revisão`, além de pausa/revisão de retomada, replay idempotente e exportação/exclusão sem órfãos. O provider externo é substituído apenas nos testes HTTP; persistência, policies e serviços continuam reais sobre SQLite temporário.
+
+A esteira de pacotes também foi endurecida: pacotes futuros precisam conter `APEX_UPDATE_MANIFEST.txt` canônico, a lista declarada de arquivos deve coincidir exatamente com o tarball e `apex_apply_update.py` informa corretamente se existe migration nova.

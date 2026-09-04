@@ -88,17 +88,22 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - exportação de privacidade nunca inclui `key_hash`; exclusão de aluno exige confirmação explícita e usa uma autorização transacional temporária que não enfraquece a imutabilidade normal dos ledgers.
 - retenção administrativa não roda automaticamente; o CLI é dry-run por padrão e só considera contas não padrão sem credencial ativa.
 
+- jornada E2E real de conclusão: tarefa confirmada → tentativa → rubrica → evidência → mastery → conclusão → revisão agendada;
+- replay E2E de `turn_id` confirmado não duplica tentativa, evidência ou avaliação de mastery;
+- pausa → revisar antes → tarefa de retenção → evidência demonstrada → restauração exata da etapa anterior é coberta como jornada única;
+- exportação seguida de exclusão de um aluno populado confirma isolamento, remoção de credencial/rate-limit e ausência de foreign keys órfãs;
+- `apex_apply_update.py` valida manifesto canônico e correspondência exata entre manifesto e conteúdo do pacote, rejeitando manifestos técnicos extras;
+
 ## Validação da release
 
-O checkpoint corrente deve ser validado com:
+O checkpoint corrente deve ser validado em duas camadas:
 
-- suíte automatizada completa;
-- validação sintática Python;
-- validação sintática do JavaScript;
-- `/health` via Flask;
-- smoke test real com Gunicorn.
+1. `python3 tools/apex_validate.py`: sintaxe Python/JavaScript, suíte automatizada completa e `git diff --check`, sempre com SQLite temporário.
+2. `python3 tools/apex_release_gate.py`: exige working tree limpo, repete a suíte completa, executa a seleção de jornadas/falhas críticas e recria um banco novo validando todas as migrations, foreign keys e integridade.
 
-A rotina operacional também possui `tools/apex_validate.py`, `tools/apex_apply_update.py` e `tools/apex_migrate_real.py` para reduzir passos manuais sem remover os gates de segurança.
+Antes de declarar a 1.0, ainda deve existir smoke test real com Gunicorn e `/health` no ambiente de release.
+
+A rotina operacional também possui `tools/apex_validate.py`, `tools/apex_apply_update.py` e `tools/apex_migrate_real.py` para reduzir passos manuais sem remover os gates de segurança. O Release Candidate acrescenta `tools/apex_release_gate.py`, que exige working tree limpo, repete a suíte, executa jornadas/falhas críticas e recria um banco temporário pela cadeia completa de migrations.
 
 ## Escopo adiado
 
