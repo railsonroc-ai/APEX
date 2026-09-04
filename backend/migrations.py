@@ -5,6 +5,14 @@ from backend.identity import (
     DEFAULT_SESSION_IDS,
     DEFAULT_STUDENT_ID,
 )
+from backend.concepts import (
+    CATALOG_VERSION,
+    CONCEPT_SEEDS,
+    legacy_canonical_name,
+    legacy_concept_id,
+    normalize_alias,
+    seed_for_value,
+)
 
 
 class MigrationError(RuntimeError):
@@ -579,6 +587,595 @@ def create_evidence_events(connection):
     """)
 
 
+
+def add_concept_catalog(connection):
+    connection.execute("""
+        CREATE TABLE concept_definitions (
+            concept_id TEXT PRIMARY KEY,
+            area TEXT NOT NULL,
+            canonical_name TEXT NOT NULL,
+            catalog_version INTEGER NOT NULL,
+            selectable INTEGER NOT NULL DEFAULT 1,
+            source TEXT NOT NULL DEFAULT 'seed',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(area, concept_id),
+            UNIQUE(area, canonical_name),
+            CHECK(area IN ('ads', 'it')),
+            CHECK(catalog_version > 0),
+            CHECK(selectable IN (0, 1)),
+            CHECK(source IN ('seed', 'legacy_migration'))
+        )
+    """)
+
+    connection.execute("""
+        CREATE TABLE concept_aliases (
+            area TEXT NOT NULL,
+            normalized_alias TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            catalog_version INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(area, normalized_alias),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            CHECK(area IN ('ads', 'it')),
+            CHECK(catalog_version > 0)
+        )
+    """)
+
+    for seed in CONCEPT_SEEDS:
+        connection.execute(
+            """
+            INSERT INTO concept_definitions (
+                concept_id,
+                area,
+                canonical_name,
+                catalog_version,
+                selectable,
+                source
+            )
+            VALUES (?, ?, ?, ?, 1, 'seed')
+            """,
+            (
+                seed.concept_id,
+                seed.area,
+                seed.canonical_name,
+                CATALOG_VERSION,
+            ),
+        )
+
+        for alias in (
+            seed.canonical_name,
+            *seed.aliases,
+        ):
+            normalized = normalize_alias(alias)
+            if not normalized:
+                continue
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO concept_aliases (
+                    area,
+                    normalized_alias,
+                    concept_id,
+                    catalog_version
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    seed.area,
+                    normalized,
+                    seed.concept_id,
+                    CATALOG_VERSION,
+                ),
+            )
+
+    legacy_values = []
+    legacy_values.extend(
+        connection.execute(
+            """
+            SELECT area, current_concept AS concept
+            FROM learner_state
+            WHERE current_concept IS NOT NULL
+              AND TRIM(current_concept) != ''
+            """
+        ).fetchall()
+    )
+    legacy_values.extend(
+        connection.execute(
+            """
+            SELECT area, concept
+            FROM concept_progress
+            WHERE concept IS NOT NULL
+              AND TRIM(concept) != ''
+            """
+        ).fetchall()
+    )
+    legacy_values.extend(
+        connection.execute(
+            """
+            SELECT area, concept
+            FROM learning_turns
+            WHERE concept IS NOT NULL
+              AND TRIM(concept) != ''
+            """
+        ).fetchall()
+    )
+    legacy_values.extend(
+        connection.execute(
+            """
+            SELECT area, concept
+            FROM evidence_events
+            WHERE concept IS NOT NULL
+              AND TRIM(concept) != ''
+            """
+        ).fetchall()
+    )
+
+    def resolve_legacy(area, value):
+        if value is None or not str(value).strip():
+            return None
+
+        seed = seed_for_value(area, str(value))
+        if seed is not None:
+            return seed.concept_id
+
+        concept_id = legacy_concept_id(area, str(value))
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO concept_definitions (
+                concept_id,
+                area,
+                canonical_name,
+                catalog_version,
+                selectable,
+                source
+            )
+            VALUES (?, ?, ?, ?, 0, 'legacy_migration')
+            """,
+            (
+                concept_id,
+                area,
+                legacy_canonical_name(concept_id),
+                CATALOG_VERSION,
+            ),
+        )
+
+        normalized = normalize_alias(str(value))
+        if normalized:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO concept_aliases (
+                    area,
+                    normalized_alias,
+                    concept_id,
+                    catalog_version
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    area,
+                    normalized,
+                    concept_id,
+                    CATALOG_VERSION,
+                ),
+            )
+        return concept_id
+
+    for row in legacy_values:
+        resolve_legacy(row["area"], row["concept"])
+
+    connection.execute("""
+        CREATE TABLE learner_state_v7 (
+            student_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            current_concept_id TEXT,
+            stage TEXT NOT NULL DEFAULT 'compreender',
+            last_evidence TEXT,
+            difficulty_count INTEGER NOT NULL DEFAULT 0,
+            mastery REAL NOT NULL DEFAULT 0.0,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(student_id, area),
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(area, current_concept_id)
+                REFERENCES concept_definitions(area, concept_id)
+        )
+    """)
+
+    for row in connection.execute(
+        "SELECT * FROM learner_state"
+    ).fetchall():
+        connection.execute(
+            """
+            INSERT INTO learner_state_v7 (
+                student_id,
+                area,
+                current_concept_id,
+                stage,
+                last_evidence,
+                difficulty_count,
+                mastery,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row["student_id"],
+                row["area"],
+                resolve_legacy(row["area"], row["current_concept"]),
+                row["stage"],
+                row["last_evidence"],
+                row["difficulty_count"],
+                row["mastery"],
+                row["updated_at"],
+            ),
+        )
+
+    connection.execute("""
+        CREATE TABLE concept_progress_v7 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            mastery REAL NOT NULL DEFAULT 0.0,
+            difficulty_count INTEGER NOT NULL DEFAULT 0,
+            last_evidence TEXT,
+            review_count INTEGER NOT NULL DEFAULT 0,
+            next_review_at TEXT,
+            last_reviewed_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            UNIQUE(student_id, area, concept_id)
+        )
+    """)
+
+    for row in connection.execute(
+        "SELECT * FROM concept_progress"
+    ).fetchall():
+        connection.execute(
+            """
+            INSERT INTO concept_progress_v7 (
+                id,
+                student_id,
+                area,
+                concept_id,
+                mastery,
+                difficulty_count,
+                last_evidence,
+                review_count,
+                next_review_at,
+                last_reviewed_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(student_id, area, concept_id) DO UPDATE SET
+                mastery = MAX(
+                    concept_progress_v7.mastery,
+                    excluded.mastery
+                ),
+                difficulty_count = MAX(
+                    concept_progress_v7.difficulty_count,
+                    excluded.difficulty_count
+                ),
+                last_evidence = CASE
+                    WHEN excluded.updated_at >= concept_progress_v7.updated_at
+                         AND excluded.last_evidence IS NOT NULL
+                    THEN excluded.last_evidence
+                    ELSE concept_progress_v7.last_evidence
+                END,
+                review_count = MAX(
+                    concept_progress_v7.review_count,
+                    excluded.review_count
+                ),
+                next_review_at = CASE
+                    WHEN concept_progress_v7.next_review_at IS NULL
+                    THEN excluded.next_review_at
+                    WHEN excluded.next_review_at IS NULL
+                    THEN concept_progress_v7.next_review_at
+                    WHEN excluded.next_review_at < concept_progress_v7.next_review_at
+                    THEN excluded.next_review_at
+                    ELSE concept_progress_v7.next_review_at
+                END,
+                last_reviewed_at = CASE
+                    WHEN concept_progress_v7.last_reviewed_at IS NULL
+                    THEN excluded.last_reviewed_at
+                    WHEN excluded.last_reviewed_at IS NULL
+                    THEN concept_progress_v7.last_reviewed_at
+                    WHEN excluded.last_reviewed_at > concept_progress_v7.last_reviewed_at
+                    THEN excluded.last_reviewed_at
+                    ELSE concept_progress_v7.last_reviewed_at
+                END,
+                updated_at = CASE
+                    WHEN excluded.updated_at > concept_progress_v7.updated_at
+                    THEN excluded.updated_at
+                    ELSE concept_progress_v7.updated_at
+                END
+            """,
+            (
+                row["id"],
+                row["student_id"],
+                row["area"],
+                resolve_legacy(row["area"], row["concept"]),
+                row["mastery"],
+                row["difficulty_count"],
+                row["last_evidence"],
+                row["review_count"],
+                row["next_review_at"],
+                row["last_reviewed_at"],
+                row["updated_at"],
+            ),
+        )
+
+    connection.execute("""
+        CREATE TABLE learning_turns_v7 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            user_message TEXT NOT NULL,
+            assistant_message TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            concept_id TEXT,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(student_id, id, area),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            UNIQUE(student_id, turn_id)
+        )
+    """)
+
+    for row in connection.execute(
+        "SELECT * FROM learning_turns"
+    ).fetchall():
+        connection.execute(
+            """
+            INSERT INTO learning_turns_v7 (
+                id,
+                student_id,
+                session_id,
+                turn_id,
+                area,
+                user_message,
+                assistant_message,
+                created_at,
+                concept_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row["id"],
+                row["student_id"],
+                row["session_id"],
+                row["turn_id"],
+                row["area"],
+                row["user_message"],
+                row["assistant_message"],
+                row["created_at"],
+                resolve_legacy(row["area"], row["concept"]),
+            ),
+        )
+
+    connection.execute("""
+        CREATE TABLE evidence_events_v7 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id TEXT NOT NULL UNIQUE,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            stage_before TEXT NOT NULL,
+            stage_after TEXT NOT NULL,
+            outcome TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            evidence_text TEXT,
+            tutor_message TEXT NOT NULL,
+            student_answer TEXT NOT NULL,
+            assistance_level TEXT NOT NULL DEFAULT 'untracked',
+            artifact_ref TEXT,
+            rubric_id TEXT NOT NULL,
+            rubric_version INTEGER NOT NULL,
+            policy_id TEXT NOT NULL,
+            policy_version INTEGER NOT NULL,
+            source TEXT NOT NULL,
+            applied INTEGER NOT NULL,
+            mastery_before REAL NOT NULL,
+            mastery_after REAL NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(student_id, id, area),
+            FOREIGN KEY(student_id, turn_id)
+                REFERENCES learning_turns_v7(student_id, turn_id),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            UNIQUE(student_id, turn_id),
+            CHECK(area IN ('ads', 'it')),
+            CHECK(outcome IN (
+                'insufficient',
+                'partial',
+                'demonstrated',
+                'misconception'
+            )),
+            CHECK(confidence >= 0.0 AND confidence <= 1.0),
+            CHECK(assistance_level IN (
+                'untracked',
+                'independent',
+                'light',
+                'guided',
+                'direct'
+            )),
+            CHECK(rubric_version > 0),
+            CHECK(policy_version > 0),
+            CHECK(applied IN (0, 1)),
+            CHECK(mastery_before >= 0.0 AND mastery_before <= 1.0),
+            CHECK(mastery_after >= 0.0 AND mastery_after <= 1.0)
+        )
+    """)
+
+    for row in connection.execute(
+        "SELECT * FROM evidence_events"
+    ).fetchall():
+        connection.execute(
+            """
+            INSERT INTO evidence_events_v7 (
+                id,
+                event_id,
+                student_id,
+                session_id,
+                turn_id,
+                area,
+                concept_id,
+                stage_before,
+                stage_after,
+                outcome,
+                confidence,
+                evidence_text,
+                tutor_message,
+                student_answer,
+                assistance_level,
+                artifact_ref,
+                rubric_id,
+                rubric_version,
+                policy_id,
+                policy_version,
+                source,
+                applied,
+                mastery_before,
+                mastery_after,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row["id"],
+                row["event_id"],
+                row["student_id"],
+                row["session_id"],
+                row["turn_id"],
+                row["area"],
+                resolve_legacy(row["area"], row["concept"]),
+                row["stage_before"],
+                row["stage_after"],
+                row["outcome"],
+                row["confidence"],
+                row["evidence_text"],
+                row["tutor_message"],
+                row["student_answer"],
+                row["assistance_level"],
+                row["artifact_ref"],
+                row["rubric_id"],
+                row["rubric_version"],
+                row["policy_id"],
+                row["policy_version"],
+                row["source"],
+                row["applied"],
+                row["mastery_before"],
+                row["mastery_after"],
+                row["created_at"],
+            ),
+        )
+
+    for index_name in (
+        "idx_concept_progress_student_area_review",
+        "idx_learning_turns_student_area_concept_created_at",
+        "idx_learning_turns_session_created_at",
+        "idx_evidence_events_student_concept_created",
+        "idx_evidence_events_policy",
+    ):
+        connection.execute(f"DROP INDEX IF EXISTS {index_name}")
+
+    connection.execute("DROP TRIGGER IF EXISTS evidence_events_no_update")
+    connection.execute("DROP TRIGGER IF EXISTS evidence_events_no_delete")
+
+    connection.execute("DROP TABLE evidence_events")
+    connection.execute("DROP TABLE learning_turns")
+    connection.execute("DROP TABLE concept_progress")
+    connection.execute("DROP TABLE learner_state")
+
+    connection.execute(
+        "ALTER TABLE learner_state_v7 RENAME TO learner_state"
+    )
+    connection.execute(
+        "ALTER TABLE concept_progress_v7 RENAME TO concept_progress"
+    )
+    connection.execute(
+        "ALTER TABLE learning_turns_v7 RENAME TO learning_turns"
+    )
+    connection.execute(
+        "ALTER TABLE evidence_events_v7 RENAME TO evidence_events"
+    )
+
+    connection.execute("""
+        CREATE INDEX idx_concept_progress_student_area_review
+        ON concept_progress (
+            student_id,
+            area,
+            next_review_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_turns_student_area_concept_created_at
+        ON learning_turns (
+            student_id,
+            area,
+            concept_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_turns_session_created_at
+        ON learning_turns (
+            student_id,
+            session_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_evidence_events_student_concept_created
+        ON evidence_events (
+            student_id,
+            area,
+            concept_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_evidence_events_policy
+        ON evidence_events (
+            policy_id,
+            policy_version,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER evidence_events_no_update
+        BEFORE UPDATE ON evidence_events
+        BEGIN
+            SELECT RAISE(ABORT, 'evidence_events are immutable');
+        END
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER evidence_events_no_delete
+        BEFORE DELETE ON evidence_events
+        BEGIN
+            SELECT RAISE(ABORT, 'evidence_events are immutable');
+        END
+    """)
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -609,6 +1206,11 @@ MIGRATIONS = (
         6,
         "create_evidence_events",
         create_evidence_events,
+    ),
+    Migration(
+        7,
+        "add_concept_catalog",
+        add_concept_catalog,
     ),
 )
 

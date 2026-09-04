@@ -103,7 +103,7 @@ def test_history_is_isolated_by_area_and_limited(
         area="it",
         user_message="Pergunta IT",
         assistant_message="Resposta IT",
-        concept="variáveis",
+        concept="redes",
     )
 
     messages = LearningHistory.get_messages(
@@ -156,6 +156,7 @@ def test_find_returns_committed_turn(
     assert turn["area"] == "ads"
     assert turn["user_message"] == "Pergunta"
     assert turn["assistant_message"] == "Resposta"
+    assert turn["concept_id"] == "ads.variables"
     assert turn["concept"] == "variáveis"
 
 
@@ -255,4 +256,5 @@ def test_existing_learning_turns_table_is_migrated(
     finally:
         connection.close()
 
-    assert "concept" in columns
+    assert "concept_id" in columns
+    assert "concept" not in columns

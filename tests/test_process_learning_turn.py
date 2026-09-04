@@ -3,15 +3,9 @@ from backend.services.process_learning_turn import ProcessLearningTurn
 
 
 def test_activates_identified_concept(monkeypatch):
-    state = {"current_concept": None}
-    activated = {"current_concept": "variáveis", "stage": "compreender"}
+    state = {"current_concept_id": None, "current_concept": None}
+    activated = {"current_concept_id": "ads.variables", "current_concept": "variáveis", "stage": "compreender"}
     captured = {}
-
-    monkeypatch.setattr(
-        turn_module.ConceptTracker,
-        "resolve_candidate",
-        lambda state, concept: "variáveis",
-    )
 
     def fake_activate(area, concept, **kwargs):
         captured["activation"] = (
@@ -36,13 +30,14 @@ def test_activates_identified_concept(monkeypatch):
     assert result == activated
     assert captured["activation"] == (
         "ads",
-        "variáveis",
+        "ads.variables",
         "student_default",
     )
 
 
 def test_finalize_completed_concept_schedules_review(monkeypatch):
     initial = {
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "fixar",
         "mastery": 0.7,
@@ -121,6 +116,7 @@ def test_finalize_completed_concept_schedules_review(monkeypatch):
 
 def test_finalize_review_request_activates_due_review(monkeypatch):
     initial = {
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "concluido",
     }

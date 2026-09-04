@@ -17,6 +17,8 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `database.py`: SQLite e configuração das conexões.
 - `migrations.py`: migrations ordenadas, atômicas e registradas no banco.
 - `identity.py`: identificadores estáveis do aluno e das sessões padrão.
+- `concepts.py`: catálogo seed versionado, aliases e IDs estáveis de competência.
+- `services/concept_catalog.py`: resolução autoritativa de `concept_id` e nomes canônicos.
 - `services/student_context.py`: resolve a identidade no servidor; o navegador não escolhe `student_id`.
 
 ## Tutor
@@ -29,7 +31,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `LearnerState`: estado pedagógico atual por aluno + área.
 - `LearnerStateTransition`: mudanças por sinais e evidências.
 - `TeachingPolicy`: escolha determinística da próxima ação.
-- `ConceptTracker` e `ConceptActivation`: identificação e ativação de conceitos.
+- `ConceptCatalog`, `ConceptTracker` e `ConceptActivation`: catálogo, seleção por ID estável e ativação segura de conceitos.
 - `EvidenceEvaluator`: contrato da avaliação semântica e rubrica versionada.
 - `EvidenceEvent`: ledger imutável de avaliações confirmadas.
 - `EvidencePolicy`: IDs/versões de rubrica e política, além do nível de assistência registrado.
@@ -57,10 +59,12 @@ Tabelas principais:
 - `learning_sessions`: episódios de estudo associados ao aluno e à área;
 - `notes`: notas pertencentes ao aluno;
 - `learner_state`: estado atual por aluno + área;
-- `concept_progress`: progresso e revisão por aluno + área + conceito;
+- `concept_definitions`: definições versionadas de competências por `concept_id`;
+- `concept_aliases`: aliases normalizados que convergem para um `concept_id`;
+- `concept_progress`: progresso e revisão por aluno + área + `concept_id`;
 - `learning_turns`: turnos idempotentes por aluno, associados a uma sessão;
 - `learning_turn_leases`: reserva temporária por aluno + área;
-- `evidence_events`: avaliações imutáveis ligadas ao aluno, sessão e turno confirmado.
+- `evidence_events`: avaliações imutáveis ligadas ao aluno, sessão, turno e `concept_id` confirmado.
 
 O navegador não fornece o histórico usado pelo tutor e não escolhe livremente
 o `student_id`. O backend resolve a identidade do aluno padrão atual, lê apenas
@@ -72,6 +76,8 @@ a mesma área em paralelo. A lease fica no SQLite, funciona entre threads/worker
 e expira para permitir recuperação caso um worker seja interrompido.
 
 A migration 6 cria o ledger `evidence_events`, protegido por triggers contra `UPDATE` e `DELETE`. O evento registra outcome, confiança, contexto avaliado, rubrica/policy versionadas, assistência, artefato opcional, flag de aplicação e mastery antes/depois. O nível de ajuda permanece `untracked` enquanto o APEX ainda não mede scaffolding explicitamente; nenhum valor de autonomia é inventado.
+
+A migration 7 introduz `concept_definitions` e `concept_aliases` e reconstrói as tabelas pedagógicas para que `concept_id` seja a chave de negócio e foreign key real. Aliases conhecidos como `Variáveis`, `variaveis` e `variables` convergem para `ads.variables`. Valores legados fora do catálogo são preservados sob IDs determinísticos `legacy.*`, marcados como não selecionáveis e apresentados com nome sintético seguro; o texto legado não é promovido ao prompt de sistema.
 
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação
@@ -92,4 +98,4 @@ Aplicação segura de pacotes futuros: `python3 tools/apex_apply_update.py <paco
 O APEX 1.0 continua operando como produto individual, mas a fundação de identidade
 já existe: `student_id` participa das chaves pedagógicas e o aluno atual é resolvido
 no servidor. Ainda não existem cadastro, login, autorização individual, revogação,
-seleção de perfil ou gestão multiusuário completa. O ledger de evidências agora torna as decisões atuais auditáveis, mas a política de mastery ainda deve evoluir para múltiplas evidências, variedade, independência, retenção e assistência medida explicitamente.
+seleção de perfil ou gestão multiusuário completa. O ledger de evidências torna as decisões atuais auditáveis e o catálogo estabiliza a identidade das competências, mas a política de mastery ainda deve evoluir para múltiplas evidências, variedade, independência, retenção e assistência medida explicitamente.

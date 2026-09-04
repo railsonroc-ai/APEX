@@ -66,6 +66,7 @@ def test_chat_stream_without_groq_key_returns_sse_error(
 def test_chat_uses_pedagogical_state(monkeypatch):
     state = {
         "area": "ads",
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "testar",
         "last_evidence": None,
@@ -110,7 +111,7 @@ def test_chat_uses_pedagogical_state(monkeypatch):
 
 
 def test_difficulty_signal_updates_state_before_policy(monkeypatch):
-    initial_state = {"area": "ads", "current_concept": "variáveis", "stage": "compreender", "last_evidence": None, "difficulty_count": 0, "mastery": 0.2, "updated_at": None}
+    initial_state = {"area": "ads", "current_concept_id": "ads.variables", "current_concept": "variáveis", "stage": "compreender", "last_evidence": None, "difficulty_count": 0, "mastery": 0.2, "updated_at": None}
     updated_state = {**initial_state, "stage": "corrigir", "difficulty_count": 1}
     captured = {}
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
@@ -156,8 +157,8 @@ def test_difficulty_signal_updates_state_before_policy(monkeypatch):
 
 def test_identified_concept_updates_state_before_policy(monkeypatch):
     from types import SimpleNamespace
-    initial_state = {"area": "ads", "current_concept": None, "stage": "compreender", "last_evidence": None, "difficulty_count": 0, "mastery": 0.0, "updated_at": None}
-    updated_state = {**initial_state, "current_concept": "variáveis"}
+    initial_state = {"area": "ads", "current_concept_id": None, "current_concept": None, "stage": "compreender", "last_evidence": None, "difficulty_count": 0, "mastery": 0.0, "updated_at": None}
+    updated_state = {**initial_state, "current_concept_id": "ads.variables", "current_concept": "variáveis"}
     captured = {}
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
@@ -199,13 +200,13 @@ def test_identified_concept_updates_state_before_policy(monkeypatch):
     response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert captured["activation"] == ("ads", "variáveis")
+    assert captured["activation"] == ("ads", "ads.variables")
     assert captured["policy_state"] == updated_state
 
 
 def test_semantic_evidence_updates_state_before_policy(monkeypatch):
     from types import SimpleNamespace
-    initial_state = {"area": "ads", "current_concept": "variáveis", "stage": "testar", "last_evidence": None, "difficulty_count": 1, "mastery": 0.5, "updated_at": None}
+    initial_state = {"area": "ads", "current_concept_id": "ads.variables", "current_concept": "variáveis", "stage": "testar", "last_evidence": None, "difficulty_count": 1, "mastery": 0.5, "updated_at": None}
     updated_state = {**initial_state, "stage": "fixar", "last_evidence": "Explicou corretamente.", "difficulty_count": 0, "mastery": 0.7}
     captured = {"evidence_calls": 0}
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
@@ -287,7 +288,7 @@ def test_completed_concept_schedules_review(monkeypatch):
     from types import SimpleNamespace
 
     initial = {
-        "area": "ads", "current_concept": "variáveis",
+        "area": "ads", "current_concept_id": "ads.variables", "current_concept": "variáveis",
         "stage": "fixar", "last_evidence": None,
         "difficulty_count": 0, "mastery": 0.7, "updated_at": None,
     }

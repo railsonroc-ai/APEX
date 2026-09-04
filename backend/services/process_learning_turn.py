@@ -39,6 +39,7 @@ class ProcessLearningTurn:
             .resolve_identified_candidate(
                 learner_state,
                 identified_concept,
+                area=area,
             )
         )
 
@@ -196,8 +197,8 @@ class ProcessLearningTurn:
                         .attach_response(
                             normalized_turn_id,
                             normalized_assistant_message,
-                            concept=learner_state.get(
-                                "current_concept"
+                            concept_id=learner_state.get(
+                                "current_concept_id"
                             ),
                             student_id=normalized_student_id,
                         )
@@ -263,8 +264,8 @@ class ProcessLearningTurn:
                     area=normalized_area,
                     user_message=normalized_user_message,
                     assistant_message=normalized_assistant_message,
-                    concept=result["learner_state"].get(
-                        "current_concept"
+                    concept_id=result["learner_state"].get(
+                        "current_concept_id"
                     ),
                     student_id=normalized_student_id,
                     session_id=normalized_session_id,
@@ -319,14 +320,10 @@ class ProcessLearningTurn:
                 "evidence_context não corresponde ao turno confirmado"
             )
 
-        context_concept = LearningHistory.normalize_concept(
-            evidence_context.get("concept")
-        )
-        state_concept = LearningHistory.normalize_concept(
-            state_before_evidence.get("current_concept")
-        )
+        context_concept_id = evidence_context.get("concept_id")
+        state_concept_id = state_before_evidence.get("current_concept_id")
 
-        if not context_concept or context_concept != state_concept:
+        if not context_concept_id or context_concept_id != state_concept_id:
             raise ValueError(
                 "evidence_context não corresponde ao conceito ativo"
             )
@@ -334,7 +331,7 @@ class ProcessLearningTurn:
         return EvidenceEvent.record(
             turn_id=normalized_turn_id,
             area=normalized_area,
-            concept=context_concept,
+            concept_id=context_concept_id,
             stage_before=evidence_context.get("stage"),
             stage_after=state_after.get("stage"),
             semantic_evidence=semantic_evidence,
@@ -390,12 +387,12 @@ class ProcessLearningTurn:
                 student_id=student_id,
             )
 
-            current_concept = learner_state.get("current_concept")
+            current_concept_id = learner_state.get("current_concept_id")
 
-            if current_concept:
+            if current_concept_id:
                 concept_progress = ConceptProgress.update(
                     area,
-                    current_concept,
+                    current_concept_id,
                     mastery=learner_state.get("mastery"),
                     difficulty_count=learner_state.get(
                         "difficulty_count"
@@ -414,7 +411,7 @@ class ProcessLearningTurn:
                 ):
                     review_result = ReviewLifecycle.complete_due(
                         area,
-                        current_concept,
+                        current_concept_id,
                         learner_state,
                         student_id=student_id,
                     )
@@ -433,7 +430,7 @@ class ProcessLearningTurn:
                     if review_schedule:
                         ConceptProgress.update(
                             area,
-                            current_concept,
+                            current_concept_id,
                             **review_schedule,
                             student_id=student_id,
                         )

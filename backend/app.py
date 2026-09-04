@@ -375,7 +375,8 @@ def chat_stream():
                 try:
                     content = identification_response.choices[0].message.content
                     identified_concept = ConceptTracker.parse_identification_response(
-                        content
+                        content,
+                        area=area,
                     )
                 except (AttributeError, IndexError, TypeError):
                     identified_concept = None
@@ -389,8 +390,8 @@ def chat_stream():
 
             history = LearningHistory.get_messages(
                 area,
-                concept=learner_state.get(
-                    "current_concept"
+                concept_id=learner_state.get(
+                    "current_concept_id"
                 ),
                 student_id=student_id,
             )

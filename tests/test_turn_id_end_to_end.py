@@ -41,6 +41,7 @@ def test_backend_forwards_turn_id_to_commit(
 ):
     initial_state = {
         "area": "ads",
+        "current_concept_id": None,
         "current_concept": None,
         "stage": "concluido",
         "last_evidence": None,
@@ -51,6 +52,7 @@ def test_backend_forwards_turn_id_to_commit(
 
     activated_state = {
         **initial_state,
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "compreender",
     }
@@ -144,7 +146,7 @@ def test_backend_forwards_turn_id_to_commit(
                         SimpleNamespace(
                             message=SimpleNamespace(
                                 content=(
-                                    '{"concept":"variáveis"}'
+                                    '{"concept_id":"ads.variables"}'
                                 )
                             )
                         )
@@ -219,6 +221,7 @@ def test_empty_stream_does_not_commit_or_confirm_turn(
 ):
     learner_state = {
         "area": "ads",
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "testar",
         "last_evidence": None,

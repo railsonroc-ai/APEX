@@ -26,7 +26,7 @@ class ReviewLifecycle:
 
         return LearnerState.update(
             area,
-            current_concept=progress["concept"],
+            current_concept_id=progress["concept_id"],
             stage=cls.REVIEW_STAGE,
             last_evidence=progress.get("last_evidence") or "",
             difficulty_count=progress.get("difficulty_count", 0),
@@ -46,15 +46,18 @@ class ReviewLifecycle:
         if not isinstance(learner_state, dict):
             return None
 
-        if learner_state.get("current_concept") != concept:
-            return None
-
         progress = ConceptProgress.get(
             area,
             concept,
             student_id=student_id,
         )
-        if not progress or not ReviewScheduler.is_due(progress, now=now):
+        if not progress:
+            return None
+
+        if learner_state.get("current_concept_id") != progress.get("concept_id"):
+            return None
+
+        if not ReviewScheduler.is_due(progress, now=now):
             return None
 
         current_time = ReviewScheduler.normalize_now(now)

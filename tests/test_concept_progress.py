@@ -7,12 +7,25 @@ from backend.services.concept_progress import ConceptProgress
 def create_concept_progress_database(path):
     connection = sqlite3.connect(str(path))
     connection.row_factory = sqlite3.Row
-    connection.execute("""
+    connection.executescript("""
+        CREATE TABLE concept_definitions (
+            concept_id TEXT PRIMARY KEY,
+            area TEXT NOT NULL,
+            canonical_name TEXT NOT NULL,
+            catalog_version INTEGER NOT NULL,
+            selectable INTEGER NOT NULL,
+            source TEXT NOT NULL,
+            UNIQUE(area, concept_id)
+        );
+        INSERT INTO concept_definitions VALUES
+            ('ads.variables','ads','variáveis',1,1,'seed'),
+            ('ads.conditionals','ads','condicionais',1,1,'seed'),
+            ('ads.functions','ads','funções',1,1,'seed');
         CREATE TABLE concept_progress (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_id TEXT NOT NULL,
             area TEXT NOT NULL,
-            concept TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
             mastery REAL NOT NULL DEFAULT 0.0,
             difficulty_count INTEGER NOT NULL DEFAULT 0,
             last_evidence TEXT,
@@ -20,8 +33,8 @@ def create_concept_progress_database(path):
             next_review_at TEXT,
             last_reviewed_at TEXT,
             updated_at TEXT,
-            UNIQUE(student_id, area, concept)
-        )
+            UNIQUE(student_id, area, concept_id)
+        );
     """)
     connection.commit()
     connection.close()
@@ -32,7 +45,6 @@ def use_test_database(monkeypatch, path):
         connection = sqlite3.connect(str(path))
         connection.row_factory = sqlite3.Row
         return connection
-
     monkeypatch.setattr(concept_progress_module, "get_db_connection", get_test_connection)
 
 
@@ -42,6 +54,7 @@ def test_default_concept_progress(monkeypatch, tmp_path):
     use_test_database(monkeypatch, path)
     state = ConceptProgress.get("ads", "  variáveis  ")
     assert state["area"] == "ads"
+    assert state["concept_id"] == "ads.variables"
     assert state["concept"] == "variáveis"
     assert state["mastery"] == 0.0
     assert state["difficulty_count"] == 0
@@ -49,21 +62,14 @@ def test_default_concept_progress(monkeypatch, tmp_path):
     assert state["next_review_at"] is None
 
 
-def test_update_persists_concept_progress(monkeypatch, tmp_path):
+def test_aliases_share_same_progress(monkeypatch, tmp_path):
     path = tmp_path / "concept-progress-update.db"
     create_concept_progress_database(path)
     use_test_database(monkeypatch, path)
-    state = ConceptProgress.update(
-        "ads",
-        "variáveis",
-        mastery=0.7,
-        difficulty_count=1,
-        last_evidence="Explicou corretamente.",
-    )
-    assert state["concept"] == "variáveis"
+    ConceptProgress.update("ads", "variaveis", mastery=0.7)
+    state = ConceptProgress.get("ads", "variables")
+    assert state["concept_id"] == "ads.variables"
     assert state["mastery"] == 0.7
-    assert state["difficulty_count"] == 1
-    assert state["last_evidence"] == "Explicou corretamente."
 
 
 def test_partial_update_preserves_existing_values(monkeypatch, tmp_path):
@@ -71,13 +77,10 @@ def test_partial_update_preserves_existing_values(monkeypatch, tmp_path):
     create_concept_progress_database(path)
     use_test_database(monkeypatch, path)
     ConceptProgress.update(
-        "ads",
-        "variáveis",
-        mastery=0.7,
-        difficulty_count=1,
-        last_evidence="Explicou corretamente.",
+        "ads", "variáveis", mastery=0.7,
+        difficulty_count=1, last_evidence="Explicou corretamente.",
     )
-    state = ConceptProgress.update("ads", "variáveis", review_count=1)
+    state = ConceptProgress.update("ads", "ads.variables", review_count=1)
     assert state["mastery"] == 0.7
     assert state["difficulty_count"] == 1
     assert state["last_evidence"] == "Explicou corretamente."
@@ -89,40 +92,24 @@ def test_invalid_progress_values_are_normalized(monkeypatch, tmp_path):
     create_concept_progress_database(path)
     use_test_database(monkeypatch, path)
     state = ConceptProgress.update(
-        "area-invalida",
-        "variáveis",
-        mastery=9,
-        difficulty_count=-3,
-        review_count=-2,
+        "area-invalida", "variáveis", mastery=9,
+        difficulty_count=-3, review_count=-2,
     )
     assert state["area"] == "ads"
     assert state["mastery"] == 1.0
     assert state["difficulty_count"] == 0
     assert state["review_count"] == 0
 
+
 def test_list_scheduled_returns_only_scheduled_concepts(monkeypatch, tmp_path):
     path = tmp_path / "concept-scheduled.db"
     create_concept_progress_database(path)
     use_test_database(monkeypatch, path)
-
-    ConceptProgress.update(
-        "ads",
-        "variáveis",
-        next_review_at="2026-09-04T12:00:00+00:00",
-    )
-    ConceptProgress.update(
-        "ads",
-        "condicionais",
-        next_review_at="2026-09-06T12:00:00+00:00",
-    )
-    ConceptProgress.update(
-        "ads",
-        "funções",
-    )
-
+    ConceptProgress.update("ads", "variáveis", next_review_at="2026-09-04T12:00:00+00:00")
+    ConceptProgress.update("ads", "condicionais", next_review_at="2026-09-06T12:00:00+00:00")
+    ConceptProgress.update("ads", "funções")
     scheduled = ConceptProgress.list_scheduled("ads")
-
-    assert [item["concept"] for item in scheduled] == [
-        "variáveis",
-        "condicionais",
+    assert [item["concept_id"] for item in scheduled] == [
+        "ads.variables", "ads.conditionals",
     ]
+    assert [item["concept"] for item in scheduled] == ["variáveis", "condicionais"]

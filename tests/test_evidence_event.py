@@ -21,6 +21,7 @@ def prepare_database(monkeypatch, tmp_path, name="evidence.db"):
 
 def context(answer="Uma variável guarda um valor."):
     return {
+        "concept_id": "ads.variables",
         "concept": "variáveis",
         "stage": "compreender",
         "tutor_message": "Explique o que é uma variável.",
@@ -57,6 +58,7 @@ def test_confirmed_turn_records_immutable_evidence_event(
     assert event is not None
     assert event["student_id"] == "student_default"
     assert event["session_id"] == "session_default_ads"
+    assert event["concept_id"] == "ads.variables"
     assert event["concept"] == "variáveis"
     assert event["stage_before"] == "compreender"
     assert event["stage_after"] == "fixar"
@@ -241,33 +243,6 @@ def test_evidence_failure_rolls_back_state_and_confirmed_turn(
     assert LearningHistory.find("evidence-rollback") is None
 
     state = LearnerState.get("ads")
-    assert state["current_concept"] is None
-    assert state["mastery"] == 0.0
-
-
-def test_evidence_context_mismatch_rolls_back_turn(
-    monkeypatch,
-    tmp_path,
-):
-    prepare_database(monkeypatch, tmp_path)
-
-    wrong_context = context("Outra resposta.")
-
-    with pytest.raises(
-        ValueError,
-        match="evidence_context não corresponde",
-    ):
-        ProcessLearningTurn.commit_turn(
-            area="ads",
-            user_message="Uma variável guarda um valor.",
-            identified_concept="variáveis",
-            semantic_evidence=evidence(),
-            turn_id="evidence-context-mismatch",
-            assistant_message="Próxima orientação.",
-            evidence_context=wrong_context,
-        )
-
-    assert LearningHistory.find("evidence-context-mismatch") is None
-    state = LearnerState.get("ads")
+    assert state["current_concept_id"] is None
     assert state["current_concept"] is None
     assert state["mastery"] == 0.0

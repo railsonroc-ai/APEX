@@ -4,6 +4,7 @@ from backend.services.concept_activation import ConceptActivation
 
 def test_new_concept_starts_clean(monkeypatch):
     progress = {
+        "concept_id": "ads.functions",
         "concept": "funções",
         "mastery": 0.0,
         "difficulty_count": 0,
@@ -30,7 +31,7 @@ def test_new_concept_starts_clean(monkeypatch):
 
     ConceptActivation.activate("ads", "funções")
 
-    assert captured["current_concept"] == "funções"
+    assert captured["current_concept_id"] == "ads.functions"
     assert captured["stage"] == "compreender"
     assert captured["mastery"] == 0.0
     assert captured["difficulty_count"] == 0
@@ -38,6 +39,7 @@ def test_new_concept_starts_clean(monkeypatch):
 
 def test_known_concept_restores_progress(monkeypatch):
     progress = {
+        "concept_id": "ads.variables",
         "concept": "variáveis",
         "mastery": 0.65,
         "difficulty_count": 2,
@@ -71,6 +73,7 @@ def test_known_concept_restores_progress(monkeypatch):
 
 def test_invalid_concept_preserves_current_state(monkeypatch):
     current = {
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "mastery": 0.5,
     }

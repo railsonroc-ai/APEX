@@ -12,8 +12,11 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `prompts/tutor.py` — prompt pedagógico do tutor.
 - `services/tutor_core.py` — preparação e proteção do contexto.
 - `identity.py` — IDs estáveis do aluno e das sessões padrão do APEX individual.
+- `concepts.py` — definições seed, aliases e IDs estáveis do catálogo de competências.
+- `services/concept_catalog.py` — resolução autoritativa de `concept_id` e nomes canônicos.
 - `services/student_context.py` — resolução server-side da identidade pedagógica.
 - `services/process_learning_turn.py` — preview e commit do turno pedagógico.
+- `services/concept_tracker.py` — seleção de competência somente entre IDs permitidos pelo catálogo.
 - `services/evidence_evaluator.py` — avaliação semântica com rubrica versionada.
 - `services/evidence_policy.py` — IDs/versões de rubrica, política e assistência.
 - `services/evidence_event.py` — ledger imutável das avaliações confirmadas.

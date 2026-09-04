@@ -8,9 +8,9 @@ O objetivo é evoluir além de um chatbot: ensinar, verificar compreensão, adap
 
 A fundação técnica e o hardening inicial estão concluídos.
 
-O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn e um ledger imutável de evidências pedagógicas e uma suíte automatizada com mais de 150 casos.
+O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn um ledger imutável de evidências pedagógicas, um catálogo mínimo de competências com `concept_id` estável e uma suíte automatizada com mais de 160 casos.
 
-A fundação do Evidence Engine está em construção: avaliações confirmadas passam a ser auditáveis por aluno/turno, com rubrica e policy versionadas. A próxima evolução é derivar domínio de evidências variadas e independentes, em vez de depender apenas do acumulador atual.
+A fundação do Evidence Engine torna avaliações confirmadas auditáveis por aluno/turno, com rubrica e policy versionadas. A identidade das competências também é estável: aliases convergem para `concept_id` versionado e texto livre do LLM não funciona como chave de negócio. A próxima evolução é derivar domínio de evidências variadas e independentes, em vez de depender apenas do acumulador atual.
 
 ## Executar
 
@@ -52,4 +52,4 @@ Materiais históricos: `docs/legacy/`
 
 **Fundação técnica:** concluída.
 
-**Próxima etapa:** Evidence Engine auditável, `concept_id` estável e política de domínio baseada em evidências múltiplas.
+**Próxima etapa:** política de domínio baseada em evidências múltiplas, variedade, independência, retenção e assistência medida.

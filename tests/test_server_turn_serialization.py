@@ -87,6 +87,7 @@ def test_concurrent_server_turn_is_rejected_before_llm(
 
     learner_state = {
         "area": "ads",
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "testar",
         "last_evidence": None,
@@ -271,6 +272,7 @@ def test_lease_is_released_when_stream_fails(
 
     learner_state = {
         "area": "ads",
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "testar",
         "last_evidence": None,

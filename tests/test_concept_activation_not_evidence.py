@@ -11,6 +11,7 @@ import backend.app as app_module
         (
             {
                 "area": "ads",
+                "current_concept_id": None,
                 "current_concept": None,
                 "stage": "concluido",
                 "last_evidence": None,
@@ -23,6 +24,7 @@ import backend.app as app_module
         (
             {
                 "area": "ads",
+                "current_concept_id": "ads.variables",
                 "current_concept": "variáveis",
                 "stage": "testar",
                 "last_evidence": None,
@@ -74,7 +76,8 @@ def test_concept_activation_message_is_not_learning_evidence(
 
         return {
             **learner_state,
-            "current_concept": identified_concept,
+            "current_concept_id": identified_concept,
+            "current_concept": "funções",
             "stage": "compreender",
             "mastery": 0.0,
         }
@@ -95,8 +98,9 @@ def test_concept_activation_message_is_not_learning_evidence(
         **kwargs: {
             "learner_state": {
                 **initial_state,
-                "current_concept":
+                "current_concept_id":
                     identified_concept,
+                "current_concept": "funções",
                 "stage": "compreender",
                 "mastery": 0.0,
             },
@@ -143,7 +147,7 @@ def test_concept_activation_message_is_not_learning_evidence(
                         SimpleNamespace(
                             message=SimpleNamespace(
                                 content=(
-                                    '{"concept":"funções"}'
+                                    '{"concept_id":"ads.functions"}'
                                 )
                             )
                         )
@@ -186,7 +190,7 @@ def test_concept_activation_message_is_not_learning_evidence(
 
     assert (
         captured["identified_concept"]
-        == "funções"
+        == "ads.functions"
     )
 
     assert captured["evidence_calls"] == 0

@@ -19,6 +19,7 @@ EXPECTED_MIGRATIONS = [
     (4, "create_learning_turn_leases"),
     (5, "add_student_identity"),
     (6, "create_evidence_events"),
+    (7, "add_concept_catalog"),
 ]
 
 
@@ -103,9 +104,12 @@ def test_new_database_applies_ordered_migrations(
         "students",
         "learning_sessions",
         "evidence_events",
+        "concept_definitions",
+        "concept_aliases",
     }.issubset(tables)
 
-    assert "concept" in turn_columns
+    assert "concept_id" in turn_columns
+    assert "concept" not in turn_columns
     assert "student_id" in turn_columns
     assert "session_id" in turn_columns
 
@@ -196,7 +200,7 @@ def test_legacy_database_is_upgraded_without_losing_turns(
                 turn_id,
                 user_message,
                 assistant_message,
-                concept
+                concept_id
             FROM learning_turns
             WHERE turn_id = 'legacy-turn'
             """
@@ -209,7 +213,7 @@ def test_legacy_database_is_upgraded_without_losing_turns(
     assert turn["turn_id"] == "legacy-turn"
     assert turn["user_message"] == "Pergunta preservada"
     assert turn["assistant_message"] == "Resposta preservada"
-    assert turn["concept"] is None
+    assert turn["concept_id"] is None
 
 
 def test_migration_and_version_record_roll_back_together(
@@ -636,7 +640,7 @@ def test_v5_database_receives_empty_evidence_ledger(
 
         assert total == 0
         assert turns == 1
-        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6]
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7]
         assert connection.execute(
             "PRAGMA foreign_key_check"
         ).fetchall() == []
@@ -713,5 +717,229 @@ def test_evidence_migration_rolls_back_schema_and_version_together(
         assert table is None
         assert trigger is None
         assert [row["version"] for row in versions] == [1, 2, 3, 4, 5]
+    finally:
+        connection.close()
+
+
+
+def test_v6_concepts_are_backfilled_to_stable_ids(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="v6-to-v7.db")
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(migrations_module, "MIGRATIONS", current_migrations[:6])
+    database_module.init_database()
+
+    connection = connect(path)
+    connection.execute(
+        """
+        INSERT INTO learner_state (
+            student_id, area, current_concept, stage, mastery
+        ) VALUES ('student_default', 'ads', 'Variáveis', 'testar', 0.6)
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO concept_progress (
+            student_id, area, concept, mastery
+        ) VALUES ('student_default', 'ads', 'variaveis', 0.6)
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO learning_turns (
+            student_id, session_id, turn_id, area,
+            user_message, assistant_message, concept
+        ) VALUES (
+            'student_default', 'session_default_ads', 'turn-v6', 'ads',
+            'Pergunta', 'Resposta', 'variables'
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO evidence_events (
+            event_id, student_id, session_id, turn_id, area, concept,
+            stage_before, stage_after, outcome, confidence,
+            tutor_message, student_answer, assistance_level,
+            rubric_id, rubric_version, policy_id, policy_version,
+            source, applied, mastery_before, mastery_after
+        ) VALUES (
+            'event-v6', 'student_default', 'session_default_ads', 'turn-v6',
+            'ads', 'variáveis', 'testar', 'fixar', 'demonstrated', 0.9,
+            'Tutor', 'Aluno', 'untracked', 'rubric', 1,
+            'policy', 1, 'semantic_llm', 1, 0.6, 0.8
+        )
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    monkeypatch.setattr(migrations_module, "MIGRATIONS", current_migrations)
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        assert connection.execute(
+            "SELECT current_concept_id FROM learner_state"
+        ).fetchone()[0] == "ads.variables"
+        assert connection.execute(
+            "SELECT concept_id FROM concept_progress"
+        ).fetchone()[0] == "ads.variables"
+        assert connection.execute(
+            "SELECT concept_id FROM learning_turns WHERE turn_id='turn-v6'"
+        ).fetchone()[0] == "ads.variables"
+        assert connection.execute(
+            "SELECT concept_id FROM evidence_events WHERE event_id='event-v6'"
+        ).fetchone()[0] == "ads.variables"
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_unknown_legacy_concept_is_preserved_but_not_selectable(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="legacy-concept-v7.db")
+    current_migrations = migrations_module.MIGRATIONS
+    monkeypatch.setattr(migrations_module, "MIGRATIONS", current_migrations[:6])
+    database_module.init_database()
+
+    connection = connect(path)
+    connection.execute(
+        """
+        INSERT INTO concept_progress (
+            student_id, area, concept, mastery
+        ) VALUES ('student_default', 'ads', 'conceito estranho legado', 0.4)
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    monkeypatch.setattr(migrations_module, "MIGRATIONS", current_migrations)
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        row = connection.execute(
+            """
+            SELECT d.concept_id, d.canonical_name, d.selectable, d.source
+            FROM concept_progress p
+            JOIN concept_definitions d
+              ON d.area = p.area AND d.concept_id = p.concept_id
+            """
+        ).fetchone()
+        assert row["concept_id"].startswith("legacy.ads.")
+        assert row["canonical_name"].startswith("Conceito legado ")
+        assert row["selectable"] == 0
+        assert row["source"] == "legacy_migration"
+    finally:
+        connection.close()
+
+
+def test_concept_catalog_migration_rolls_back_atomically(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="concept-v7-rollback.db")
+    current_migrations = migrations_module.MIGRATIONS
+    monkeypatch.setattr(migrations_module, "MIGRATIONS", current_migrations[:6])
+    database_module.init_database()
+
+    def failing(connection):
+        migrations_module.add_concept_catalog(connection)
+        raise RuntimeError("falha depois do catálogo")
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:6] + (Migration(7, "add_concept_catalog", failing),),
+    )
+
+    with pytest.raises(MigrationError, match="Falha ao aplicar migração 7"):
+        database_module.init_database()
+
+    connection = connect(path)
+    try:
+        tables = {
+            row["name"] for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        columns = {
+            row["name"] for row in connection.execute(
+                "PRAGMA table_info(concept_progress)"
+            ).fetchall()
+        }
+        versions = [
+            row["version"] for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+        assert "concept_definitions" not in tables
+        assert "concept_aliases" not in tables
+        assert "concept" in columns
+        assert "concept_id" not in columns
+        assert versions == [1, 2, 3, 4, 5, 6]
+    finally:
+        connection.close()
+
+
+def test_v7_merges_semantic_duplicate_progress_rows(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="v7-merge-aliases.db")
+    current_migrations = migrations_module.MIGRATIONS
+    monkeypatch.setattr(migrations_module, "MIGRATIONS", current_migrations[:6])
+    database_module.init_database()
+
+    connection = connect(path)
+    connection.execute(
+        """
+        INSERT INTO concept_progress (
+            student_id, area, concept, mastery, difficulty_count,
+            last_evidence, review_count, next_review_at,
+            last_reviewed_at, updated_at
+        ) VALUES (
+            'student_default', 'ads', 'Variáveis', 0.6, 1,
+            'evidência antiga', 2, '2026-09-10T00:00:00+00:00',
+            '2026-09-01T00:00:00+00:00', '2026-09-02T00:00:00+00:00'
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO concept_progress (
+            student_id, area, concept, mastery, difficulty_count,
+            last_evidence, review_count, next_review_at,
+            last_reviewed_at, updated_at
+        ) VALUES (
+            'student_default', 'ads', 'variaveis', 0.85, 3,
+            'evidência mais recente', 4, '2026-09-08T00:00:00+00:00',
+            '2026-09-03T00:00:00+00:00', '2026-09-04T00:00:00+00:00'
+        )
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    monkeypatch.setattr(migrations_module, "MIGRATIONS", current_migrations)
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT concept_id, mastery, difficulty_count, last_evidence,
+                   review_count, next_review_at, last_reviewed_at, updated_at
+            FROM concept_progress
+            WHERE student_id = 'student_default' AND area = 'ads'
+            """
+        ).fetchall()
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["concept_id"] == "ads.variables"
+        assert row["mastery"] == 0.85
+        assert row["difficulty_count"] == 3
+        assert row["last_evidence"] == "evidência mais recente"
+        assert row["review_count"] == 4
+        assert row["next_review_at"] == "2026-09-08T00:00:00+00:00"
+        assert row["last_reviewed_at"] == "2026-09-03T00:00:00+00:00"
+        assert row["updated_at"] == "2026-09-04T00:00:00+00:00"
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     finally:
         connection.close()

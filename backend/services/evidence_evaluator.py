@@ -1,3 +1,4 @@
+from backend.services.concept_catalog import ConceptCatalog
 from backend.services.learner_signals import LearnerSignals
 from backend.services.evidence_policy import EvidencePolicy
 
@@ -31,9 +32,16 @@ class EvidenceEvaluator:
     def is_applicable(cls, state):
         if not isinstance(state, dict):
             return False
-        concept = state.get("current_concept")
+        concept_value = (
+            state.get("current_concept_id")
+            or state.get("current_concept")
+        )
+        concept = ConceptCatalog.resolve(
+            state.get("area", "ads"),
+            concept_value,
+        )
         stage = state.get("stage")
-        return bool(concept) and stage in cls.EVALUATION_STAGES
+        return concept is not None and stage in cls.EVALUATION_STAGES
 
     @staticmethod
     def last_assistant_message(history):
@@ -58,8 +66,17 @@ class EvidenceEvaluator:
         if LearnerSignals.detect(user_message):
             return None
 
+        definition = ConceptCatalog.resolve(
+            state.get("area", "ads"),
+            state.get("current_concept_id")
+            or state.get("current_concept"),
+        )
+        if definition is None:
+            return None
+
         return {
-            "concept": str(state["current_concept"]).strip(),
+            "concept_id": definition["concept_id"],
+            "concept": definition["canonical_name"],
             "stage": state["stage"],
             "tutor_message": tutor_message,
             "student_answer": user_message.strip(),

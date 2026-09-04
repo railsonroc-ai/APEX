@@ -7,43 +7,24 @@ class ConceptActivation:
     INITIAL_STAGE = "compreender"
 
     @classmethod
-    def activate(
-        cls,
-        area,
-        concept,
-        student_id=DEFAULT_STUDENT_ID,
-    ):
-        progress = ConceptProgress.get(
-            area,
-            concept,
-            student_id=student_id,
-        )
-
+    def activate(cls, area, concept, student_id=DEFAULT_STUDENT_ID):
+        progress = ConceptProgress.get(area, concept, student_id=student_id)
         if not progress:
-            return LearnerState.get(
-                area,
-                student_id=student_id,
-            )
+            return LearnerState.get(area, student_id=student_id)
 
         known_concept = progress.get("updated_at") is not None
-
+        changes = {
+            "current_concept_id": progress["concept_id"],
+            "stage": cls.INITIAL_STAGE,
+            "student_id": student_id,
+        }
         if known_concept:
-            return LearnerState.update(
-                area,
-                current_concept=progress["concept"],
-                stage=cls.INITIAL_STAGE,
+            changes.update(
                 last_evidence=progress.get("last_evidence") or "",
                 difficulty_count=progress.get("difficulty_count", 0),
                 mastery=progress.get("mastery", 0.0),
-                student_id=student_id,
             )
+        else:
+            changes.update(last_evidence="", difficulty_count=0, mastery=0.0)
 
-        return LearnerState.update(
-            area,
-            current_concept=progress["concept"],
-            stage=cls.INITIAL_STAGE,
-            last_evidence="",
-            difficulty_count=0,
-            mastery=0.0,
-            student_id=student_id,
-        )
+        return LearnerState.update(area, **changes)

@@ -18,9 +18,10 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `LearnerStateTransition`: transições por sinais e evidências.
 - `EvidenceEvaluator`: avaliação semântica da resposta do aluno com rubrica versionada.
 - `EvidenceEvent`: ledger imutável das avaliações confirmadas, com contexto, confiança, assistência, versão da rubrica/política e mastery antes/depois.
-- `ConceptTracker`: identificação do conceito.
+- `ConceptCatalog`: catálogo mínimo versionado com `concept_id` estável, aliases e nomes canônicos.
+- `ConceptTracker`: seleção do conceito somente entre IDs permitidos pelo catálogo.
 - `ConceptActivation`: início e retomada de conceitos sem contaminação de estado.
-- `ConceptProgress`: progresso persistente por conceito.
+- `ConceptProgress`: progresso persistente por `concept_id` estável.
 - `ReviewScheduler`: cálculo de revisão espaçada.
 - `ReviewQueue`: seleção de revisões vencidas.
 - `ReviewLifecycle`: ativação, conclusão e reagendamento de revisões.
@@ -41,9 +42,12 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - idempotência por `turn_id` e replay da resposta confirmada;
 - serialização server-side de turnos por aluno + área entre threads/workers;
 - histórico pedagógico autoritativo no servidor;
+- identidade de competência baseada em `concept_id` com foreign keys reais;
+- aliases de conceito convergem para uma única competência e texto livre não entra como chave de negócio;
 - descarte de histórico forjado enviado pelo navegador;
 - limite explícito de mensagens e notas;
 - avaliações abaixo do limiar podem ser auditadas sem alterar o estado pedagógico;
+- conceitos legados desconhecidos são preservados como não selecionáveis e recebem nome seguro;
 - configuração de produção exige `SECRET_KEY` e `APEX_ACCESS_KEY`.
 
 ## Validação da release

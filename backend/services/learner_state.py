@@ -1,13 +1,14 @@
 from backend.database import get_db_connection
-from backend.identity import (
-    DEFAULT_STUDENT_ID,
-    normalize_student_id,
-)
+from backend.identity import DEFAULT_STUDENT_ID, normalize_student_id
+from backend.services.concept_catalog import ConceptCatalog
 
 
 class LearnerState:
     ALLOWED_AREAS = {"ads", "it"}
-    ALLOWED_STAGES = {"ler", "compreender", "explicar", "testar", "corrigir", "fixar", "concluido", "reencontrar"}
+    ALLOWED_STAGES = {
+        "ler", "compreender", "explicar", "testar", "corrigir",
+        "fixar", "concluido", "reencontrar",
+    }
 
     @classmethod
     def normalize_area(cls, area):
@@ -24,31 +25,30 @@ class LearnerState:
         return stage if stage in cls.ALLOWED_STAGES else "compreender"
 
     @classmethod
-    def get(
-        cls,
-        area="ads",
-        student_id=DEFAULT_STUDENT_ID,
-    ):
+    def get(cls, area="ads", student_id=DEFAULT_STUDENT_ID):
         area = cls.normalize_area(area)
         student_id = normalize_student_id(student_id)
         connection = get_db_connection()
         try:
             row = connection.execute(
                 """
-                SELECT *
-                FROM learner_state
-                WHERE student_id = ?
-                  AND area = ?
+                SELECT
+                    state.*,
+                    definition.canonical_name AS current_concept
+                FROM learner_state AS state
+                LEFT JOIN concept_definitions AS definition
+                  ON definition.area = state.area
+                 AND definition.concept_id = state.current_concept_id
+                WHERE state.student_id = ?
+                  AND state.area = ?
                 """,
-                (
-                    student_id,
-                    area,
-                ),
+                (student_id, area),
             ).fetchone()
             if row is None:
                 return {
                     "student_id": student_id,
                     "area": area,
+                    "current_concept_id": None,
                     "current_concept": None,
                     "stage": "compreender",
                     "last_evidence": None,
@@ -81,6 +81,7 @@ class LearnerState:
         cls,
         area="ads",
         current_concept=None,
+        current_concept_id=None,
         stage=None,
         last_evidence=None,
         difficulty_count=None,
@@ -89,32 +90,37 @@ class LearnerState:
     ):
         area = cls.normalize_area(area)
         student_id = normalize_student_id(student_id)
-        current = cls.get(
-            area,
-            student_id=student_id,
-        )
-        concept = current["current_concept"] if current_concept is None else str(current_concept).strip() or None
-        stage = current["stage"] if stage is None else cls.normalize_stage(stage)
+        current = cls.get(area, student_id=student_id)
+
+        concept_value_supplied = current_concept_id is not None or current_concept is not None
+        if not concept_value_supplied:
+            concept_id = current.get("current_concept_id")
+        else:
+            requested = current_concept_id if current_concept_id is not None else current_concept
+            if isinstance(requested, str) and not requested.strip():
+                concept_id = None
+            else:
+                resolved = ConceptCatalog.resolve(area, requested)
+                if resolved is None:
+                    raise ValueError("conceito não pertence ao catálogo")
+                concept_id = resolved["concept_id"]
+
+        stage_value = current["stage"] if stage is None else cls.normalize_stage(stage)
         evidence = current["last_evidence"] if last_evidence is None else str(last_evidence).strip() or None
         difficulty = current["difficulty_count"] if difficulty_count is None else cls.normalize_difficulty_count(difficulty_count)
         mastery_value = current["mastery"] if mastery is None else cls.normalize_mastery(mastery)
+
         connection = get_db_connection()
         try:
             connection.execute(
                 """
                 INSERT INTO learner_state (
-                    student_id,
-                    area,
-                    current_concept,
-                    stage,
-                    last_evidence,
-                    difficulty_count,
-                    mastery,
-                    updated_at
+                    student_id, area, current_concept_id, stage,
+                    last_evidence, difficulty_count, mastery, updated_at
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(student_id, area) DO UPDATE SET
-                    current_concept = excluded.current_concept,
+                    current_concept_id = excluded.current_concept_id,
                     stage = excluded.stage,
                     last_evidence = excluded.last_evidence,
                     difficulty_count = excluded.difficulty_count,
@@ -122,20 +128,12 @@ class LearnerState:
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (
-                    student_id,
-                    area,
-                    concept,
-                    stage,
-                    evidence,
-                    difficulty,
-                    mastery_value,
+                    student_id, area, concept_id, stage_value, evidence,
+                    difficulty, mastery_value,
                 ),
             )
             connection.commit()
         finally:
             connection.close()
 
-        return cls.get(
-            area,
-            student_id=student_id,
-        )
+        return cls.get(area, student_id=student_id)

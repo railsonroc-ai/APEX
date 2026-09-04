@@ -6,6 +6,7 @@ from backend.services.review_lifecycle import ReviewLifecycle
 
 def test_activate_due_enters_review_stage(monkeypatch):
     progress = {
+        "concept_id": "ads.variables",
         "concept": "variáveis",
         "mastery": 0.85,
         "difficulty_count": 1,
@@ -31,7 +32,7 @@ def test_activate_due_enters_review_stage(monkeypatch):
 
     ReviewLifecycle.activate_due("ads")
 
-    assert captured["current_concept"] == "variáveis"
+    assert captured["current_concept_id"] == "ads.variables"
     assert captured["stage"] == "reencontrar"
     assert captured["mastery"] == 0.85
     assert captured["difficulty_count"] == 1
@@ -40,6 +41,7 @@ def test_activate_due_enters_review_stage(monkeypatch):
 def test_successful_review_is_recorded_and_rescheduled(monkeypatch):
     now = datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc)
     progress = {
+        "concept_id": "ads.variables",
         "concept": "variáveis",
         "review_count": 1,
         "difficulty_count": 0,
@@ -85,6 +87,7 @@ def test_successful_review_is_recorded_and_rescheduled(monkeypatch):
     )
 
     learner_state = {
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "fixar",
         "mastery": 0.9,
@@ -110,6 +113,7 @@ def test_successful_review_is_recorded_and_rescheduled(monkeypatch):
 
 def test_review_cannot_complete_for_another_concept(monkeypatch):
     progress = {
+        "concept_id": "ads.variables",
         "concept": "variáveis",
         "review_count": 1,
         "next_review_at": "2026-09-03T10:00:00+00:00",
@@ -127,6 +131,7 @@ def test_review_cannot_complete_for_another_concept(monkeypatch):
     )
 
     learner_state = {
+        "current_concept_id": "ads.functions",
         "current_concept": "funções",
         "stage": "fixar",
         "mastery": 0.9,

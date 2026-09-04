@@ -6,6 +6,7 @@ def test_identified_concept_reaches_activation_during_switch(
     monkeypatch,
 ):
     state = {
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "testar",
         "mastery": 0.6,
@@ -21,7 +22,8 @@ def test_identified_concept_reaches_activation_during_switch(
 
         return {
             **state,
-            "current_concept": concept,
+            "current_concept_id": concept,
+            "current_concept": "funções",
             "stage": "compreender",
             "mastery": 0.0,
         }
@@ -43,10 +45,10 @@ def test_identified_concept_reaches_activation_during_switch(
 
     assert captured == {
         "area": "ads",
-        "concept": "funções",
+        "concept": "ads.functions",
     }
 
     assert (
-        result["current_concept"]
-        == "funções"
+        result["current_concept_id"]
+        == "ads.functions"
     )

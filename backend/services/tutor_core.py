@@ -2,6 +2,7 @@ from backend.config import (
     MAX_HISTORY_MESSAGES as CONFIG_MAX_HISTORY_MESSAGES,
 )
 from backend.prompts.tutor import TUTOR_SYSTEM_PROMPT
+from backend.services.concept_catalog import ConceptCatalog
 
 
 class TutorCore:
@@ -80,9 +81,17 @@ class TutorCore:
 
         pedagogical_context = ""
         if isinstance(learner_state, dict):
+            concept_value = (
+                learner_state.get("current_concept_id")
+                or learner_state.get("current_concept")
+            )
+            concept = ConceptCatalog.canonical_name(
+                normalized_area,
+                concept_value,
+            )
             pedagogical_context = (
                 "ESTADO PEDAGÓGICO ATUAL:\n"
-                f"Conceito: {learner_state.get('current_concept') or 'não definido'}\n"
+                f"Conceito: {concept or 'não definido'}\n"
                 f"Etapa: {learner_state.get('stage', 'compreender')}\n"
                 f"Domínio: {learner_state.get('mastery', 0.0)}\n"
                 f"Dificuldades: {learner_state.get('difficulty_count', 0)}\n"

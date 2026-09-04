@@ -19,7 +19,7 @@ class FakeCompletions:
                 choices=[
                     SimpleNamespace(
                         message=SimpleNamespace(
-                            content='{"concept":"funções"}'
+                            content='{"concept_id":"ads.functions"}'
                         )
                     )
                 ]
@@ -88,6 +88,7 @@ def test_stream_failure_rolls_back_new_concept_activation(
 
     state = LearnerState.get("ads")
 
+    assert state["current_concept_id"] is None
     assert state["current_concept"] is None
     assert state["mastery"] == 0.0
     assert state["updated_at"] is None

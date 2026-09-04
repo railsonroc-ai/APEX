@@ -28,6 +28,7 @@ class FakeGroq:
 def test_review_request_activates_due_review(monkeypatch):
     initial = {
         "area": "ads",
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "concluido",
         "last_evidence": None,
@@ -90,6 +91,7 @@ def test_review_request_activates_due_review(monkeypatch):
 def test_demonstrated_review_completes_lifecycle(monkeypatch):
     initial = {
         "area": "ads",
+        "current_concept_id": "ads.variables",
         "current_concept": "variáveis",
         "stage": "reencontrar",
         "last_evidence": None,
@@ -169,4 +171,4 @@ def test_demonstrated_review_completes_lifecycle(monkeypatch):
     response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert captured["complete"] == ("ads", "variáveis", "fixar")
+    assert captured["complete"] == ("ads", "ads.variables", "fixar")
