@@ -34,6 +34,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - rollback quando o streaming da resposta falha;
 - proteção contra envio concorrente no frontend;
 - idempotência por `turn_id` e replay da resposta confirmada;
+- serialização server-side de turnos por área entre threads/workers;
 - histórico pedagógico autoritativo no servidor;
 - descarte de histórico forjado enviado pelo navegador;
 - limite explícito de mensagens e notas;

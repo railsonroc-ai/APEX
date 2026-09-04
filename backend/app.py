@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from uuid import uuid4
 
 from flask import (
     Flask,
@@ -39,6 +40,7 @@ from backend.services.teaching_policy import TeachingPolicy
 from backend.services.learner_signals import LearnerSignals
 from backend.services.learner_state_transition import LearnerStateTransition
 from backend.services.learning_history import LearningHistory
+from backend.services.learning_turn_lease import LearningTurnLease
 from backend.services.concept_tracker import ConceptTracker
 from backend.services.evidence_evaluator import EvidenceEvaluator
 from backend.services.concept_progress import ConceptProgress
@@ -233,44 +235,52 @@ def chat_stream():
             }
         ), 400
 
+    def find_confirmed_response():
+        existing_turn = LearningHistory.find(
+            turn_id
+        )
+
+        if existing_turn is None:
+            return None
+
+        if (
+            existing_turn["area"] != area
+            or existing_turn["user_message"]
+            != user_message
+        ):
+            raise ValueError(
+                "turn_id reutilizado "
+                "com conteúdo diferente"
+            )
+
+        return existing_turn.get(
+            "assistant_message"
+        )
+
     @stream_with_context
     def generate():
 
+        lease_owner = turn_id or uuid4().hex
+        lease_acquired = False
+
         try:
 
-            existing_turn = LearningHistory.find(
-                turn_id
+            previous_response = (
+                find_confirmed_response()
             )
 
-            if existing_turn is not None:
-                if (
-                    existing_turn["area"] != area
-                    or existing_turn["user_message"]
-                    != user_message
-                ):
-                    raise ValueError(
-                        "turn_id reutilizado "
-                        "com conteúdo diferente"
-                    )
-
-                previous_response = (
-                    existing_turn.get(
-                        "assistant_message"
-                    )
+            if previous_response:
+                yield sse(
+                    {
+                        "token": previous_response
+                    }
                 )
-
-                if previous_response:
-                    yield sse(
-                        {
-                            "token": previous_response
-                        }
-                    )
-                    yield sse(
-                        {
-                            "done": True
-                        }
-                    )
-                    return
+                yield sse(
+                    {
+                        "done": True
+                    }
+                )
+                return
 
             if not GROQ_API_KEY:
 
@@ -282,6 +292,44 @@ def chat_stream():
                     }
                 )
 
+                return
+
+            lease_acquired = (
+                LearningTurnLease.acquire(
+                    area,
+                    lease_owner,
+                )
+            )
+
+            if not lease_acquired:
+                yield sse(
+                    {
+                        "error":
+                            "Já existe um turno "
+                            "em processamento nesta área. "
+                            "Aguarde a conclusão e "
+                            "tente novamente."
+                    }
+                )
+                return
+
+            # O primeiro turno pode ter sido confirmado entre
+            # a consulta inicial e a aquisição da reserva.
+            previous_response = (
+                find_confirmed_response()
+            )
+
+            if previous_response:
+                yield sse(
+                    {
+                        "token": previous_response
+                    }
+                )
+                yield sse(
+                    {
+                        "done": True
+                    }
+                )
                 return
 
             client = Groq(
@@ -469,6 +517,18 @@ def chat_stream():
                         "ao consultar o tutor."
                 }
             )
+
+        finally:
+            if lease_acquired:
+                try:
+                    LearningTurnLease.release(
+                        area,
+                        lease_owner,
+                    )
+                except Exception:
+                    app.logger.exception(
+                        "Falha ao liberar reserva do turno"
+                    )
 
     return Response(
         generate(),

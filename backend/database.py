@@ -155,6 +155,15 @@ def init_database():
             )
         """)
 
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS learning_turn_leases (
+                area TEXT PRIMARY KEY,
+                owner_token TEXT NOT NULL UNIQUE,
+                acquired_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            )
+        """)
+
         learning_turn_columns = {
             row["name"]
             for row in connection.execute(
@@ -177,6 +186,14 @@ def init_database():
                 area,
                 concept,
                 created_at
+            )
+        """)
+
+        connection.execute("""
+            CREATE INDEX IF NOT EXISTS
+                idx_learning_turn_leases_expires_at
+            ON learning_turn_leases (
+                expires_at
             )
         """)
 

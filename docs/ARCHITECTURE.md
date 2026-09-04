@@ -32,6 +32,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `ReviewScheduler`, `ReviewQueue` e `ReviewLifecycle`: revisão espaçada.
 - `ProcessLearningTurn`: preview e commit atômico do turno.
 - `LearningHistory`: histórico confirmado e autoritativo do servidor.
+- `LearningTurnLease`: reserva temporária cross-process por área.
 
 ## Frontend
 
@@ -50,9 +51,14 @@ Tabelas principais:
 - `learner_state`: estado atual por área;
 - `concept_progress`: progresso e revisão por conceito;
 - `learning_turns`: mensagem do aluno, resposta confirmada do tutor e conceito.
+- `learning_turn_leases`: reserva temporária do turno em processamento.
 
 O navegador não fornece o histórico usado pelo tutor. O backend lê apenas
 turnos confirmados, limita o contexto e o isola por área e conceito.
+
+Como a versão 1.0 ainda é individual, somente um turno por área pode estar
+em processamento. A reserva fica no SQLite, funciona entre threads/workers e
+expira para permitir recuperação caso um worker seja interrompido.
 
 ## Produção e testes
 

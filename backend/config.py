@@ -115,6 +115,18 @@ AI_DIALOG_TIMEOUT_SECONDS = (
 )
 
 
+# A reserva do turno cobre, sem manter uma transação SQLite
+# aberta, a avaliação/identificação e o streaming da resposta.
+# A folga também permite que uma reserva abandonada expire.
+TURN_LEASE_SECONDS = max(
+    180,
+    int(
+        AI_DIALOG_TIMEOUT_SECONDS
+        * 3
+    ),
+)
+
+
 # ============================================================
 # DADOS
 # ============================================================
