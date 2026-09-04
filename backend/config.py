@@ -30,6 +30,32 @@ APP_ENV = os.getenv(
 ).strip().lower()
 
 
+def resolve_log_level():
+    value = os.getenv(
+        "APEX_LOG_LEVEL",
+        "INFO",
+    ).strip().upper()
+
+    allowed = {
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    }
+
+    if value not in allowed:
+        raise RuntimeError(
+            "APEX_LOG_LEVEL deve ser um de: "
+            + ", ".join(sorted(allowed))
+        )
+
+    return value
+
+
+LOG_LEVEL = resolve_log_level()
+
+
 APEX_ACCESS_KEY = os.getenv(
     "APEX_ACCESS_KEY",
     "",

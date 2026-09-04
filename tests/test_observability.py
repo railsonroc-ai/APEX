@@ -130,3 +130,55 @@ def test_app_routes_use_structured_observability_boundary():
     assert '"learning_turn_failed"' in app_source
     assert '"session_transition"' in app_source
     assert '"X-Apex-Request-ID"' in app_source
+
+
+def test_create_app_routes_info_events_to_gunicorn_error_handler():
+    from backend.app import create_app
+
+    gunicorn_logger = logging.getLogger("gunicorn.error")
+    application_logger = logging.getLogger("backend.app")
+
+    saved_gunicorn_handlers = list(gunicorn_logger.handlers)
+    saved_gunicorn_level = gunicorn_logger.level
+    saved_gunicorn_propagate = gunicorn_logger.propagate
+
+    saved_app_handlers = list(application_logger.handlers)
+    saved_app_level = application_logger.level
+    saved_app_propagate = application_logger.propagate
+
+    capture = CaptureHandler()
+
+    try:
+        gunicorn_logger.handlers = [capture]
+        gunicorn_logger.setLevel(logging.INFO)
+        gunicorn_logger.propagate = False
+
+        application = create_app({
+            "TESTING": True,
+            "LOG_LEVEL": "INFO",
+        })
+
+        Observability.begin_request("request-runtime-info")
+        Observability.event(
+            application.logger,
+            "runtime_info_visible",
+            status_code=200,
+        )
+
+        assert application.logger.level == logging.INFO
+        assert application.logger.handlers == [capture]
+        assert any(
+            "runtime_info_visible" in message
+            for message in capture.messages
+        )
+
+    finally:
+        Observability.clear()
+
+        gunicorn_logger.handlers = saved_gunicorn_handlers
+        gunicorn_logger.setLevel(saved_gunicorn_level)
+        gunicorn_logger.propagate = saved_gunicorn_propagate
+
+        application_logger.handlers = saved_app_handlers
+        application_logger.setLevel(saved_app_level)
+        application_logger.propagate = saved_app_propagate

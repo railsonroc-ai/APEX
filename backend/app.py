@@ -1,4 +1,5 @@
 import json
+import logging
 import sqlite3
 import time
 from uuid import uuid4
@@ -17,6 +18,7 @@ from flask import (
 
 from backend.config import (
     APP_ENV,
+    LOG_LEVEL,
     TEMPLATE_DIR,
     STATIC_DIR,
     SECRET_KEY,
@@ -79,6 +81,29 @@ from backend.services.data_lifecycle import (
 bp = Blueprint("apex", __name__)
 
 
+def _configure_application_logging(application):
+    """Alinha logs do Flask ao error logger do Gunicorn sem perder INFO.
+
+    O APEX registra eventos operacionais ``apex_event`` em nível INFO.
+    Em produção, o logger padrão do Flask pode permanecer em WARNING,
+    descartando esses eventos antes de chegarem ao arquivo do Gunicorn.
+    """
+
+    level_name = str(
+        application.config.get("LOG_LEVEL", LOG_LEVEL)
+    ).strip().upper()
+
+    level = getattr(logging, level_name, logging.INFO)
+
+    gunicorn_logger = logging.getLogger("gunicorn.error")
+
+    if gunicorn_logger.handlers:
+        application.logger.handlers = list(gunicorn_logger.handlers)
+        application.logger.propagate = False
+
+    application.logger.setLevel(level)
+
+
 def create_app(config_overrides=None):
     """Cria uma instância Flask sem efeitos de persistência no import.
 
@@ -96,10 +121,13 @@ def create_app(config_overrides=None):
         SECRET_KEY=SECRET_KEY,
         MAX_CONTENT_LENGTH=MAX_CONTENT_LENGTH,
         APP_ENV=APP_ENV,
+        LOG_LEVEL=LOG_LEVEL,
     )
 
     if config_overrides:
         application.config.update(config_overrides)
+
+    _configure_application_logging(application)
 
     application.register_blueprint(bp)
     application.before_request(_begin_request_observability)

@@ -69,3 +69,14 @@ def test_privacy_retention_rejects_window_below_30_days():
 def test_privacy_retention_accepts_valid_window():
     result = _import_config_with({"PRIVACY_RETENTION_DAYS": "365"})
     assert result.returncode == 0
+
+
+def test_log_level_rejects_unknown_value():
+    result = _import_config_with({"APEX_LOG_LEVEL": "VERBOSE"})
+    assert result.returncode != 0
+    assert "APEX_LOG_LEVEL" in result.stderr
+
+
+def test_log_level_accepts_info():
+    result = _import_config_with({"APEX_LOG_LEVEL": "INFO"})
+    assert result.returncode == 0
