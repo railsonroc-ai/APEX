@@ -32,6 +32,7 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `services/mastery_assessment.py` — ledger imutável das decisões de domínio e seus bloqueadores.
 - `services/learning_history.py` — histórico confirmado no servidor.
 - `services/learning_turn_lease.py` — serialização de turnos por aluno + área entre workers.
+- `services/learning_session_lifecycle.py` — estado persistente de sessão, pausa/retomada e revisão antes de retomar, com ledger imutável de transições.
 - `templates/index.html` — interface principal.
 - `static/js/chat-engine.js` — estado da conversa e interface.
 - `static/js/apex-api.js` — HTTP, autenticação, notas e SSE.
@@ -41,7 +42,10 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 
 - `/` — interface principal.
 - `/health` — verifica Flask e SQLite.
-- `/chat/stream` — conversa com o tutor via SSE.
+- `/chat/stream` — conversa com o tutor via SSE; bloqueia novos turnos enquanto a sessão está pausada.
+- `/api/session` — consulta o lifecycle da sessão atual.
+- `/api/session/pause` — pausa a sessão com serialização pelo mesmo lease dos turnos.
+- `/api/session/resume` — retoma direto ou inicia revisão antes da retomada.
 - `/api/notes` — salva notas no SQLite.
 
 ## TutorCore

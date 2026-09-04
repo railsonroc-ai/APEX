@@ -48,6 +48,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `ProcessLearningTurn`: preview e commit atômico do turno.
 - `LearningHistory`: histórico confirmado e autoritativo, isolado por aluno.
 - `LearningTurnLease`: reserva temporária cross-process por aluno + área.
+- `LearningSessionLifecycle`: lifecycle persistente da sessão, incluindo pausa, retomada direta e revisão antes de retomar.
 
 ## Frontend
 
@@ -65,6 +66,8 @@ Tabelas principais:
 - `schema_migrations`: versões de schema já aplicadas;
 - `students`: identidade estável do aluno;
 - `learning_sessions`: episódios de estudo associados ao aluno e à área;
+- `learning_session_states`: estado operacional persistente (`studying`, `paused`, `reviewing`) e snapshot da etapa/conceito para retomada;
+- `learning_session_events`: ledger imutável de pausas, retomadas e conclusão da revisão de retomada;
 - `notes`: notas pertencentes ao aluno;
 - `learner_state`: estado atual por aluno + área;
 - `concept_definitions`: definições versionadas de competências por `concept_id`;
@@ -99,6 +102,8 @@ A migration 9 cria `assistance_events`, também imutável. A classificação nã
 A migration 10 separa formalmente a ação do aluno do julgamento semântico. `learning_attempts` registra a tentativa confirmada, o estágio, o tipo pedagógico, a assistência observada, o artefato opcional e o turno-fonte do tutor. `rubric_assessments` registra os três critérios da rubrica — resposta à tarefa, correção conceitual e compreensão/aplicação —, sua completude, confiança e origem do outcome. Ambos os ledgers são protegidos contra `UPDATE` e `DELETE`. Na rubrica `semantic_evidence` v2, a LLM deixa de escolher diretamente o outcome global: ela classifica os critérios e `RubricPolicy` deriva `demonstrated`, `partial`, `misconception` ou `insufficient` no servidor. Respostas históricas/internas sem critérios continuam auditáveis como `legacy_outcome`, sem fingir que possuem uma rubrica completa.
 
 A migration 11 cria `learning_tasks` e adiciona `task_id` opcional a `learning_attempts`. O `TaskPolicy` transforma a ação pedagógica controlada pelo servidor em um tipo de tarefa e um contrato de geração; `TutorCore` recebe esse contrato para terminar o turno com uma única microtarefa quando a ação é avaliável. Depois que a resposta do tutor é confirmada, o backend persiste a `LearningTask` usando o texto real do turno, sem pedir à LLM que invente identidade, rubrica ou nível de assistência. No turno seguinte, o app só monta uma nova avaliação semântica se localizar essa tarefa pelo mesmo aluno, sessão, conceito e `source_turn_id`; o `LearningAttempt` resultante recebe o `task_id`. Tentativas anteriores à migration 11 permanecem com `task_id = NULL`, sem retropreenchimento fictício. `AttemptPolicy` v2 e `EvidencePolicy` v5 marcam essa mudança de contrato.
+
+A migration 12 cria `learning_session_states` e `learning_session_events`. O lifecycle é controlado no servidor: `pause` captura o conceito e a etapa atuais; `resume` em modo `direct` volta a `studying` sem alterar o estado pedagógico, enquanto `review` coloca a sessão em `reviewing` e move temporariamente o `LearnerState` para `reencontrar`. Uma evidência aplicada com outcome `demonstrated` conclui essa revisão e restaura a etapa capturada. Enquanto `paused`, novos turnos são recusados; pause/resume usam o mesmo `LearningTurnLease` de aluno+área e o chat revalida o estado depois de adquirir a lease para fechar a janela de corrida. Eventos anteriores à migration 12 não são inventados: sessões existentes recebem apenas estado inicial `studying`.
 
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação

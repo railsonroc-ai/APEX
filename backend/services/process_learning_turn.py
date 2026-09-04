@@ -20,6 +20,7 @@ from backend.services.learner_state_transition import LearnerStateTransition
 from backend.services.learning_history import LearningHistory
 from backend.services.learning_attempt import LearningAttempt
 from backend.services.learning_task import LearningTask
+from backend.services.learning_session_lifecycle import LearningSessionLifecycle
 from backend.services.mastery_assessment import MasteryAssessment
 from backend.services.mastery_policy import MasteryPolicy
 from backend.services.review_lifecycle import ReviewLifecycle
@@ -120,6 +121,8 @@ class ProcessLearningTurn:
                 learner_state,
                 semantic_evidence,
                 student_id=student_id,
+                session_id=session_id,
+                evidence_context=evidence_context,
                 mastery_decision=mastery_decision,
             )
 
@@ -306,6 +309,8 @@ class ProcessLearningTurn:
                 learner_state,
                 semantic_evidence,
                 student_id=normalized_student_id,
+                session_id=normalized_session_id,
+                evidence_context=evidence_context,
                 mastery_decision=mastery_decision,
             )
 
@@ -394,7 +399,7 @@ class ProcessLearningTurn:
                     active_concept_id
                     and TaskPolicy.is_assessable_action(effective_action)
                 ):
-                    LearningTask.record(
+                    learning_task = LearningTask.record(
                         source_turn_id=normalized_turn_id,
                         area=normalized_area,
                         concept_id=active_concept_id,
@@ -404,6 +409,13 @@ class ProcessLearningTurn:
                         student_id=normalized_student_id,
                         session_id=normalized_session_id,
                     )
+                    if learning_task is not None:
+                        LearningSessionLifecycle.bind_review_task(
+                            learning_task["task_id"],
+                            normalized_area,
+                            student_id=normalized_student_id,
+                            session_id=normalized_session_id,
+                        )
 
             return result
 
@@ -564,6 +576,8 @@ class ProcessLearningTurn:
         learner_state,
         semantic_evidence,
         student_id=DEFAULT_STUDENT_ID,
+        session_id=None,
+        evidence_context=None,
         mastery_decision=None,
     ):
         with transaction():
@@ -573,6 +587,8 @@ class ProcessLearningTurn:
                 learner_state,
                 semantic_evidence,
                 student_id=student_id,
+                session_id=session_id,
+                evidence_context=evidence_context,
                 mastery_decision=mastery_decision,
             )
 
@@ -584,6 +600,8 @@ class ProcessLearningTurn:
         learner_state,
         semantic_evidence,
         student_id=DEFAULT_STUDENT_ID,
+        session_id=None,
+        evidence_context=None,
         mastery_decision=None,
     ):
         if mastery_decision is None:
@@ -623,7 +641,28 @@ class ProcessLearningTurn:
                     student_id=student_id,
                 )
 
-                if (
+                resume_review_result = None
+                if session_id:
+                    resume_review_result = (
+                        LearningSessionLifecycle.complete_resume_review(
+                            area,
+                            learner_state,
+                            semantic_evidence,
+                            evidence_applied=bool(evidence_changes),
+                            task_id=(
+                                evidence_context.get("task_id")
+                                if isinstance(evidence_context, dict)
+                                else None
+                            ),
+                            student_id=student_id,
+                            session_id=session_id,
+                        )
+                    )
+
+                if resume_review_result:
+                    learner_state = resume_review_result["learner_state"]
+
+                elif (
                     previous_stage == "reencontrar"
                     and semantic_evidence
                     and semantic_evidence.get("outcome")

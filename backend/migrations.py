@@ -1701,6 +1701,184 @@ def create_learning_tasks(connection):
     """)
 
 
+def create_learning_session_lifecycle(connection):
+    connection.execute("""
+        CREATE TABLE learning_session_states (
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'studying',
+            resume_concept_id TEXT,
+            resume_stage TEXT,
+            review_task_id TEXT,
+            paused_at TEXT,
+            last_resumed_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(student_id, session_id, area),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(student_id, id, area),
+            FOREIGN KEY(area, resume_concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            FOREIGN KEY(review_task_id)
+                REFERENCES learning_tasks(task_id),
+            CHECK(status IN ('studying', 'paused', 'reviewing')),
+            CHECK(resume_stage IS NULL OR resume_stage IN (
+                'ler',
+                'compreender',
+                'explicar',
+                'testar',
+                'corrigir',
+                'fixar',
+                'concluido',
+                'reencontrar'
+            ))
+        )
+    """)
+
+    connection.execute("""
+        INSERT INTO learning_session_states (
+            student_id,
+            session_id,
+            area,
+            status
+        )
+        SELECT student_id, id, area, 'studying'
+        FROM learning_sessions
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_session_states_status
+        ON learning_session_states (
+            student_id,
+            status,
+            area
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_session_states_review_task
+        ON learning_session_states (
+            student_id,
+            review_task_id
+        )
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER learning_session_states_review_task_scope_insert
+        BEFORE INSERT ON learning_session_states
+        WHEN NEW.review_task_id IS NOT NULL
+        BEGIN
+            SELECT CASE
+                WHEN NOT EXISTS (
+                    SELECT 1
+                    FROM learning_tasks t
+                    WHERE t.task_id = NEW.review_task_id
+                      AND t.student_id = NEW.student_id
+                      AND t.session_id = NEW.session_id
+                      AND t.area = NEW.area
+                      AND t.concept_id = NEW.resume_concept_id
+                )
+                THEN RAISE(ABORT, 'session review task scope mismatch')
+            END;
+        END
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER learning_session_states_review_task_scope_update
+        BEFORE UPDATE OF review_task_id ON learning_session_states
+        WHEN NEW.review_task_id IS NOT NULL
+        BEGIN
+            SELECT CASE
+                WHEN NOT EXISTS (
+                    SELECT 1
+                    FROM learning_tasks t
+                    WHERE t.task_id = NEW.review_task_id
+                      AND t.student_id = NEW.student_id
+                      AND t.session_id = NEW.session_id
+                      AND t.area = NEW.area
+                      AND t.concept_id = NEW.resume_concept_id
+                )
+                THEN RAISE(ABORT, 'session review task scope mismatch')
+            END;
+        END
+    """)
+
+    connection.execute("""
+        CREATE TABLE learning_session_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id TEXT NOT NULL UNIQUE,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            area TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            status_before TEXT NOT NULL,
+            status_after TEXT NOT NULL,
+            concept_id TEXT,
+            stage_snapshot TEXT,
+            policy_id TEXT NOT NULL,
+            policy_version INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(student_id, id, area),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            CHECK(event_type IN (
+                'paused',
+                'resumed_direct',
+                'resume_review_started',
+                'resume_review_completed'
+            )),
+            CHECK(status_before IN ('studying', 'paused', 'reviewing')),
+            CHECK(status_after IN ('studying', 'paused', 'reviewing')),
+            CHECK(stage_snapshot IS NULL OR stage_snapshot IN (
+                'ler',
+                'compreender',
+                'explicar',
+                'testar',
+                'corrigir',
+                'fixar',
+                'concluido',
+                'reencontrar'
+            )),
+            CHECK(policy_version > 0)
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_session_events_session_created
+        ON learning_session_events (
+            student_id,
+            session_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_learning_session_events_policy
+        ON learning_session_events (
+            policy_id,
+            policy_version,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER learning_session_events_no_update
+        BEFORE UPDATE ON learning_session_events
+        BEGIN
+            SELECT RAISE(ABORT, 'learning_session_events are immutable');
+        END
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER learning_session_events_no_delete
+        BEFORE DELETE ON learning_session_events
+        BEGIN
+            SELECT RAISE(ABORT, 'learning_session_events are immutable');
+        END
+    """)
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -1756,6 +1934,11 @@ MIGRATIONS = (
         11,
         "create_learning_tasks",
         create_learning_tasks,
+    ),
+    Migration(
+        12,
+        "create_learning_session_lifecycle",
+        create_learning_session_lifecycle,
     ),
 )
 

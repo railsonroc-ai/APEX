@@ -24,6 +24,7 @@ EXPECTED_MIGRATIONS = [
     (9, "create_assistance_events"),
     (10, "create_learning_attempts_and_rubric_assessments"),
     (11, "create_learning_tasks"),
+    (12, "create_learning_session_lifecycle"),
 ]
 
 
@@ -115,6 +116,8 @@ def test_new_database_applies_ordered_migrations(
         "learning_attempts",
         "rubric_assessments",
         "learning_tasks",
+        "learning_session_states",
+        "learning_session_events",
     }.issubset(tables)
 
     assert "concept_id" in turn_columns
@@ -649,7 +652,7 @@ def test_v5_database_receives_empty_evidence_ledger(
 
         assert total == 0
         assert turns == 1
-        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
         assert connection.execute(
             "PRAGMA foreign_key_check"
         ).fetchall() == []
@@ -1031,7 +1034,7 @@ def test_v7_database_receives_empty_mastery_assessment_ledger(monkeypatch, tmp_p
         ).fetchone()[0]
         assert total == 0
         assert preserved_evidence == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1148,7 +1151,7 @@ def test_v8_database_receives_empty_assistance_ledger(monkeypatch, tmp_path):
         ).fetchone()[0]
         assert total == 0
         assert preserved_turn == 1
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1270,7 +1273,7 @@ def test_v9_database_receives_empty_attempt_and_rubric_ledgers(monkeypatch, tmp_
         assert attempts == 0
         assert rubrics == 0
         assert preserved_turn == 1
-        assert versions == list(range(1, 12))
+        assert versions == list(range(1, 13))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1401,7 +1404,7 @@ def test_v10_database_receives_empty_task_ledger_without_inventing_links(monkeyp
 
         assert tasks == 0
         assert attempt_task is None
-        assert versions == list(range(1, 12))
+        assert versions == list(range(1, 13))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1459,5 +1462,243 @@ def test_learning_task_migration_rolls_back_schema_and_version(monkeypatch, tmp_
         assert task_table is None
         assert "task_id" not in attempt_columns
         assert versions == list(range(1, 11))
+    finally:
+        connection.close()
+
+
+def test_v11_database_receives_session_runtime_without_inventing_events(
+    monkeypatch,
+    tmp_path,
+):
+    path = configure_database(
+        monkeypatch,
+        tmp_path,
+        name="v11-to-v12.db",
+    )
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:11],
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        session_count = connection.execute(
+            "SELECT COUNT(*) FROM learning_sessions"
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO learning_turns (
+                student_id, session_id, turn_id, area,
+                user_message, assistant_message, concept_id
+            ) VALUES (
+                'student_default', 'session_default_ads', 'turn-v11-before-v12',
+                'ads', 'Resposta antiga', 'Tarefa antiga', 'ads.variables'
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations,
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        states = connection.execute(
+            "SELECT COUNT(*) FROM learning_session_states"
+        ).fetchone()[0]
+        events = connection.execute(
+            "SELECT COUNT(*) FROM learning_session_events"
+        ).fetchone()[0]
+        status = connection.execute(
+            """
+            SELECT status
+            FROM learning_session_states
+            WHERE student_id='student_default'
+              AND session_id='session_default_ads'
+              AND area='ads'
+            """
+        ).fetchone()[0]
+        versions = [
+            row["version"]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+
+        assert states == session_count
+        assert events == 0
+        assert status == "studying"
+        assert versions == list(range(1, 13))
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_learning_session_lifecycle_migration_rolls_back_schema_and_version(
+    monkeypatch,
+    tmp_path,
+):
+    path = configure_database(
+        monkeypatch,
+        tmp_path,
+        name="session-v12-rollback.db",
+    )
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:11],
+    )
+    database_module.init_database()
+
+    def failing(connection):
+        migrations_module.create_learning_session_lifecycle(connection)
+        raise RuntimeError("falha depois do lifecycle de sessão")
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:11]
+        + (
+            Migration(
+                12,
+                "create_learning_session_lifecycle",
+                failing,
+            ),
+        ),
+    )
+
+    with pytest.raises(MigrationError, match="Falha ao aplicar migração 12"):
+        database_module.init_database()
+
+    connection = connect(path)
+    try:
+        states = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='learning_session_states'
+            """
+        ).fetchone()
+        events = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='learning_session_events'
+            """
+        ).fetchone()
+        versions = [
+            row["version"]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+
+        assert states is None
+        assert events is None
+        assert versions == list(range(1, 12))
+    finally:
+        connection.close()
+
+
+def test_session_lifecycle_schema_has_runtime_and_immutable_event_guards(
+    monkeypatch,
+    tmp_path,
+):
+    path = configure_database(
+        monkeypatch,
+        tmp_path,
+        name="session-v12-schema.db",
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        state_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(learning_session_states)"
+            ).fetchall()
+        }
+        event_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(learning_session_events)"
+            ).fetchall()
+        }
+        triggers = {
+            row["name"]
+            for row in connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type='trigger'
+                  AND name LIKE 'learning_session_%'
+                """
+            ).fetchall()
+        }
+        indexes = {
+            row["name"]
+            for row in connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type='index'
+                  AND name LIKE 'idx_learning_session_%'
+                """
+            ).fetchall()
+        }
+
+        assert {
+            "student_id",
+            "session_id",
+            "area",
+            "status",
+            "resume_concept_id",
+            "resume_stage",
+            "review_task_id",
+            "paused_at",
+            "last_resumed_at",
+            "updated_at",
+        }.issubset(state_columns)
+
+        assert {
+            "event_id",
+            "student_id",
+            "session_id",
+            "area",
+            "event_type",
+            "status_before",
+            "status_after",
+            "concept_id",
+            "stage_snapshot",
+            "policy_id",
+            "policy_version",
+            "created_at",
+        }.issubset(event_columns)
+
+        assert {
+            "learning_session_events_no_update",
+            "learning_session_events_no_delete",
+            "learning_session_states_review_task_scope_insert",
+            "learning_session_states_review_task_scope_update",
+        }.issubset(triggers)
+
+        assert {
+            "idx_learning_session_states_status",
+            "idx_learning_session_states_review_task",
+            "idx_learning_session_events_session_created",
+            "idx_learning_session_events_policy",
+        }.issubset(indexes)
     finally:
         connection.close()
