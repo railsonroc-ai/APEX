@@ -53,3 +53,7 @@ Materiais históricos: `docs/legacy/`
 **Fundação técnica:** concluída.
 
 **Próxima etapa:** enriquecer tarefas com requisitos/artefatos e rubricas profissionais específicas, além de melhorar a continuidade visual da sessão, ainda sem ChallengeEngine completo ou execução de código.
+
+## Runtime de IA
+
+As chamadas ao provider passam por `LLMGateway`, que centraliza timeout, retries, limites de geração e telemetria de latência/tokens sem registrar conteúdo do aluno.

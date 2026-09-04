@@ -40,6 +40,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `StudentContext`: identidade pedagógica resolvida no servidor para o aluno padrão atual.
 - `LearningSessionLifecycle`: máquina de estados persistente `studying → paused → studying/reviewing`, com revisão antes de retomar e ledger imutável de transições.
 - `Session UI`: controles da página principal que refletem o estado server-side e expõem Pausar / Retomar direto / Revisar antes.
+- `LLMGateway`: fronteira única com o provider de IA, com timeout/retries deliberados, limites de geração por finalidade e telemetria sem conteúdo.
 
 ## Confiabilidade
 
@@ -72,6 +73,9 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - conclusão de domínio exige pelo menos uma demonstração com assistência `independent` ou `light`, e a evidência final não pode ser `untracked`, `guided` ou `direct`;
 - conceitos legados desconhecidos são preservados como não selecionáveis e recebem nome seguro;
 - configuração de produção exige `SECRET_KEY` e `APEX_ACCESS_KEY`.
+- o SDK Groq não é mais chamado diretamente pelas rotas; todas as chamadas passam pelo `LLMGateway`.
+- cada finalidade LLM possui limite de geração configurável e o provider recebe política explícita de retries.
+- logs LLM registram latência e tokens quando disponíveis, sem persistir prompt/resposta.
 
 ## Validação da release
 

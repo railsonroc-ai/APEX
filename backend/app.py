@@ -11,8 +11,6 @@ from flask import (
     stream_with_context,
 )
 
-from groq import Groq
-
 from backend.config import (
     APP_ENV,
     TEMPLATE_DIR,
@@ -21,6 +19,8 @@ from backend.config import (
     GROQ_API_KEY,
     GROQ_MODEL,
     AI_DIALOG_TIMEOUT_SECONDS,
+    LLM_MAX_RETRIES,
+    LLM_MAX_TOKENS_BY_PURPOSE,
     MAX_CONTENT_LENGTH,
     MAX_USER_MESSAGE_CHARS,
     MAX_NOTE_CHARS,
@@ -54,6 +54,10 @@ from backend.services.concept_activation import ConceptActivation
 from backend.services.review_lifecycle import ReviewLifecycle
 from backend.services.process_learning_turn import ProcessLearningTurn
 from backend.services.student_context import StudentContext
+from backend.services.llm_gateway import (
+    LLMGateway,
+    LLMProviderError,
+)
 
 
 # ============================================================
@@ -491,9 +495,13 @@ def chat_stream():
                 )
                 return
 
-            client = Groq(
+            llm = LLMGateway(
                 api_key=GROQ_API_KEY,
-                timeout=AI_DIALOG_TIMEOUT_SECONDS,
+                model=GROQ_MODEL,
+                timeout_seconds=AI_DIALOG_TIMEOUT_SECONDS,
+                max_retries=LLM_MAX_RETRIES,
+                max_tokens_by_purpose=LLM_MAX_TOKENS_BY_PURPOSE,
+                logger=app.logger,
             )
 
             learner_state = LearnerState.get(
@@ -512,29 +520,24 @@ def chat_stream():
                     tracking_request
                 )
 
-            identification_response = None
+            identification_content = None
             if identification_messages:
                 try:
-                    identification_response = client.chat.completions.create(
-                        messages=identification_messages,
-                        model=GROQ_MODEL,
-                        stream=False,
+                    identification_content = llm.complete_text(
+                        identification_messages,
+                        purpose=LLMGateway.PURPOSE_CONCEPT_IDENTIFICATION,
                     )
-                except Exception:
+                except LLMProviderError:
                     app.logger.exception(
                         "Falha na identificacao semantica do conceito"
                     )
 
             identified_concept = None
-            if identification_response:
-                try:
-                    content = identification_response.choices[0].message.content
-                    identified_concept = ConceptTracker.parse_identification_response(
-                        content,
-                        area=area,
-                    )
-                except (AttributeError, IndexError, TypeError):
-                    identified_concept = None
+            if identification_content:
+                identified_concept = ConceptTracker.parse_identification_response(
+                    identification_content,
+                    area=area,
+                )
 
             learner_state = ProcessLearningTurn.preview_activation(
                 area,
@@ -589,28 +592,23 @@ def chat_stream():
                     evidence_evaluation
                 )
 
-            evidence_response = None
+            evidence_content = None
             if evidence_messages:
                 try:
-                    evidence_response = client.chat.completions.create(
-                        messages=evidence_messages,
-                        model=GROQ_MODEL,
-                        stream=False,
+                    evidence_content = llm.complete_text(
+                        evidence_messages,
+                        purpose=LLMGateway.PURPOSE_EVIDENCE_EVALUATION,
                     )
-                except Exception:
+                except LLMProviderError:
                     app.logger.exception(
                         "Falha na avaliacao semantica da evidencia"
                     )
 
             semantic_evidence = None
-            if evidence_response:
-                try:
-                    content = evidence_response.choices[0].message.content
-                    semantic_evidence = EvidenceEvaluator.parse_evaluation_response(
-                        content
-                    )
-                except (AttributeError, IndexError, TypeError):
-                    semantic_evidence = None
+            if evidence_content:
+                semantic_evidence = EvidenceEvaluator.parse_evaluation_response(
+                    evidence_content
+                )
 
             turn_result = ProcessLearningTurn.preview_turn(
                 area,
@@ -634,46 +632,18 @@ def chat_stream():
                 )
             )
 
-            response = (
-                client
-                .chat
-                .completions
-                .create(
-                    messages=messages,
-                    model=GROQ_MODEL,
-                    stream=True,
-                )
-            )
-
             assistant_parts = []
 
-            for chunk in response:
-
-                if (
-                    chunk.choices
-                    and
-                    chunk
-                    .choices[0]
-                    .delta
-                    .content
-                ):
-
-                    token = (
-                        chunk
-                        .choices[0]
-                        .delta
-                        .content
-                    )
-
-                    assistant_parts.append(
-                        token
-                    )
-
-                    yield sse(
-                        {
-                            "token": token
-                        }
-                    )
+            for token in llm.stream_text(
+                messages,
+                purpose=LLMGateway.PURPOSE_TUTOR_RESPONSE,
+            ):
+                assistant_parts.append(token)
+                yield sse(
+                    {
+                        "token": token
+                    }
+                )
 
             assistant_message = "".join(
                 assistant_parts
@@ -706,7 +676,7 @@ def chat_stream():
         except Exception:
 
             app.logger.exception(
-                "Falha no streaming Groq"
+                "Falha no streaming do tutor"
             )
 
             yield sse(

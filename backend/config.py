@@ -115,6 +115,59 @@ AI_DIALOG_TIMEOUT_SECONDS = (
 )
 
 
+def _resolve_positive_int_env(name, default, *, maximum=8192):
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} deve ser um inteiro válido.") from exc
+    if value <= 0 or value > maximum:
+        raise RuntimeError(
+            f"{name} deve estar entre 1 e {maximum}."
+        )
+    return value
+
+
+def _resolve_non_negative_int_env(name, default, *, maximum=5):
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} deve ser um inteiro válido.") from exc
+    if value < 0 or value > maximum:
+        raise RuntimeError(
+            f"{name} deve estar entre 0 e {maximum}."
+        )
+    return value
+
+
+LLM_MAX_RETRIES = _resolve_non_negative_int_env(
+    "LLM_MAX_RETRIES",
+    1,
+)
+
+LLM_IDENTIFICATION_MAX_TOKENS = _resolve_positive_int_env(
+    "LLM_IDENTIFICATION_MAX_TOKENS",
+    160,
+)
+
+LLM_EVIDENCE_MAX_TOKENS = _resolve_positive_int_env(
+    "LLM_EVIDENCE_MAX_TOKENS",
+    480,
+)
+
+LLM_TUTOR_MAX_TOKENS = _resolve_positive_int_env(
+    "LLM_TUTOR_MAX_TOKENS",
+    1200,
+)
+
+LLM_MAX_TOKENS_BY_PURPOSE = {
+    "concept_identification": LLM_IDENTIFICATION_MAX_TOKENS,
+    "evidence_evaluation": LLM_EVIDENCE_MAX_TOKENS,
+    "tutor_response": LLM_TUTOR_MAX_TOKENS,
+}
+
+
 # A reserva do turno cobre, sem manter uma transação SQLite
 # aberta, a avaliação/identificação e o streaming da resposta.
 # A folga também permite que uma reserva abandonada expire.

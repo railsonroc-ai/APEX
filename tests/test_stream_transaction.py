@@ -84,8 +84,8 @@ def test_stream_failure_rolls_back_learning_turn(
         "teste",
     )
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         FakeGroq,
     )
 

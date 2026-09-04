@@ -173,8 +173,8 @@ def test_backend_forwards_turn_id_to_commit(
             self.chat = FakeChat()
 
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         FakeGroq,
     )
 
@@ -305,8 +305,8 @@ def test_empty_stream_does_not_commit_or_confirm_turn(
             )
 
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         EmptyGroq,
     )
 

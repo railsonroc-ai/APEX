@@ -97,7 +97,7 @@ def test_chat_uses_pedagogical_state(monkeypatch):
         def __init__(self, **kwargs):
             self.chat = FakeChat()
 
-    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", FakeGroq)
 
     client = app_module.app.test_client()
     response = client.post(
@@ -140,7 +140,7 @@ def test_difficulty_signal_updates_state_before_policy(monkeypatch):
         def __init__(self, **kwargs):
             self.chat = FakeChat()
 
-    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", FakeGroq)
 
     client = app_module.app.test_client()
     response = client.post("/chat/stream", json={"message": "Não entendi", "history": [], "area": "ads"})
@@ -190,7 +190,7 @@ def test_identified_concept_updates_state_before_policy(monkeypatch):
         def __init__(self, **kwargs):
             self.chat = FakeChat()
 
-    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", FakeGroq)
 
     client = app_module.app.test_client()
     response = client.post(
@@ -249,7 +249,7 @@ def test_semantic_evidence_updates_state_before_policy(monkeypatch):
         def __init__(self, **kwargs):
             self.chat = FakeChat()
 
-    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", FakeGroq)
 
     history = [{
         "role": "assistant",
@@ -370,7 +370,7 @@ def test_completed_concept_schedules_review(monkeypatch):
         def __init__(self, **kwargs):
             self.chat = SimpleNamespace(completions=FakeCompletions())
 
-    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", FakeGroq)
 
     server_history = [
         {

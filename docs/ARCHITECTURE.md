@@ -11,7 +11,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 
 ## Backend
 
-- `app.py`: rotas HTTP, coordenação das chamadas LLM e SSE.
+- `app.py`: rotas HTTP, coordenação do caso de uso e SSE; não acessa o SDK do provider diretamente.
 - `config.py`: ambiente, caminhos, limites e timeout.
 - `security.py`: autenticação por `X-Apex-Key`.
 - `database.py`: SQLite e configuração das conexões.
@@ -23,6 +23,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 
 ## Tutor
 
+- `services/llm_gateway.py`: única fronteira com o SDK do provider; aplica timeout, retries deliberados, limites de geração por finalidade e logs de metadados sem conteúdo.
 - `services/tutor_core.py`: prepara e protege o contexto enviado ao modelo.
 - `prompts/tutor.py`: contém as regras pedagógicas atuais.
 
@@ -110,6 +111,10 @@ A interface não cria uma segunda máquina de estados. `apex-api.js` apenas cons
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação
 e pode ser executada novamente com segurança durante a inicialização.
+
+## Runtime LLM
+
+O `LLMGateway` é a única camada autorizada a importar o SDK Groq. O adapter expõe apenas texto completo ou tokens de streaming ao restante do APEX. As chamadas são classificadas como `concept_identification`, `evidence_evaluation` ou `tutor_response`, cada uma com limite próprio de geração. O cliente do provider recebe timeout e número de retries configurados explicitamente; os logs registram `call_id`, finalidade, modelo, latência, uso de tokens quando disponível e classe de erro, sem registrar prompts ou respostas.
 
 ## Produção e testes
 

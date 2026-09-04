@@ -142,8 +142,8 @@ def test_concurrent_server_turn_is_rejected_before_llm(
         }
 
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         BlockingGroq,
     )
     monkeypatch.setattr(
@@ -243,8 +243,8 @@ def test_turn_is_rechecked_after_lease_acquisition(
             )
 
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         ForbiddenGroq,
     )
 
@@ -299,8 +299,8 @@ def test_lease_is_released_when_stream_fails(
             )
 
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         BrokenGroq,
     )
 

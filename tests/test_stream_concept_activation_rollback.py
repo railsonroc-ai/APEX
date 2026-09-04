@@ -65,8 +65,8 @@ def test_stream_failure_rolls_back_new_concept_activation(
         "teste",
     )
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         FakeGroq,
     )
 

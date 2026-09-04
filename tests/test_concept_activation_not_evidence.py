@@ -165,8 +165,8 @@ def test_concept_activation_message_is_not_learning_evidence(
             self.chat = FakeChat()
 
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         FakeGroq,
     )
 

@@ -42,7 +42,7 @@ def test_review_request_activates_due_review(monkeypatch):
 
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
-    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", FakeGroq)
     monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: initial)
     monkeypatch.setattr(
         app_module.ConceptTracker,
@@ -104,7 +104,7 @@ def test_demonstrated_review_completes_lifecycle(monkeypatch):
 
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
-    monkeypatch.setattr(app_module, "Groq", FakeGroq)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", FakeGroq)
     monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: initial)
 
     def update_state(area, **changes):

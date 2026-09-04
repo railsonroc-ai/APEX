@@ -91,8 +91,8 @@ def test_chat_uses_only_server_history_and_persists_response(
         "teste",
     )
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         StreamingGroq,
     )
 
@@ -214,8 +214,8 @@ def test_retry_replays_committed_response_without_llm(
             )
 
     monkeypatch.setattr(
-        app_module,
-        "Groq",
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
         ForbiddenGroq,
     )
 
