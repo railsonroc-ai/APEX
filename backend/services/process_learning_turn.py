@@ -17,6 +17,8 @@ from backend.services.learner_signals import LearnerSignals
 from backend.services.learner_state import LearnerState
 from backend.services.learner_state_transition import LearnerStateTransition
 from backend.services.learning_history import LearningHistory
+from backend.services.mastery_assessment import MasteryAssessment
+from backend.services.mastery_policy import MasteryPolicy
 from backend.services.review_lifecycle import ReviewLifecycle
 from backend.services.review_scheduler import ReviewScheduler
 from backend.services.teaching_policy import TeachingPolicy
@@ -90,12 +92,21 @@ class ProcessLearningTurn:
                 student_id=student_id,
             )
 
+            mastery_decision = cls._build_mastery_decision(
+                area=area,
+                learner_state=learner_state,
+                semantic_evidence=semantic_evidence,
+                student_id=student_id,
+                assistance_level=EvidencePolicy.ASSISTANCE_UNTRACKED,
+            )
+
             return cls._finalize(
                 area,
                 user_message,
                 learner_state,
                 semantic_evidence,
                 student_id=student_id,
+                mastery_decision=mastery_decision,
             )
 
     @classmethod
@@ -230,6 +241,16 @@ class ProcessLearningTurn:
                     "para confirmar o turno"
                 )
 
+            if isinstance(semantic_evidence, dict):
+                if not normalized_turn_id:
+                    raise ValueError(
+                        "turn_id obrigatória para confirmar evidência"
+                    )
+                if not isinstance(evidence_context, dict):
+                    raise ValueError(
+                        "evidence_context obrigatória para confirmar evidência"
+                    )
+
             learner_state = LearnerState.get(
                 normalized_area,
                 student_id=normalized_student_id,
@@ -243,11 +264,19 @@ class ProcessLearningTurn:
             )
 
             state_before_evidence = dict(learner_state)
-            evidence_applied = bool(
-                LearnerStateTransition.from_evidence(
-                    state_before_evidence,
-                    semantic_evidence,
-                )
+            proposed_changes = LearnerStateTransition.propose_from_evidence(
+                state_before_evidence,
+                semantic_evidence,
+            )
+            evidence_applied = bool(proposed_changes)
+
+            mastery_decision = cls._build_mastery_decision(
+                area=normalized_area,
+                learner_state=state_before_evidence,
+                semantic_evidence=semantic_evidence,
+                student_id=normalized_student_id,
+                assistance_level=assistance_level,
+                proposed_changes=proposed_changes,
             )
 
             result = cls._finalize(
@@ -256,6 +285,7 @@ class ProcessLearningTurn:
                 learner_state,
                 semantic_evidence,
                 student_id=normalized_student_id,
+                mastery_decision=mastery_decision,
             )
 
             if normalized_turn_id:
@@ -271,7 +301,7 @@ class ProcessLearningTurn:
                     session_id=normalized_session_id,
                 )
 
-                cls._record_evidence_event(
+                evidence_event = cls._record_evidence_event(
                     normalized_turn_id=normalized_turn_id,
                     normalized_area=normalized_area,
                     normalized_user_message=normalized_user_message,
@@ -286,7 +316,60 @@ class ProcessLearningTurn:
                     artifact_ref=artifact_ref,
                 )
 
+                if evidence_event is not None and mastery_decision is not None:
+                    MasteryAssessment.record(
+                        turn_id=normalized_turn_id,
+                        evidence_event_id=evidence_event["event_id"],
+                        area=normalized_area,
+                        concept=evidence_event["concept_id"],
+                        decision=mastery_decision,
+                        student_id=normalized_student_id,
+                        session_id=normalized_session_id,
+                    )
+
             return result
+
+    @classmethod
+    def _build_mastery_decision(
+        cls,
+        *,
+        area,
+        learner_state,
+        semantic_evidence,
+        student_id,
+        assistance_level,
+        proposed_changes=None,
+    ):
+        if not isinstance(semantic_evidence, dict):
+            return None
+        if not isinstance(learner_state, dict):
+            return None
+
+        concept_id = learner_state.get("current_concept_id")
+        if not concept_id:
+            return None
+
+        if proposed_changes is None:
+            proposed_changes = LearnerStateTransition.propose_from_evidence(
+                learner_state,
+                semantic_evidence,
+            )
+
+        mastery_score = proposed_changes.get(
+            "mastery",
+            learner_state.get("mastery", 0.0),
+        )
+
+        return MasteryPolicy.evaluate(
+            area=area,
+            concept=concept_id,
+            stage_before=learner_state.get("stage"),
+            semantic_evidence=semantic_evidence,
+            mastery_score=mastery_score,
+            current_applied=bool(proposed_changes),
+            student_id=student_id,
+            assistance_level=assistance_level,
+        )
 
     @classmethod
     def _record_evidence_event(
@@ -328,6 +411,13 @@ class ProcessLearningTurn:
                 "evidence_context não corresponde ao conceito ativo"
             )
 
+        context_stage = evidence_context.get("stage")
+        state_stage = state_before_evidence.get("stage")
+        if context_stage != state_stage:
+            raise ValueError(
+                "evidence_context não corresponde à etapa ativa"
+            )
+
         return EvidenceEvent.record(
             turn_id=normalized_turn_id,
             area=normalized_area,
@@ -354,6 +444,7 @@ class ProcessLearningTurn:
         learner_state,
         semantic_evidence,
         student_id=DEFAULT_STUDENT_ID,
+        mastery_decision=None,
     ):
         with transaction():
             return cls._finalize(
@@ -362,6 +453,7 @@ class ProcessLearningTurn:
                 learner_state,
                 semantic_evidence,
                 student_id=student_id,
+                mastery_decision=mastery_decision,
             )
 
     @classmethod
@@ -372,11 +464,19 @@ class ProcessLearningTurn:
         learner_state,
         semantic_evidence,
         student_id=DEFAULT_STUDENT_ID,
+        mastery_decision=None,
     ):
-        evidence_changes = LearnerStateTransition.from_evidence(
-            learner_state,
-            semantic_evidence,
-        )
+        if mastery_decision is None:
+            evidence_changes = LearnerStateTransition.from_evidence(
+                learner_state,
+                semantic_evidence,
+            )
+        else:
+            evidence_changes = LearnerStateTransition.from_evidence(
+                learner_state,
+                semantic_evidence,
+                mastery_decision=mastery_decision,
+            )
 
         if evidence_changes:
             previous_stage = learner_state.get("stage")

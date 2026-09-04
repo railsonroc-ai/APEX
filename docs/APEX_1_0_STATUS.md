@@ -18,6 +18,8 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `LearnerStateTransition`: transições por sinais e evidências.
 - `EvidenceEvaluator`: avaliação semântica da resposta do aluno com rubrica versionada.
 - `EvidenceEvent`: ledger imutável das avaliações confirmadas, com contexto, confiança, assistência, versão da rubrica/política e mastery antes/depois.
+- `MasteryPolicy`: política versionada que impede conclusão apenas por score e exige portfólio mínimo de evidências.
+- `MasteryAssessment`: ledger imutável da decisão de domínio, contagens, diversidade, retenção observada e bloqueadores.
 - `ConceptCatalog`: catálogo mínimo versionado com `concept_id` estável, aliases e nomes canônicos.
 - `ConceptTracker`: seleção do conceito somente entre IDs permitidos pelo catálogo.
 - `ConceptActivation`: início e retomada de conceitos sem contaminação de estado.
@@ -47,6 +49,8 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - descarte de histórico forjado enviado pelo navegador;
 - limite explícito de mensagens e notas;
 - avaliações abaixo do limiar podem ser auditadas sem alterar o estado pedagógico;
+- conclusão de competência exige decisão explícita da `MasteryPolicy`; chamar a transição isoladamente não contorna o gate;
+- cada evidência confirmada recebe uma avaliação de domínio versionada e explicável por bloqueadores;
 - conceitos legados desconhecidos são preservados como não selecionáveis e recebem nome seguro;
 - configuração de produção exige `SECRET_KEY` e `APEX_ACCESS_KEY`.
 

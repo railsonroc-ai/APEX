@@ -1,7 +1,13 @@
 from backend.services.learner_state_transition import LearnerStateTransition
 
 
-def apply(state, outcome, confidence=0.9, evidence="evidencia"):
+def apply(
+    state,
+    outcome,
+    confidence=0.9,
+    evidence="evidencia",
+    can_complete=False,
+):
     changes = LearnerStateTransition.from_evidence(
         state,
         {
@@ -9,6 +15,7 @@ def apply(state, outcome, confidence=0.9, evidence="evidencia"):
             "confidence": confidence,
             "evidence": evidence,
         },
+        mastery_decision={"can_complete": can_complete},
     )
     return {**state, **changes}
 
@@ -30,7 +37,7 @@ def test_learning_journey_requires_evidence_before_completion():
     assert state["stage"] == "fixar"
     assert round(state["mastery"], 2) == 0.80
 
-    state = apply(state, "demonstrated")
+    state = apply(state, "demonstrated", can_complete=True)
     assert state["stage"] == "concluido"
     assert round(state["mastery"], 2) == 1.00
 

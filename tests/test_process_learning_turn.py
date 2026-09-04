@@ -55,7 +55,7 @@ def test_finalize_completed_concept_schedules_review(monkeypatch):
     monkeypatch.setattr(
         turn_module.LearnerStateTransition,
         "from_evidence",
-        lambda state, evidence: {
+        lambda state, evidence, **kwargs: {
             "stage": "concluido",
             "mastery": 0.9,
             "last_evidence": "Aplicou corretamente.",
@@ -104,6 +104,7 @@ def test_finalize_completed_concept_schedules_review(monkeypatch):
         "Resposta correta.",
         initial,
         {"outcome": "demonstrated"},
+        mastery_decision={"can_complete": True},
     )
 
     assert result["learner_state"] == completed

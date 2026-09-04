@@ -314,6 +314,25 @@ def test_completed_concept_schedules_review(monkeypatch):
         lambda progress: {"next_review_at": "2026-09-04T12:00:00+00:00"},
     )
     monkeypatch.setattr(app_module.TeachingPolicy, "choose_action", lambda state: "avancar")
+    monkeypatch.setattr(
+        app_module.ProcessLearningTurn,
+        "_build_mastery_decision",
+        classmethod(
+            lambda cls, **kwargs: {
+                "policy_id": "evidence_portfolio_mastery",
+                "policy_version": 1,
+                "score": 0.9,
+                "can_complete": True,
+                "applied_evidence_count": 4,
+                "demonstrated_count": 4,
+                "demonstrated_stage_count": 2,
+                "retention_demonstrated_count": 0,
+                "low_assistance_demonstrated_count": 0,
+                "latest_outcome": "demonstrated",
+                "blockers": [],
+            }
+        ),
+    )
 
     class FakeCompletions:
         def create(self, **kwargs):

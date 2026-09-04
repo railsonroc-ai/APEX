@@ -1,0 +1,170 @@
+from backend.identity import DEFAULT_STUDENT_ID, normalize_student_id
+from backend.services.evidence_evaluator import EvidenceEvaluator
+from backend.services.evidence_event import EvidenceEvent
+from backend.services.evidence_policy import EvidencePolicy
+from backend.services.learning_history import LearningHistory
+
+
+class MasteryPolicy:
+    """Política determinística e auditável para conclusão de uma competência.
+
+    O score numérico continua compatível com o kernel atual, porém sozinho não
+    autoriza conclusão. A decisão exige um pequeno portfólio de evidências
+    confirmadas e diversidade mínima de contexto pedagógico.
+    """
+
+    POLICY_ID = "evidence_portfolio_mastery"
+    POLICY_VERSION = 1
+
+    MIN_SCORE_TO_COMPLETE = 0.80
+    MIN_APPLIED_EVIDENCE = 3
+    MIN_DEMONSTRATED = 2
+    MIN_DEMONSTRATED_STAGES = 2
+
+    LOW_ASSISTANCE_LEVELS = {
+        "independent",
+        "light",
+    }
+    TRACKED_ASSISTANCE_LEVELS = (
+        EvidencePolicy.ASSISTANCE_LEVELS
+        - {EvidencePolicy.ASSISTANCE_UNTRACKED}
+    )
+
+    BLOCK_CURRENT_NOT_APPLIED = "current_evidence_not_applied"
+    BLOCK_STAGE_NOT_FIXING = "stage_not_fixar"
+    BLOCK_SCORE = "score_below_threshold"
+    BLOCK_EVIDENCE_COUNT = "insufficient_applied_evidence"
+    BLOCK_DEMONSTRATED_COUNT = "insufficient_demonstrated_evidence"
+    BLOCK_STAGE_DIVERSITY = "insufficient_demonstrated_stage_diversity"
+    BLOCK_LATEST_OUTCOME = "latest_outcome_not_demonstrated"
+    BLOCK_ASSISTANCE = "no_low_assistance_demonstration"
+
+    @staticmethod
+    def _normalize_score(value):
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            score = 0.0
+        return min(1.0, max(0.0, score))
+
+    @classmethod
+    def evaluate(
+        cls,
+        *,
+        area,
+        concept,
+        stage_before,
+        semantic_evidence,
+        mastery_score,
+        current_applied,
+        student_id=DEFAULT_STUDENT_ID,
+        assistance_level=EvidencePolicy.ASSISTANCE_UNTRACKED,
+    ):
+        normalized_area = LearningHistory.normalize_area(area)
+        normalized_student_id = normalize_student_id(student_id)
+        score = cls._normalize_score(mastery_score)
+        normalized_assistance = EvidencePolicy.normalize_assistance_level(
+            assistance_level
+        )
+
+        events = EvidenceEvent.list_for_concept(
+            normalized_area,
+            concept,
+            student_id=normalized_student_id,
+            limit=200,
+        )
+
+        portfolio = [
+            {
+                "outcome": event.get("outcome"),
+                "stage_before": event.get("stage_before"),
+                "assistance_level": event.get("assistance_level"),
+                "applied": bool(event.get("applied")),
+            }
+            for event in events
+        ]
+
+        candidate_outcome = None
+        if isinstance(semantic_evidence, dict):
+            candidate_outcome = semantic_evidence.get("outcome")
+
+        portfolio.append(
+            {
+                "outcome": candidate_outcome,
+                "stage_before": stage_before,
+                "assistance_level": normalized_assistance,
+                "applied": bool(current_applied),
+            }
+        )
+
+        applied = [item for item in portfolio if item["applied"]]
+        demonstrated = [
+            item
+            for item in applied
+            if item["outcome"] == EvidenceEvaluator.DEMONSTRATED
+        ]
+        demonstrated_stages = {
+            item["stage_before"]
+            for item in demonstrated
+            if isinstance(item.get("stage_before"), str)
+            and item["stage_before"].strip()
+        }
+        retention_demonstrated = [
+            item
+            for item in demonstrated
+            if item.get("stage_before") == "reencontrar"
+        ]
+
+        tracked_demonstrated = [
+            item
+            for item in demonstrated
+            if item.get("assistance_level") in cls.TRACKED_ASSISTANCE_LEVELS
+        ]
+        low_assistance_demonstrated = [
+            item
+            for item in demonstrated
+            if item.get("assistance_level") in cls.LOW_ASSISTANCE_LEVELS
+        ]
+
+        blockers = []
+
+        if not current_applied:
+            blockers.append(cls.BLOCK_CURRENT_NOT_APPLIED)
+        if stage_before != "fixar":
+            blockers.append(cls.BLOCK_STAGE_NOT_FIXING)
+        if score < cls.MIN_SCORE_TO_COMPLETE:
+            blockers.append(cls.BLOCK_SCORE)
+        if len(applied) < cls.MIN_APPLIED_EVIDENCE:
+            blockers.append(cls.BLOCK_EVIDENCE_COUNT)
+        if len(demonstrated) < cls.MIN_DEMONSTRATED:
+            blockers.append(cls.BLOCK_DEMONSTRATED_COUNT)
+        if len(demonstrated_stages) < cls.MIN_DEMONSTRATED_STAGES:
+            blockers.append(cls.BLOCK_STAGE_DIVERSITY)
+        if candidate_outcome != EvidenceEvaluator.DEMONSTRATED:
+            blockers.append(cls.BLOCK_LATEST_OUTCOME)
+        if tracked_demonstrated and not low_assistance_demonstrated:
+            blockers.append(cls.BLOCK_ASSISTANCE)
+
+        recommended_stage = None
+        if (
+            stage_before == "fixar"
+            and cls.BLOCK_STAGE_DIVERSITY in blockers
+        ):
+            recommended_stage = "testar"
+
+        return {
+            "policy_id": cls.POLICY_ID,
+            "policy_version": cls.POLICY_VERSION,
+            "score": score,
+            "can_complete": not blockers,
+            "applied_evidence_count": len(applied),
+            "demonstrated_count": len(demonstrated),
+            "demonstrated_stage_count": len(demonstrated_stages),
+            "retention_demonstrated_count": len(retention_demonstrated),
+            "low_assistance_demonstrated_count": len(
+                low_assistance_demonstrated
+            ),
+            "latest_outcome": candidate_outcome,
+            "recommended_stage": recommended_stage,
+            "blockers": blockers,
+        }

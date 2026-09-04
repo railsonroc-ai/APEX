@@ -8,9 +8,9 @@ O objetivo é evoluir além de um chatbot: ensinar, verificar compreensão, adap
 
 A fundação técnica e o hardening inicial estão concluídos.
 
-O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn um ledger imutável de evidências pedagógicas, um catálogo mínimo de competências com `concept_id` estável e uma suíte automatizada com mais de 160 casos.
+O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn, um ledger imutável de evidências pedagógicas, catálogo mínimo de competências com `concept_id` estável e uma política de domínio baseada em portfólio de evidências.
 
-A fundação do Evidence Engine torna avaliações confirmadas auditáveis por aluno/turno, com rubrica e policy versionadas. A identidade das competências também é estável: aliases convergem para `concept_id` versionado e texto livre do LLM não funciona como chave de negócio. A próxima evolução é derivar domínio de evidências variadas e independentes, em vez de depender apenas do acumulador atual.
+A fundação do Evidence Engine torna avaliações confirmadas auditáveis por aluno/turno, com rubrica e policy versionadas. A identidade das competências também é estável: aliases convergem para `concept_id` versionado e texto livre do LLM não funciona como chave de negócio. A `MasteryPolicy` adiciona um segundo gate: score sozinho não conclui uma competência; são exigidas evidências aplicadas suficientes, demonstrações, diversidade mínima de etapas e uma evidência atual válida. Quando assistência explícita for rastreada, a política também exige demonstração com baixa ajuda.
 
 ## Executar
 
@@ -52,4 +52,4 @@ Materiais históricos: `docs/legacy/`
 
 **Fundação técnica:** concluída.
 
-**Próxima etapa:** política de domínio baseada em evidências múltiplas, variedade, independência, retenção e assistência medida.
+**Próxima etapa:** tornar scaffolding/nível de ajuda explícito e evoluir a estimativa de competência com retenção e contextos profissionais, mantendo decisões auditáveis.

@@ -1176,6 +1176,105 @@ def add_concept_catalog(connection):
     """)
 
 
+
+def create_mastery_assessments(connection):
+    connection.execute("""
+        CREATE UNIQUE INDEX idx_evidence_events_student_event
+        ON evidence_events (
+            student_id,
+            event_id
+        )
+    """)
+
+    connection.execute("""
+        CREATE TABLE mastery_assessments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id TEXT NOT NULL UNIQUE,
+            student_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            evidence_event_id TEXT NOT NULL UNIQUE,
+            area TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            score REAL NOT NULL,
+            can_complete INTEGER NOT NULL,
+            applied_evidence_count INTEGER NOT NULL,
+            demonstrated_count INTEGER NOT NULL,
+            demonstrated_stage_count INTEGER NOT NULL,
+            retention_demonstrated_count INTEGER NOT NULL,
+            low_assistance_demonstrated_count INTEGER NOT NULL,
+            latest_outcome TEXT,
+            recommended_stage TEXT,
+            blockers_json TEXT NOT NULL DEFAULT '[]',
+            policy_id TEXT NOT NULL,
+            policy_version INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(student_id)
+                REFERENCES students(id),
+            FOREIGN KEY(student_id, session_id, area)
+                REFERENCES learning_sessions(student_id, id, area),
+            FOREIGN KEY(student_id, turn_id)
+                REFERENCES learning_turns(student_id, turn_id),
+            FOREIGN KEY(student_id, evidence_event_id)
+                REFERENCES evidence_events(student_id, event_id),
+            FOREIGN KEY(area, concept_id)
+                REFERENCES concept_definitions(area, concept_id),
+            UNIQUE(student_id, turn_id),
+            CHECK(area IN ('ads', 'it')),
+            CHECK(score >= 0.0 AND score <= 1.0),
+            CHECK(can_complete IN (0, 1)),
+            CHECK(applied_evidence_count >= 0),
+            CHECK(demonstrated_count >= 0),
+            CHECK(demonstrated_stage_count >= 0),
+            CHECK(retention_demonstrated_count >= 0),
+            CHECK(low_assistance_demonstrated_count >= 0),
+            CHECK(latest_outcome IS NULL OR latest_outcome IN (
+                'insufficient',
+                'partial',
+                'demonstrated',
+                'misconception'
+            )),
+            CHECK(recommended_stage IS NULL OR recommended_stage IN ('testar')),
+            CHECK(policy_version > 0)
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_mastery_assessments_student_concept_created
+        ON mastery_assessments (
+            student_id,
+            area,
+            concept_id,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE INDEX idx_mastery_assessments_policy
+        ON mastery_assessments (
+            policy_id,
+            policy_version,
+            created_at
+        )
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER mastery_assessments_no_update
+        BEFORE UPDATE ON mastery_assessments
+        BEGIN
+            SELECT RAISE(ABORT, 'mastery_assessments are immutable');
+        END
+    """)
+
+    connection.execute("""
+        CREATE TRIGGER mastery_assessments_no_delete
+        BEFORE DELETE ON mastery_assessments
+        BEGIN
+            SELECT RAISE(ABORT, 'mastery_assessments are immutable');
+        END
+    """)
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -1211,6 +1310,11 @@ MIGRATIONS = (
         7,
         "add_concept_catalog",
         add_concept_catalog,
+    ),
+    Migration(
+        8,
+        "create_mastery_assessments",
+        create_mastery_assessments,
     ),
 )
 

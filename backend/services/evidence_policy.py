@@ -10,7 +10,7 @@ class EvidencePolicy:
     RUBRIC_VERSION = 1
 
     POLICY_ID = "learner_state_transition"
-    POLICY_VERSION = 1
+    POLICY_VERSION = 2
 
     ASSISTANCE_UNTRACKED = "untracked"
     ASSISTANCE_LEVELS = {

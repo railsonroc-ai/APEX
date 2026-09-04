@@ -20,6 +20,7 @@ EXPECTED_MIGRATIONS = [
     (5, "add_student_identity"),
     (6, "create_evidence_events"),
     (7, "add_concept_catalog"),
+    (8, "create_mastery_assessments"),
 ]
 
 
@@ -106,6 +107,7 @@ def test_new_database_applies_ordered_migrations(
         "evidence_events",
         "concept_definitions",
         "concept_aliases",
+        "mastery_assessments",
     }.issubset(tables)
 
     assert "concept_id" in turn_columns
@@ -640,7 +642,7 @@ def test_v5_database_receives_empty_evidence_ledger(
 
         assert total == 0
         assert turns == 1
-        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7]
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8]
         assert connection.execute(
             "PRAGMA foreign_key_check"
         ).fetchall() == []
@@ -941,5 +943,148 @@ def test_v7_merges_semantic_duplicate_progress_rows(monkeypatch, tmp_path):
         assert row["last_reviewed_at"] == "2026-09-03T00:00:00+00:00"
         assert row["updated_at"] == "2026-09-04T00:00:00+00:00"
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+    finally:
+        connection.close()
+
+
+
+def test_v7_database_receives_empty_mastery_assessment_ledger(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="v7-to-v8.db")
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:7],
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO concept_progress (
+                student_id, area, concept_id, mastery
+            ) VALUES (
+                'student_default', 'ads', 'ads.variables', 0.8
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO learning_turns (
+                student_id, session_id, turn_id, area,
+                user_message, assistant_message, concept_id
+            ) VALUES (
+                'student_default', 'session_default_ads', 'turn-v7-before-v8',
+                'ads', 'Pergunta', 'Resposta', 'ads.variables'
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO evidence_events (
+                event_id, student_id, session_id, turn_id, area, concept_id,
+                stage_before, stage_after, outcome, confidence,
+                tutor_message, student_answer, assistance_level,
+                rubric_id, rubric_version, policy_id, policy_version,
+                source, applied, mastery_before, mastery_after
+            ) VALUES (
+                'event-v7-before-v8', 'student_default', 'session_default_ads',
+                'turn-v7-before-v8', 'ads', 'ads.variables',
+                'fixar', 'fixar', 'demonstrated', 0.95,
+                'Tutor', 'Aluno', 'untracked', 'semantic_evidence', 1,
+                'learner_state_transition', 1, 'semantic_llm', 1, 0.6, 0.8
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations,
+    )
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        total = connection.execute(
+            "SELECT COUNT(*) FROM mastery_assessments"
+        ).fetchone()[0]
+        versions = [
+            row["version"] for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+        preserved_evidence = connection.execute(
+            "SELECT COUNT(*) FROM evidence_events WHERE event_id='event-v7-before-v8'"
+        ).fetchone()[0]
+        assert total == 0
+        assert preserved_evidence == 1
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 8]
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_mastery_assessment_migration_rolls_back_schema_and_version(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="mastery-v8-rollback.db")
+    current_migrations = migrations_module.MIGRATIONS
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:7],
+    )
+    database_module.init_database()
+
+    def failing(connection):
+        migrations_module.create_mastery_assessments(connection)
+        raise RuntimeError("falha depois do mastery ledger")
+
+    monkeypatch.setattr(
+        migrations_module,
+        "MIGRATIONS",
+        current_migrations[:7]
+        + (
+            Migration(
+                8,
+                "create_mastery_assessments",
+                failing,
+            ),
+        ),
+    )
+
+    with pytest.raises(MigrationError, match="Falha ao aplicar migração 8"):
+        database_module.init_database()
+
+    connection = connect(path)
+    try:
+        table = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type='table' AND name='mastery_assessments'
+            """
+        ).fetchone()
+        trigger = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type='trigger' AND name='mastery_assessments_no_update'
+            """
+        ).fetchone()
+        versions = [
+            row["version"] for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+        assert table is None
+        assert trigger is None
+        assert versions == [1, 2, 3, 4, 5, 6, 7]
     finally:
         connection.close()

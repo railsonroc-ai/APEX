@@ -246,3 +246,30 @@ def test_evidence_failure_rolls_back_state_and_confirmed_turn(
     assert state["current_concept_id"] is None
     assert state["current_concept"] is None
     assert state["mastery"] == 0.0
+
+
+def test_semantic_evidence_requires_confirmed_turn_and_context(monkeypatch, tmp_path):
+    prepare_database(monkeypatch, tmp_path)
+
+    with pytest.raises(ValueError, match="turn_id obrigatória"):
+        ProcessLearningTurn.commit_turn(
+            area="ads",
+            user_message="Uma variável guarda um valor.",
+            identified_concept="variáveis",
+            semantic_evidence=evidence(),
+            assistant_message="Continue.",
+        )
+
+    with pytest.raises(ValueError, match="evidence_context obrigatória"):
+        ProcessLearningTurn.commit_turn(
+            area="ads",
+            user_message="Uma variável guarda um valor.",
+            identified_concept="variáveis",
+            semantic_evidence=evidence(),
+            turn_id="missing-evidence-context",
+            assistant_message="Continue.",
+        )
+
+    state = LearnerState.get("ads")
+    assert state["current_concept_id"] is None
+    assert state["mastery"] == 0.0

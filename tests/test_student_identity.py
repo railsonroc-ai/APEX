@@ -279,6 +279,13 @@ def test_process_turn_keeps_students_independent(
         assistant_message="Continue.",
         student_id=DEFAULT_STUDENT_ID,
         session_id=default_session_id("ads"),
+        evidence_context={
+            "concept_id": "ads.variables",
+            "concept": "variáveis",
+            "stage": "compreender",
+            "tutor_message": "Explique uma variável.",
+            "student_answer": "Uma variável guarda um valor.",
+        },
     )
 
     ProcessLearningTurn.commit_turn(
@@ -292,6 +299,13 @@ def test_process_turn_keeps_students_independent(
         assistant_message="Continue também.",
         student_id=SECOND_STUDENT_ID,
         session_id=SECOND_SESSION_ADS,
+        evidence_context={
+            "concept_id": "ads.functions",
+            "concept": "funções",
+            "stage": "compreender",
+            "tutor_message": "Explique uma função.",
+            "student_answer": "Uma função agrupa comportamento.",
+        },
     )
 
     first = LearnerState.get(

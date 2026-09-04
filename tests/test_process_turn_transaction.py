@@ -119,6 +119,13 @@ def test_commit_rolls_back_state_when_history_record_fails(
             semantic_evidence=evidence,
             turn_id="history-failure",
             assistant_message="Próxima orientação.",
+            evidence_context={
+                "concept_id": "ads.variables",
+                "concept": "variáveis",
+                "stage": "testar",
+                "tutor_message": "Aplique o conceito.",
+                "student_answer": "Resposta correta.",
+            },
         )
 
     restored = LearnerState.get("ads")

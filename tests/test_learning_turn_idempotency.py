@@ -34,6 +34,16 @@ def demonstrated_evidence():
     }
 
 
+def evidence_context(answer):
+    return {
+        "concept_id": "ads.variables",
+        "concept": "variáveis",
+        "stage": "compreender",
+        "tutor_message": "Explique o que é uma variável.",
+        "student_answer": answer,
+    }
+
+
 def test_same_turn_id_does_not_apply_evidence_twice(
     monkeypatch,
     tmp_path,
@@ -52,6 +62,7 @@ def test_same_turn_id_does_not_apply_evidence_twice(
         semantic_evidence=evidence,
         turn_id="turn-001",
         assistant_message="Próxima orientação.",
+        evidence_context=evidence_context("Uma variável guarda um valor."),
     )
 
     after_first = LearnerState.get("ads")
@@ -100,6 +111,7 @@ def test_turn_id_cannot_be_reused_for_different_message(
         semantic_evidence=demonstrated_evidence(),
         turn_id="turn-002",
         assistant_message="Próxima orientação.",
+        evidence_context=evidence_context("Uma variável guarda um valor."),
     )
 
     with pytest.raises(

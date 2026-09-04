@@ -92,16 +92,24 @@ def test_low_confidence_evidence_does_not_change_state():
     assert result == {}
 
 
-def test_demonstrated_while_fixing_completes_concept():
+def test_demonstrated_while_fixing_requires_mastery_decision_to_complete():
     state = {"stage": "fixar", "mastery": 0.7, "difficulty_count": 0}
     evidence = {
         "outcome": "demonstrated",
         "confidence": 0.9,
         "evidence": "Aplicou corretamente sem ajuda.",
     }
-    result = LearnerStateTransition.from_evidence(state, evidence)
-    assert result["stage"] == "concluido"
-    assert round(result["mastery"], 2) == 0.9
+
+    without_decision = LearnerStateTransition.from_evidence(state, evidence)
+    with_decision = LearnerStateTransition.from_evidence(
+        state,
+        evidence,
+        mastery_decision={"can_complete": True},
+    )
+
+    assert without_decision["stage"] == "fixar"
+    assert with_decision["stage"] == "concluido"
+    assert round(with_decision["mastery"], 2) == 0.9
 
 def test_fixing_below_mastery_threshold_does_not_complete():
     state = {"stage": "fixar", "mastery": 0.2, "difficulty_count": 0}
@@ -111,7 +119,11 @@ def test_fixing_below_mastery_threshold_does_not_complete():
         "evidence": "Acertou novamente.",
     }
 
-    result = LearnerStateTransition.from_evidence(state, evidence)
+    result = LearnerStateTransition.from_evidence(
+        state,
+        evidence,
+        mastery_decision={"can_complete": False},
+    )
 
     assert result["stage"] == "fixar"
     assert round(result["mastery"], 2) == 0.4
