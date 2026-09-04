@@ -192,6 +192,24 @@ def chat_stream():
         [],
     )
 
+    turn_id = str(
+        data.get(
+            "turn_id",
+            "",
+        )
+    ).strip() or None
+
+    if (
+        turn_id is not None
+        and len(turn_id) > 128
+    ):
+        return jsonify(
+            {
+                "error":
+                    "turn_id inválido"
+            }
+        ), 400
+
     area = TutorCore.normalize_area(
         data.get(
             "area",
@@ -373,6 +391,7 @@ def chat_stream():
                 user_message,
                 identified_concept,
                 semantic_evidence,
+                turn_id=turn_id,
             )
 
             yield sse(

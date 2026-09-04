@@ -1,4 +1,8 @@
-from backend.database import preview_transaction, transaction
+from backend.database import (
+    get_db_connection,
+    preview_transaction,
+    transaction,
+)
 from backend.services.concept_activation import ConceptActivation
 from backend.services.concept_progress import ConceptProgress
 from backend.services.concept_tracker import ConceptTracker
@@ -83,8 +87,55 @@ class ProcessLearningTurn:
         user_message,
         identified_concept,
         semantic_evidence,
+        turn_id=None,
     ):
+        normalized_turn_id = None
+
+        if turn_id is not None:
+            normalized_turn_id = str(
+                turn_id
+            ).strip() or None
+
         with transaction():
+            connection = get_db_connection()
+
+            if normalized_turn_id:
+                existing = connection.execute(
+                    """
+                    SELECT
+                        area,
+                        user_message
+                    FROM learning_turns
+                    WHERE turn_id = ?
+                    """,
+                    (normalized_turn_id,),
+                ).fetchone()
+
+                if existing is not None:
+                    if (
+                        existing["area"] != area
+                        or existing["user_message"]
+                        != user_message
+                    ):
+                        raise ValueError(
+                            "turn_id reutilizado "
+                            "com conteúdo diferente"
+                        )
+
+                    learner_state = (
+                        LearnerState.get(area)
+                    )
+
+                    return {
+                        "learner_state":
+                            learner_state,
+                        "teaching_action":
+                            TeachingPolicy.choose_action(
+                                learner_state
+                            ),
+                        "duplicate": True,
+                    }
+
             learner_state = LearnerState.get(area)
 
             learner_state = cls.activate_identified_concept(
@@ -93,12 +144,31 @@ class ProcessLearningTurn:
                 identified_concept,
             )
 
-            return cls._finalize(
+            result = cls._finalize(
                 area,
                 user_message,
                 learner_state,
                 semantic_evidence,
             )
+
+            if normalized_turn_id:
+                connection.execute(
+                    """
+                    INSERT INTO learning_turns (
+                        turn_id,
+                        area,
+                        user_message
+                    )
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        normalized_turn_id,
+                        area,
+                        user_message,
+                    ),
+                )
+
+            return result
 
     @classmethod
     def finalize(

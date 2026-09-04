@@ -723,10 +723,28 @@
   // STREAM DO CHAT
   // ==========================================================
 
+  function createTurnId() {
+    if (
+      globalThis.crypto
+      && typeof globalThis.crypto.randomUUID
+        === 'function'
+    ) {
+      return globalThis.crypto.randomUUID();
+    }
+
+    return [
+      'turn',
+      Date.now().toString(36),
+      Math.random().toString(36).slice(2)
+    ].join('-');
+  }
+
+
   async function streamChat(
     text,
     button,
-    historyForRequest
+    historyForRequest,
+    turnId
   ) {
     const {
       content,
@@ -751,6 +769,7 @@
         {
           message: text,
           area: AREA,
+          turn_id: turnId,
           history:
             historyForRequest
         },
@@ -930,11 +949,15 @@
     sendingMessage = true;
 
     try {
+      const turnId =
+        createTurnId();
+
       const assistantText =
         await streamChat(
           text,
           sendButton,
-          historyForRequest
+          historyForRequest,
+          turnId
         );
 
       if (assistantText !== null) {

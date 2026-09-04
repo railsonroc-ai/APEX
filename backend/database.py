@@ -144,6 +144,16 @@ def init_database():
             )
         """)
 
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS learning_turns (
+                turn_id TEXT PRIMARY KEY,
+                area TEXT NOT NULL,
+                user_message TEXT NOT NULL,
+                assistant_message TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         connection.commit()
     finally:
         connection.close()
