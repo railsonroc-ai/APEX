@@ -7,6 +7,7 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `app.py` — rotas HTTP, SSE e orquestração.
 - `config.py` — variáveis de ambiente, caminhos e limites.
 - `database.py` — conexões e inicialização do SQLite.
+- `migrations.py` — evolução versionada e atômica do schema SQLite.
 - `security.py` — autenticação por `X-Apex-Key`.
 - `prompts/tutor.py` — prompt pedagógico do tutor.
 - `services/tutor_core.py` — preparação e proteção do contexto.

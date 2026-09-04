@@ -15,6 +15,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `config.py`: ambiente, caminhos, limites e timeout.
 - `security.py`: autenticação por `X-Apex-Key`.
 - `database.py`: SQLite e configuração das conexões.
+- `migrations.py`: migrations ordenadas, atômicas e registradas no banco.
 
 ## Tutor
 
@@ -47,6 +48,7 @@ O SQLite atual usa `data/apex.db`.
 
 Tabelas principais:
 
+- `schema_migrations`: versões de schema já aplicadas;
 - `notes`: notas do aluno;
 - `learner_state`: estado atual por área;
 - `concept_progress`: progresso e revisão por conceito;
@@ -59,6 +61,10 @@ turnos confirmados, limita o contexto e o isola por área e conceito.
 Como a versão 1.0 ainda é individual, somente um turno por área pode estar
 em processamento. A reserva fica no SQLite, funciona entre threads/workers e
 expira para permitir recuperação caso um worker seja interrompido.
+
+O schema não é mais alterado por comandos avulsos no `init_database`. Cada
+mudança possui versão e nome, é aplicada junto do seu registro em uma transação
+e pode ser executada novamente com segurança durante a inicialização.
 
 ## Produção e testes
 

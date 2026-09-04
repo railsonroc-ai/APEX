@@ -1,4 +1,5 @@
 import sqlite3
+import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 
@@ -8,6 +9,7 @@ from backend.config import (
     SQLITE_TIMEOUT_SECONDS,
     SQLITE_BUSY_TIMEOUT_MS,
 )
+from backend.migrations import run_migrations
 
 
 _active_transaction = ContextVar(
@@ -56,6 +58,53 @@ def get_db_connection():
     return _new_connection()
 
 
+def _ensure_wal_mode(
+    connection,
+    attempts=5,
+    retry_delay_seconds=0.05,
+):
+    for attempt in range(attempts):
+        try:
+            row = connection.execute(
+                "PRAGMA journal_mode = WAL"
+            ).fetchone()
+
+            if (
+                row is not None
+                and str(row[0]).lower() == "wal"
+            ):
+                return
+
+            raise RuntimeError(
+                "SQLite não ativou journal_mode WAL."
+            )
+
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
+
+            try:
+                current = connection.execute(
+                    "PRAGMA journal_mode"
+                ).fetchone()
+            except sqlite3.OperationalError:
+                current = None
+
+            if (
+                current is not None
+                and str(current[0]).lower() == "wal"
+            ):
+                return
+
+            if attempt == attempts - 1:
+                raise
+
+            time.sleep(
+                retry_delay_seconds
+                * (attempt + 1)
+            )
+
+
 @contextmanager
 def transaction():
     active = _active_transaction.get()
@@ -102,101 +151,10 @@ def preview_transaction():
 
 
 def init_database():
-    connection = get_db_connection()
+    connection = _new_connection()
 
     try:
-        connection.execute("PRAGMA journal_mode = WAL")
-
-        connection.execute("""
-            CREATE TABLE IF NOT EXISTS notes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                text TEXT NOT NULL,
-                area TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        connection.execute("""
-            CREATE TABLE IF NOT EXISTS learner_state (
-                area TEXT PRIMARY KEY,
-                current_concept TEXT,
-                stage TEXT NOT NULL DEFAULT 'compreender',
-                last_evidence TEXT,
-                difficulty_count INTEGER NOT NULL DEFAULT 0,
-                mastery REAL NOT NULL DEFAULT 0.0,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        connection.execute("""
-            CREATE TABLE IF NOT EXISTS concept_progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                area TEXT NOT NULL,
-                concept TEXT NOT NULL,
-                mastery REAL NOT NULL DEFAULT 0.0,
-                difficulty_count INTEGER NOT NULL DEFAULT 0,
-                last_evidence TEXT,
-                review_count INTEGER NOT NULL DEFAULT 0,
-                next_review_at TEXT,
-                last_reviewed_at TEXT,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(area, concept)
-            )
-        """)
-
-        connection.execute("""
-            CREATE TABLE IF NOT EXISTS learning_turns (
-                turn_id TEXT PRIMARY KEY,
-                area TEXT NOT NULL,
-                user_message TEXT NOT NULL,
-                assistant_message TEXT,
-                concept TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        connection.execute("""
-            CREATE TABLE IF NOT EXISTS learning_turn_leases (
-                area TEXT PRIMARY KEY,
-                owner_token TEXT NOT NULL UNIQUE,
-                acquired_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL
-            )
-        """)
-
-        learning_turn_columns = {
-            row["name"]
-            for row in connection.execute(
-                "PRAGMA table_info(learning_turns)"
-            ).fetchall()
-        }
-
-        if "concept" not in learning_turn_columns:
-            connection.execute(
-                """
-                ALTER TABLE learning_turns
-                ADD COLUMN concept TEXT
-                """
-            )
-
-        connection.execute("""
-            CREATE INDEX IF NOT EXISTS
-                idx_learning_turns_area_concept_created_at
-            ON learning_turns (
-                area,
-                concept,
-                created_at
-            )
-        """)
-
-        connection.execute("""
-            CREATE INDEX IF NOT EXISTS
-                idx_learning_turn_leases_expires_at
-            ON learning_turn_leases (
-                expires_at
-            )
-        """)
-
-        connection.commit()
+        _ensure_wal_mode(connection)
+        run_migrations(connection)
     finally:
         connection.close()

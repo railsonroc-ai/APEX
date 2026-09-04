@@ -29,6 +29,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 ## Confiabilidade
 
 - persistência SQLite;
+- migrations de schema versionadas, atômicas e idempotentes;
 - transações atômicas no turno pedagógico;
 - rollback quando uma gravação falha;
 - rollback quando o streaming da resposta falha;
