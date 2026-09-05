@@ -890,6 +890,9 @@ def chat_stream():
                     session_runtime.get("status")
                     == LearningSessionLifecycle.REVIEWING
                 ),
+                evidence_outcome=EvidenceEvaluator.feedback_outcome(
+                    semantic_evidence
+                ),
             )
 
             messages = (
@@ -899,6 +902,7 @@ def chat_stream():
                     area=area,
                     learner_state=learner_state,
                     teaching_action=teaching_action,
+                    teaching_contract=teaching_contract,
                 )
             )
 

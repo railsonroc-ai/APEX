@@ -18,6 +18,7 @@ class TurnTeachingContract:
     task_required: bool
     assistance_ceiling: str
     review_mode: bool
+    feedback_text: str | None
     safe_response: str | None
 
     ORDERED_STEPS = "ads.algorithms.ordered_steps"
@@ -30,12 +31,36 @@ class TurnTeachingContract:
         "classe", "objeto", "api", "banco de dados",
     )
 
+    FEEDBACK_BY_OUTCOME = {
+        "demonstrated": "Correto.",
+        "partial": "Parcialmente correto.",
+        "misconception": "Ainda não está correto.",
+        "insufficient": "Ainda não há evidência suficiente.",
+        "unverified": "Não foi possível confirmar ainda.",
+    }
+
     @classmethod
-    def build(cls, learner_state, teaching_action, *, review_mode=False):
+    def _feedback(cls, outcome):
+        return cls.FEEDBACK_BY_OUTCOME.get(outcome)
+
+    @staticmethod
+    def _prepend_feedback(response, feedback):
+        return f"{feedback}\n\n{response}" if feedback else response
+
+    @classmethod
+    def build(
+        cls,
+        learner_state,
+        teaching_action,
+        *,
+        review_mode=False,
+        evidence_outcome=None,
+    ):
         state = learner_state if isinstance(learner_state, dict) else {}
         concept_id = state.get("current_concept_id")
         ceiling = AssistancePolicy.level_for_action(teaching_action)
         task_required = TaskPolicy.is_assessable_action(teaching_action)
+        feedback = cls._feedback(evidence_outcome)
 
         if concept_id == cls.ORDERED_STEPS:
             if review_mode:
@@ -62,6 +87,7 @@ class TurnTeachingContract:
                     "Tarefa: coloque estes passos na ordem correta: secar as mãos; abrir a "
                     "torneira; lavar as mãos."
                 )
+            safe = cls._prepend_feedback(safe, feedback)
             return cls(
                 concept_id=concept_id,
                 focus="sequência ordenada de passos",
@@ -74,6 +100,7 @@ class TurnTeachingContract:
                 task_required=True,
                 assistance_ceiling=ceiling,
                 review_mode=review_mode,
+                feedback_text=feedback,
                 safe_response=safe,
             )
 
@@ -98,6 +125,7 @@ class TurnTeachingContract:
             )
         else:
             safe = "Vamos continuar a partir do que você já demonstrou até aqui."
+        safe = cls._prepend_feedback(safe, feedback)
         return cls(
             concept_id=concept_id,
             focus=safe_focus,
@@ -110,6 +138,7 @@ class TurnTeachingContract:
             task_required=task_required,
             assistance_ceiling=ceiling,
             review_mode=review_mode,
+            feedback_text=feedback,
             safe_response=safe,
         )
 
@@ -126,5 +155,6 @@ class TurnTeachingContract:
             f"- limite: {self.max_chars} caracteres e {self.max_questions} pergunta\n"
             f"- tarefa única obrigatória: {'sim' if self.task_required else 'não'}\n"
             f"- teto de assistência: {self.assistance_ceiling}\n"
+            f"- feedback obrigatório no início: {self.feedback_text or 'nenhum'}\n"
             f"- revisão recuperativa: {'sim' if self.review_mode else 'não'}"
         )

@@ -124,6 +124,7 @@ def test_correct_first_answer_advances_and_never_repeats_first_turn(monkeypatch,
 
     assert '"done": true' in second.lower()
     assert second_message != first_message
+    assert second_message.startswith("Correto.\n\n")
     assert "guardar um arquivo" in second_message.lower()
     assert LearnerState.get("ads")["stage"] == "fixar"
     assert LearnerState.get("ads")["mastery"] == 0.2

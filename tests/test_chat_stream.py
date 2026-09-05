@@ -79,9 +79,17 @@ def test_chat_uses_pedagogical_state(monkeypatch):
     monkeypatch.setattr(app_module, "GROQ_API_KEY", "teste")
     monkeypatch.setattr(app_module.LearnerState, "get", lambda area, **kwargs: state)
     monkeypatch.setattr(app_module.TeachingPolicy, "choose_action", lambda value: "testar")
-    def fake_build_messages(user_message, history=None, area="ads", learner_state=None, teaching_action=None):
+    def fake_build_messages(
+        user_message,
+        history=None,
+        area="ads",
+        learner_state=None,
+        teaching_action=None,
+        teaching_contract=None,
+    ):
         captured["learner_state"] = learner_state
         captured["teaching_action"] = teaching_action
+        captured["teaching_contract"] = teaching_contract
         return [{"role": "user", "content": user_message}]
 
     monkeypatch.setattr(app_module.TutorCore, "build_messages", fake_build_messages)
@@ -108,6 +116,7 @@ def test_chat_uses_pedagogical_state(monkeypatch):
     assert response.status_code == 200
     assert captured["learner_state"] == state
     assert captured["teaching_action"] == "testar"
+    assert isinstance(captured["teaching_contract"], app_module.TurnTeachingContract)
 
 
 def test_difficulty_signal_updates_state_before_policy(monkeypatch):

@@ -78,6 +78,9 @@ Tarefas objetivas conhecidas são avaliadas localmente antes da LLM. Se uma
 tarefa aberta exigir avaliação semântica e o provider não devolver uma rubrica
 válida, o turno falha fechado: não repete a explicação, não cria falsa
 evidência e não altera o progresso.
+Quando existe evidência válida, o `TurnTeachingContract` exige que a resposta
+comece com feedback explícito sobre o resultado antes de apresentar a próxima
+tarefa. O validador substitui respostas que omitam esse retorno.
 
 ## Testes
 

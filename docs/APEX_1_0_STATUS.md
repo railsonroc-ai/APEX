@@ -103,6 +103,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - “recomeçar do zero” limpa domínio, dificuldade, evidência e agenda de revisão da microcompetência ativada;
 - a primeira tarefa objetiva é corrigida deterministicamente e sua resposta correta avança o estado mesmo se o avaliador LLM estiver indisponível;
 - falha ou resposta inválida do avaliador semântico não gera resposta pedagógica, commit ou repetição silenciosa da explicação;
+- toda evidência válida exige feedback explícito do resultado antes da próxima tarefa;
 
 ## Validação da release
 

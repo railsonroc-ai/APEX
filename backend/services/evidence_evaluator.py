@@ -33,6 +33,20 @@ class EvidenceEvaluator:
     }
 
     @classmethod
+    def feedback_outcome(cls, evidence):
+        """Traduz uma avaliação aceita em feedback seguro para o aluno."""
+        if not isinstance(evidence, dict):
+            return None
+        try:
+            confidence = float(evidence.get("confidence"))
+        except (TypeError, ValueError):
+            return "unverified"
+        if confidence < cls.MIN_CONFIDENCE:
+            return "unverified"
+        outcome = evidence.get("outcome")
+        return outcome if outcome in cls.VALID_OUTCOMES else "unverified"
+
+    @classmethod
     def is_applicable(cls, state):
         if not isinstance(state, dict):
             return False

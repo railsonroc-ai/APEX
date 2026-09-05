@@ -2,7 +2,7 @@ from backend.services.turn_teaching_contract import TurnTeachingContract
 from backend.services.tutor_response_validator import TutorResponseValidator
 
 
-def ordered_contract(action="explicar", review=False):
+def ordered_contract(action="explicar", review=False, evidence_outcome=None):
     return TurnTeachingContract.build(
         {
             "area": "ads",
@@ -11,6 +11,7 @@ def ordered_contract(action="explicar", review=False):
         },
         action,
         review_mode=review,
+        evidence_outcome=evidence_outcome,
     )
 
 
@@ -61,3 +62,22 @@ def test_validated_chunks_reconstruct_exact_response():
     chunks = TutorResponseValidator.chunks(response, size=180)
     assert "".join(chunks) == response
     assert [len(chunk) for chunk in chunks] == [180, 180, 41]
+
+
+def test_confirmed_evidence_requires_explicit_feedback_before_next_task():
+    contract = ordered_contract(
+        "consolidar",
+        evidence_outcome="demonstrated",
+    )
+    without_feedback = TutorResponseValidator.validate(
+        "Tarefa: descreva três passos em ordem.",
+        contract,
+    )
+    result = TutorResponseValidator.validate_or_fallback(
+        "Tarefa: descreva três passos em ordem.",
+        contract,
+    )
+
+    assert "feedback_missing" in without_feedback["errors"]
+    assert result["fallback_used"] is True
+    assert result["response"].startswith("Correto.\n\nTarefa:")

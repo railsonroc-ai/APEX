@@ -39,6 +39,10 @@ class TutorResponseValidator:
 
         text = response.strip()
         normalized = normalize_alias(text) or ""
+        if contract.feedback_text:
+            expected_feedback = normalize_alias(contract.feedback_text) or ""
+            if not normalized.startswith(expected_feedback):
+                errors.append("feedback_missing")
         if len(text) > contract.max_chars:
             errors.append("too_long")
         if text.count("?") > contract.max_questions:

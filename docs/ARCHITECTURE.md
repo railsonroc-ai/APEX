@@ -120,6 +120,12 @@ avaliação não produzir rubrica válida, a rota não chama o tutor nem confirm
 turno: falha fechada em vez de interpretar indisponibilidade como ausência de
 aprendizagem e repetir a explicação anterior.
 
+Uma evidência confirmada também gera um contrato explícito de feedback. A
+resposta seguinte deve começar com `Correto.`, `Parcialmente correto.`, `Ainda
+não está correto.` ou a indicação de evidência insuficiente antes de avançar
+para outra tarefa. Esse prefixo é decidido e validado no servidor; não depende
+de o texto livre da LLM lembrar de informar o resultado ao aluno.
+
 A migration 15 sincroniza o catálogo v2 e inclui `ads.algorithms.ordered_steps`
 como unidade interna não selecionável. `ads.algorithms` permanece o tópico que o
 aluno escolhe, mas `Curriculum` ativa o primeiro microconceito. Essa é a primeira
