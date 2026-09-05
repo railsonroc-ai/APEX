@@ -2,6 +2,7 @@ import json
 
 from backend.services.concept_catalog import ConceptCatalog
 from backend.services.learner_signals import LearnerSignals
+from backend.services.objective_task_evaluator import ObjectiveTaskEvaluator
 from backend.services.evidence_policy import EvidencePolicy
 from backend.services.rubric_policy import RubricPolicy
 
@@ -149,6 +150,10 @@ class EvidenceEvaluator:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
+
+    @staticmethod
+    def evaluate_objective_task(evaluation):
+        return ObjectiveTaskEvaluator.evaluate(evaluation)
 
     @classmethod
     def parse_evaluation_response(cls, content):

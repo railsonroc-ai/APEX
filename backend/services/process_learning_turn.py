@@ -363,6 +363,12 @@ class ProcessLearningTurn:
                     applied=evidence_applied,
                     assistance_level=assistance_level,
                     artifact_ref=artifact_ref,
+                    source=(
+                        semantic_evidence.get("source")
+                        if isinstance(semantic_evidence, dict)
+                        else None
+                    )
+                    or EvidencePolicy.SOURCE_SEMANTIC_LLM,
                 )
 
                 if evidence_event is not None and learning_attempt is not None:
@@ -540,6 +546,7 @@ class ProcessLearningTurn:
         applied,
         assistance_level,
         artifact_ref,
+        source,
     ):
         if (
             not isinstance(semantic_evidence, dict)
@@ -587,6 +594,7 @@ class ProcessLearningTurn:
             session_id=normalized_session_id,
             assistance_level=assistance_level,
             artifact_ref=artifact_ref,
+            source=source,
         )
 
     @classmethod

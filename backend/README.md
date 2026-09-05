@@ -27,6 +27,7 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `services/tutor_response_validator.py` — valida a resposta completa antes de qualquer conteúdo chegar à tela.
 - `services/task_spec.py` — extrai a tarefa única realmente exibida para o ledger.
 - `services/evidence_evaluator.py` — avaliação semântica com critérios estruturados e outcome derivado pelo servidor.
+- `services/objective_task_evaluator.py` — correção determinística de tarefas fechadas reconhecidas pelo conceito e pelo enunciado confirmado.
 - `services/rubric_policy.py` — contrato versionado dos critérios e derivação determinística do outcome.
 - `services/attempt_policy.py` — classificação determinística do tipo pedagógico de tentativa.
 - `services/learning_attempt.py` — ledger imutável da tentativa do aluno antes do julgamento.
@@ -73,6 +74,10 @@ No chat, tokens do provider são acumulados no servidor. O
 `TutorResponseValidator` aceita ou substitui a resposta segundo o
 `TurnTeachingContract`; `ProcessLearningTurn` confirma resposta, assistência
 observada e tarefa extraída; somente depois o SSE entrega o texto validado.
+Tarefas objetivas conhecidas são avaliadas localmente antes da LLM. Se uma
+tarefa aberta exigir avaliação semântica e o provider não devolver uma rubrica
+válida, o turno falha fechado: não repete a explicação, não cria falsa
+evidência e não altera o progresso.
 
 ## Testes
 

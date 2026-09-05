@@ -111,6 +111,15 @@ A migration 10 separa formalmente a ação do aluno do julgamento semântico. `l
 
 A migration 11 cria `learning_tasks` e adiciona `task_id` opcional a `learning_attempts`. O `TaskPolicy` define quando há tarefa avaliável. No fluxo HTTP atual, `TaskSpec` extrai somente a tarefa da resposta já validada; `LearningTask` não armazena mais toda a explicação como se fosse o enunciado. No turno seguinte, a associação usa aluno, sessão, conceito e `source_turn_id`.
 
+`ObjectiveTaskEvaluator` corrige localmente tarefas fechadas que reconhece pelo
+`concept_id` e pelo enunciado imutável do `LearningTask`. O primeiro exercício
+de ordenação aceita linguagem natural e a notação `2, 3, 1`, produz a mesma
+rubrica estruturada do avaliador semântico e registra a origem
+`deterministic_task`. Tarefas não reconhecidas continuam na LLM. Se essa
+avaliação não produzir rubrica válida, a rota não chama o tutor nem confirma o
+turno: falha fechada em vez de interpretar indisponibilidade como ausência de
+aprendizagem e repetir a explicação anterior.
+
 A migration 15 sincroniza o catálogo v2 e inclui `ads.algorithms.ordered_steps`
 como unidade interna não selecionável. `ads.algorithms` permanece o tópico que o
 aluno escolhe, mas `Curriculum` ativa o primeiro microconceito. Essa é a primeira

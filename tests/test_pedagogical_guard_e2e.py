@@ -5,6 +5,7 @@ import backend.app as app_module
 import backend.database as database_module
 from backend.services.assistance_event import AssistanceEvent
 from backend.services.concept_progress import ConceptProgress
+from backend.services.evidence_event import EvidenceEvent
 from backend.services.learner_state import LearnerState
 from backend.services.learning_history import LearningHistory
 from backend.services.learning_task import LearningTask
@@ -32,6 +33,34 @@ class BadCompletions:
 class BadGroq:
     def __init__(self, **kwargs):
         self.chat = SimpleNamespace(completions=BadCompletions())
+
+
+class TutorOnlyCompletions:
+    def create(self, **kwargs):
+        if kwargs.get("stream") is False:
+            raise AssertionError("a tarefa objetiva não deve chamar o avaliador LLM")
+        return [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(
+            content="Agora use variável e Python. Tarefa: escreva código com if."
+        ))])]
+
+
+class TutorOnlyGroq:
+    def __init__(self, **kwargs):
+        self.chat = SimpleNamespace(completions=TutorOnlyCompletions())
+
+
+class InvalidEvidenceCompletions:
+    def create(self, **kwargs):
+        if kwargs.get("stream") is True:
+            raise AssertionError("o tutor não deve responder sem avaliação válida")
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+            content="não foi possível produzir a rubrica"
+        ))])
+
+
+class InvalidEvidenceGroq:
+    def __init__(self, **kwargs):
+        self.chat = SimpleNamespace(completions=InvalidEvidenceCompletions())
 
 
 def prepare(monkeypatch, tmp_path):
@@ -64,6 +93,84 @@ def test_restart_logic_from_zero_activates_first_microconcept(monkeypatch, tmp_p
     assert task is not None
     assert task["prompt_text"] in LearningHistory.find("guard-start")["assistant_message"]
     assert AssistanceEvent.for_turn("guard-start")["assistance_level"] == "guided"
+
+
+def test_correct_first_answer_advances_and_never_repeats_first_turn(monkeypatch, tmp_path):
+    prepare(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
+    client = app_module.app.test_client()
+    first = client.post(
+        "/chat/stream",
+        json={
+            "message": "Quero recomeçar lógica de programação do zero",
+            "area": "ads",
+            "turn_id": "guard-sequence-start",
+        },
+    ).get_data(as_text=True)
+
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", TutorOnlyGroq)
+    second = client.post(
+        "/chat/stream",
+        json={
+            "message": "Primeiro abrir a torneira, depois lavar e por último secar.",
+            "area": "ads",
+            "turn_id": "guard-sequence-answer",
+        },
+    ).get_data(as_text=True)
+
+    first_message = LearningHistory.find("guard-sequence-start")["assistant_message"]
+    second_message = LearningHistory.find("guard-sequence-answer")["assistant_message"]
+    evidence = EvidenceEvent.for_turn("guard-sequence-answer")
+
+    assert '"done": true' in second.lower()
+    assert second_message != first_message
+    assert "guardar um arquivo" in second_message.lower()
+    assert LearnerState.get("ads")["stage"] == "fixar"
+    assert LearnerState.get("ads")["mastery"] == 0.2
+    assert evidence["outcome"] == "demonstrated"
+    assert evidence["source"] == "deterministic_task"
+
+
+def test_unavailable_evaluator_never_repeats_or_commits_as_if_answered(
+    monkeypatch,
+    tmp_path,
+):
+    prepare(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
+    client = app_module.app.test_client()
+    client.post(
+        "/chat/stream",
+        json={
+            "message": "Quero recomeçar lógica de programação do zero",
+            "area": "ads",
+            "turn_id": "guard-unavailable-start",
+        },
+    ).get_data(as_text=True)
+
+    monkeypatch.setattr(
+        app_module.EvidenceEvaluator,
+        "evaluate_objective_task",
+        lambda evaluation: None,
+    )
+    monkeypatch.setattr(
+        app_module.LLMGateway,
+        "PROVIDER_FACTORY",
+        InvalidEvidenceGroq,
+    )
+    response = client.post(
+        "/chat/stream",
+        json={
+            "message": "Abrir a torneira, lavar as mãos e secar as mãos.",
+            "area": "ads",
+            "turn_id": "guard-unavailable-answer",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert "não foi possível avaliar" in body.lower()
+    assert '"done": true' not in body.lower()
+    assert LearningHistory.find("guard-unavailable-answer") is None
+    assert LearnerState.get("ads")["stage"] == "compreender"
 
 
 def test_invalid_provider_text_never_reaches_screen_or_history(monkeypatch, tmp_path):

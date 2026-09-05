@@ -824,8 +824,14 @@ def chat_stream():
                     task_context=task_context,
                 )
 
+            semantic_evidence = (
+                EvidenceEvaluator.evaluate_objective_task(evidence_evaluation)
+                if evidence_evaluation
+                else None
+            )
+
             evidence_messages = None
-            if evidence_evaluation:
+            if evidence_evaluation and semantic_evidence is None:
                 evidence_messages = EvidenceEvaluator.build_evaluation_messages(
                     evidence_evaluation
                 )
@@ -844,11 +850,26 @@ def chat_stream():
                         error_type=type(exc).__name__,
                     )
 
-            semantic_evidence = None
-            if evidence_content:
+            if evidence_content and semantic_evidence is None:
                 semantic_evidence = EvidenceEvaluator.parse_evaluation_response(
                     evidence_content
                 )
+
+            if evidence_evaluation and semantic_evidence is None:
+                Observability.event(
+                    current_app.logger,
+                    "evidence_evaluation_unavailable",
+                    source_turn_id=evidence_evaluation.get("source_turn_id"),
+                )
+                yield sse(
+                    {
+                        "error": (
+                            "Não foi possível avaliar sua resposta com segurança. "
+                            "Seu progresso não foi alterado; envie a mesma resposta novamente."
+                        )
+                    }
+                )
+                return
 
             turn_result = ProcessLearningTurn.preview_turn(
                 area,
