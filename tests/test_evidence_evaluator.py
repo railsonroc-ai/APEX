@@ -32,6 +32,24 @@ def test_control_message_is_not_evaluated():
     assert result is None
 
 
+def test_answer_combined_with_difficulty_signal_is_still_evaluated():
+    state = {
+        "area": "ads",
+        "current_concept_id": "ads.variables",
+        "current_concept": "variáveis",
+        "stage": "testar",
+    }
+    result = EvidenceEvaluator.build_evaluation(
+        "Uma variável guarda um valor, mas ainda não entendi bem.",
+        [],
+        state,
+        task_context=task_context(),
+    )
+
+    assert result is not None
+    assert "guarda um valor" in result["student_answer"]
+
+
 def test_without_current_concept_is_not_applicable():
     state = {"area": "ads", "current_concept_id": None, "current_concept": None, "stage": "testar"}
     history = [{"role": "assistant", "content": "Explique o conceito."}]

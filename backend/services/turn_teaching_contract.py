@@ -58,21 +58,44 @@ class TurnTeachingContract:
     ):
         state = learner_state if isinstance(learner_state, dict) else {}
         concept_id = state.get("current_concept_id")
+        review_mode = bool(
+            review_mode
+            or state.get("stage") == "reencontrar"
+            or teaching_action == "revisar"
+        )
         ceiling = AssistancePolicy.level_for_action(teaching_action)
+        difficulty = state.get("difficulty_count", 0)
+        try:
+            difficulty = max(0, int(difficulty))
+        except (TypeError, ValueError):
+            difficulty = 0
+        if teaching_action == "corrigir" and difficulty < 2:
+            ceiling = "guided"
         task_required = TaskPolicy.is_assessable_action(teaching_action)
         feedback = cls._feedback(evidence_outcome)
 
         if concept_id == cls.ORDERED_STEPS:
             if review_mode:
                 safe = (
-                    "Tarefa: sem consultar uma explicação, descreva uma atividade cotidiana "
+                    "Tarefa: de memória, descreva uma atividade cotidiana "
                     "em três passos na ordem em que precisa acontecer."
+                )
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = (
+                    "Tarefa: coloque estes passos na ordem correta: secar as mãos; "
+                    "abrir a torneira; lavar as mãos."
+                )
+            elif teaching_action == "corrigir" and difficulty < 2:
+                safe = (
+                    "Pense em apenas o começo: antes de lavar as mãos, é preciso "
+                    "possibilitar que a água saia.\n\n"
+                    "Tarefa: entre abrir a torneira e lavar as mãos, qual acontece primeiro?"
                 )
             elif teaching_action == "corrigir":
                 safe = (
-                    "A ordem precisa mostrar o que acontece primeiro, depois e por último. "
-                    "Tarefa: reorganize estes passos para lavar as mãos: secar as mãos; "
-                    "abrir a torneira; lavar as mãos."
+                    "Correção completa: a ordem é abrir a torneira, lavar as mãos e secar "
+                    "as mãos.\n\n"
+                    "Tarefa: coloque em ordem: guardar o copo; pegar o copo; beber a água."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 safe = (
@@ -115,7 +138,7 @@ class TurnTeachingContract:
         )
         if review_mode:
             safe = (
-                f"Tarefa: recupere de memória e explique com suas palavras o ponto "
+                f"Tarefa: de memória, explique com suas palavras o ponto "
                 f"principal de {safe_focus}."
             )
         elif task_required:

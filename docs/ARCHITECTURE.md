@@ -33,6 +33,8 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `services/tutor_response_validator.py`: valida a resposta completa antes da tela e observa a assistência real.
 - `services/task_spec.py`: extrai a tarefa única da resposta confirmada.
 - `prompts/tutor.py`: contém as regras pedagógicas atuais.
+- `docs/PEDAGOGICAL_CONTRACT.md`: rastreia cada diretriz até enforcement e teste;
+  regra presente apenas no prompt permanece explicitamente parcial.
 
 ## Kernel pedagógico
 
@@ -125,6 +127,13 @@ resposta seguinte deve começar com `Correto.`, `Parcialmente correto.`, `Ainda
 não está correto.` ou a indicação de evidência insuficiente antes de avançar
 para outra tarefa. Esse prefixo é decidido e validado no servidor; não depende
 de o texto livre da LLM lembrar de informar o resultado ao aluno.
+Se a única violação for a ausência do prefixo, o servidor preserva a resposta
+válida e acrescenta o veredito. Violações reais continuam usando fallback seguro.
+
+Mensagens de controle puras, como “não entendi”, não são evidência. Quando a
+mensagem também contém uma resposta à tarefa, a produção é avaliada e o sinal de
+dificuldade é aplicado separadamente. Na primeira dificuldade da fatia inicial,
+o contrato reduz o recorte com ajuda guiada; correção direta fica para recorrência.
 
 A migration 15 sincroniza o catálogo v2 e inclui `ads.algorithms.ordered_steps`
 como unidade interna não selecionável. `ads.algorithms` permanece o tópico que o
@@ -143,6 +152,10 @@ usado antes da persistência e da tela.
 A migration 12 cria `learning_session_states` e `learning_session_events`. O lifecycle é controlado no servidor: `pause` captura o conceito e a etapa atuais; `resume` em modo `direct` volta a `studying` sem alterar o estado pedagógico, enquanto `review` coloca a sessão em `reviewing` e move temporariamente o `LearnerState` para `reencontrar`. Uma evidência aplicada com outcome `demonstrated` conclui essa revisão e restaura a etapa capturada. Enquanto `paused`, novos turnos são recusados; pause/resume usam o mesmo `LearningTurnLease` de aluno+área e o chat revalida o estado depois de adquirir a lease para fechar a janela de corrida. Eventos anteriores à migration 12 não são inventados: sessões existentes recebem apenas estado inicial `studying`.
 
 A interface não cria uma segunda máquina de estados. `apex-api.js` apenas consulta e solicita transições; `chat-engine.js` mantém uma cópia transitória para renderização e sempre a substitui pela resposta server-side. Ao carregar, o envio fica temporariamente indisponível até a primeira consulta de sessão. Em `paused`, textarea e envio são bloqueados; em `reviewing`, a revisão é iniciada por um turno explícito e, depois de cada resposta confirmada, o frontend consulta novamente o lifecycle para refletir automaticamente a conclusão da revisão.
+
+`/api/session` também projeta, de forma read-only, o conceito, a etapa, a ação
+pedagógica e o próximo passo. A interface usa essa projeção para externalizar o
+foco sem decidir ou persistir transições no navegador.
 
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação

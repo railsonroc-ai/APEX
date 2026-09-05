@@ -97,9 +97,9 @@ class ObjectiveTaskEvaluator:
 
         return cls._evidence(
             {
-                RubricPolicy.TASK_RESPONSE: RubricPolicy.PARTIAL,
+                RubricPolicy.TASK_RESPONSE: RubricPolicy.NOT_MET,
                 RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
-                RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
             },
-            "A resposta não apresentou inequivocamente os três passos em ordem.",
+            "A resposta não apresentou os três passos pedidos em uma ordem avaliável.",
         )

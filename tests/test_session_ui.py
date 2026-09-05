@@ -17,6 +17,9 @@ def test_session_controls_are_present_in_main_interface():
         'id="session-panel-actions"',
         'id="resume-direct-btn"',
         'id="resume-review-btn"',
+        'id="learning-focus"',
+        'id="learning-focus-title"',
+        'id="learning-focus-detail"',
     }
     for marker in required_ids:
         assert marker in TEMPLATE
@@ -47,6 +50,8 @@ def test_chat_engine_uses_server_status_to_control_input():
     assert "sendButton.disabled =\n        blocked || busy;" in CHAT_JS
     assert "pauseButton.hidden =\n        status !== 'studying';" in CHAT_JS
     assert "sessionPanelActions.hidden = true;" in CHAT_JS
+    assert "Responda à tarefa atual ou peça ajuda..." in CHAT_JS
+    assert "`Agora: ${focus.concept}. `" in CHAT_JS
 
 
 def test_pause_and_both_resume_modes_are_wired_to_api():

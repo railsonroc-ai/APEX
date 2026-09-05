@@ -138,6 +138,25 @@
             display: none;
         }
 
+        .learning-focus {
+            margin: 12px 20px 0;
+            padding: 10px 14px;
+            border-left: 3px solid var(--accent-color);
+            border-radius: 8px;
+            background: #111827;
+            color: #cbd5e1;
+            font-size: 0.86rem;
+            line-height: 1.4;
+        }
+
+        .learning-focus[hidden] {
+            display: none;
+        }
+
+        .learning-focus strong {
+            color: #f8fafc;
+        }
+
         .session-panel-title {
             font-weight: 700;
             margin-bottom: 4px;
@@ -415,6 +434,16 @@
     <div id="chat-container">
 
         <section
+            id="learning-focus"
+            class="learning-focus"
+            hidden
+            aria-live="polite"
+        >
+            <strong id="learning-focus-title"></strong>
+            <span id="learning-focus-detail"></span>
+        </section>
+
+        <section
             id="session-panel"
             class="session-panel"
             hidden
@@ -473,7 +502,7 @@
             <textarea
                 id="user-input"
                 rows="1"
-                placeholder="Digite sua dúvida aqui..."
+                placeholder="Diga o que você quer aprender..."
             ></textarea>
 
             <button

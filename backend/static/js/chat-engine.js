@@ -107,6 +107,21 @@
       'session-panel-actions'
     );
 
+  const learningFocus =
+    document.getElementById(
+      'learning-focus'
+    );
+
+  const learningFocusTitle =
+    document.getElementById(
+      'learning-focus-title'
+    );
+
+  const learningFocusDetail =
+    document.getElementById(
+      'learning-focus-detail'
+    );
+
   let sessionRuntime = {
     status: 'loading'
   };
@@ -217,9 +232,15 @@
       } else if (sessionStatus() === 'reviewing') {
         input.placeholder =
           'Responda à revisão de retomada...';
+      } else if (
+        sessionRuntime.learning_focus
+        && sessionRuntime.learning_focus.concept
+      ) {
+        input.placeholder =
+          'Responda à tarefa atual ou peça ajuda...';
       } else {
         input.placeholder =
-          'Digite sua dúvida aqui...';
+          'Diga o que você quer aprender...';
       }
     }
 
@@ -232,6 +253,31 @@
       pauseButton.disabled =
         sessionStatus() !== 'studying'
         || busy;
+    }
+
+    if (learningFocus) {
+      const focus =
+        sessionRuntime.learning_focus
+        && typeof sessionRuntime.learning_focus === 'object'
+          ? sessionRuntime.learning_focus
+          : null;
+      const showFocus = Boolean(
+        sessionStatus() === 'studying'
+        && focus
+        && focus.concept
+      );
+      learningFocus.hidden = !showFocus;
+
+      if (showFocus) {
+        if (learningFocusTitle) {
+          learningFocusTitle.textContent =
+            `Agora: ${focus.concept}. `;
+        }
+        if (learningFocusDetail) {
+          learningFocusDetail.textContent =
+            focus.next_step || '';
+        }
+      }
     }
 
     if (resumeDirectButton) {

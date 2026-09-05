@@ -347,6 +347,37 @@ def _resolve_session_request():
     return data, context
 
 
+def _with_learning_focus(session, context):
+    """Projeta o checkpoint pedagógico sem criar estado paralelo no navegador."""
+    state = LearnerState.get(
+        context["area"],
+        student_id=context["student_id"],
+    )
+    action = TeachingPolicy.choose_action(state)
+    next_step_by_action = {
+        "explicar": "Leia somente este passo e responda à tarefa apresentada.",
+        "verificar": "Explique com suas palavras o que você compreendeu.",
+        "testar": "Responda à tarefa atual sem consultar a solução.",
+        "corrigir": "Observe o recorte menor e faça uma nova tentativa.",
+        "consolidar": "Aplique a mesma ideia na nova tarefa.",
+        "revisar": "Recupere de memória e responda à revisão.",
+        "avancar": "O próximo passo será escolhido após confirmar o domínio.",
+    }
+    return {
+        **session,
+        "learning_focus": {
+            "concept_id": state.get("current_concept_id"),
+            "concept": state.get("current_concept"),
+            "stage": state.get("stage"),
+            "teaching_action": action,
+            "next_step": next_step_by_action.get(
+                action,
+                "Continue a partir do passo atual.",
+            ),
+        },
+    }
+
+
 @bp.route("/api/session", methods=["GET"])
 def session_status():
     if not verify_auth():
@@ -359,6 +390,7 @@ def session_status():
         student_id=context["student_id"],
         session_id=context["session_id"],
     )
+    session = _with_learning_focus(session, context)
     return jsonify({"ok": True, "session": session}), 200
 
 
@@ -389,6 +421,7 @@ def pause_session():
             student_id=context["student_id"],
             session_id=context["session_id"],
         )
+        session = _with_learning_focus(session, context)
     except SessionLifecycleError as exc:
         return jsonify({"error": str(exc)}), 409
     finally:
@@ -440,6 +473,7 @@ def resume_session():
             student_id=context["student_id"],
             session_id=context["session_id"],
         )
+        session = _with_learning_focus(session, context)
     except SessionLifecycleError as exc:
         return jsonify({"error": str(exc)}), 409
     finally:
@@ -889,6 +923,8 @@ def chat_stream():
                 review_mode=(
                     session_runtime.get("status")
                     == LearningSessionLifecycle.REVIEWING
+                    or learner_state.get("stage") == "reencontrar"
+                    or teaching_action == "revisar"
                 ),
                 evidence_outcome=EvidenceEvaluator.feedback_outcome(
                     semantic_evidence

@@ -111,6 +111,14 @@ class TutorCore:
             assistance_contract = AssistancePolicy.contract_for_action(
                 teaching_action
             )
+            if isinstance(teaching_contract, TurnTeachingContract):
+                level = teaching_contract.assistance_ceiling
+                assistance_contract = {
+                    **assistance_contract,
+                    "assistance_level": level,
+                    "assistance_ceiling": level,
+                    "instruction": AssistancePolicy.CONTRACTS[level],
+                }
             pedagogical_context += (
                 "Nível de assistência controlado pelo servidor: "
                 f"{assistance_contract['assistance_level']}.\n"

@@ -28,6 +28,11 @@ class TeachingPolicy:
         except (TypeError, ValueError):
             mastery = 0.0
 
+        # Revisão começa sempre por recuperação, mesmo quando o histórico do
+        # conceito registra dificuldade. A ajuda só aumenta depois da tentativa.
+        if stage == "reencontrar":
+            return "revisar"
+
         if difficulty >= 2:
             return "corrigir"
 

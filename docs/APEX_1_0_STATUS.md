@@ -12,6 +12,9 @@ LER → COMPREENDER → EXPLICAR → TESTAR → CORRIGIR → FIXAR → CONCLUIR 
 
 A progressão não depende apenas do texto gerado pela LLM. Regras de estado, domínio, evidência e revisão são aplicadas pelo backend.
 
+A matriz versionada entre diretriz, enforcement, teste e lacunas assumidas fica
+em `docs/PEDAGOGICAL_CONTRACT.md`.
+
 ## Componentes principais
 
 - `LearnerState`: estado pedagógico atual.
@@ -104,6 +107,17 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - a primeira tarefa objetiva é corrigida deterministicamente e sua resposta correta avança o estado mesmo se o avaliador LLM estiver indisponível;
 - falha ou resposta inválida do avaliador semântico não gera resposta pedagógica, commit ou repetição silenciosa da explicação;
 - toda evidência válida exige feedback explícito do resultado antes da próxima tarefa;
+- concordância curta sem os elementos pedidos na tarefa objetiva produz
+  evidência insuficiente e não muda estágio ou domínio;
+- quando apenas o prefixo de feedback falta, o servidor o acrescenta sem apagar
+  o restante da resposta válida;
+- comandos puros de dificuldade não viram evidência, mas respostas combinadas
+  com pedido de ajuda são avaliadas antes da reorientação;
+- todos os fallbacks da fatia inicial são validados, incluindo correção e revisão;
+- a primeira dificuldade reduz o recorte com assistência guiada; ajuda direta
+  fica reservada para dificuldade recorrente;
+- `/api/session` projeta o conceito e a próxima ação para a interface sem criar
+  uma segunda fonte de estado;
 
 ## Validação da release
 

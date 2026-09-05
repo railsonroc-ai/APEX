@@ -29,6 +29,8 @@ def test_session_status_uses_server_context(monkeypatch):
     payload = response.get_json()
     assert payload["ok"] is True
     assert payload["session"]["status"] == "studying"
+    assert payload["session"]["learning_focus"]["stage"] == "compreender"
+    assert "next_step" in payload["session"]["learning_focus"]
     assert captured == {
         "area": "it",
         "student_id": "student_default",

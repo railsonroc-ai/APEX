@@ -80,7 +80,12 @@ válida, o turno falha fechado: não repete a explicação, não cria falsa
 evidência e não altera o progresso.
 Quando existe evidência válida, o `TurnTeachingContract` exige que a resposta
 comece com feedback explícito sobre o resultado antes de apresentar a próxima
-tarefa. O validador substitui respostas que omitam esse retorno.
+tarefa. Quando somente esse prefixo falta, o validador o acrescenta e preserva
+o conteúdo válido; violações reais continuam usando fallback seguro.
+
+As decisões, provas e lacunas pedagógicas são mantidas em
+`docs/PEDAGOGICAL_CONTRACT.md`. Uma regra só é marcada como implementada quando
+possui enforcement server-side e teste de comportamento.
 
 ## Testes
 

@@ -15,11 +15,11 @@ class TutorResponseValidator:
     }
 
     @classmethod
-    def observe_assistance(cls, response):
+    def observe_assistance(cls, response, contract=None):
         text = normalize_alias(response) or ""
         if any(marker in text for marker in (
             "a resposta e", "a solucao e", "passo a passo da solucao",
-            "faca assim", "correcao completa",
+            "faca assim", "correcao completa", "a ordem correta e",
         )):
             return "direct"
         if any(marker in text for marker in (
@@ -41,7 +41,18 @@ class TutorResponseValidator:
         normalized = normalize_alias(text) or ""
         if contract.feedback_text:
             expected_feedback = normalize_alias(contract.feedback_text) or ""
-            if not normalized.startswith(expected_feedback):
+            known_feedback = {
+                normalize_alias(value)
+                for value in contract.FEEDBACK_BY_OUTCOME.values()
+            }
+            conflicting = any(
+                normalized.startswith(value)
+                for value in known_feedback
+                if value and value != expected_feedback
+            )
+            if conflicting:
+                errors.append("feedback_conflict")
+            elif not normalized.startswith(expected_feedback):
                 errors.append("feedback_missing")
         if len(text) > contract.max_chars:
             errors.append("too_long")
@@ -64,7 +75,7 @@ class TutorResponseValidator:
             if len(normalize_alias(prefix) or "") > 40:
                 errors.append("review_teaches_before_retrieval")
 
-        observed = cls.observe_assistance(text)
+        observed = cls.observe_assistance(text, contract=contract)
         if cls.LEVEL_RANK[observed] > cls.LEVEL_RANK.get(contract.assistance_ceiling, 0):
             errors.append("assistance_above_ceiling")
         return {"valid": not errors, "errors": errors, "assistance_level": observed}
@@ -74,6 +85,17 @@ class TutorResponseValidator:
         result = cls.validate(response, contract)
         if result["valid"]:
             return {**result, "response": response.strip(), "fallback_used": False}
+        if result["errors"] == ["feedback_missing"] and contract.feedback_text:
+            repaired_response = f"{contract.feedback_text}\n\n{response.strip()}"
+            repaired = cls.validate(repaired_response, contract)
+            if repaired["valid"]:
+                return {
+                    **repaired,
+                    "response": repaired_response,
+                    "fallback_used": False,
+                    "feedback_prepended": True,
+                    "rejected_errors": result["errors"],
+                }
         if contract.safe_response:
             fallback = cls.validate(contract.safe_response, contract)
             if not fallback["valid"]:

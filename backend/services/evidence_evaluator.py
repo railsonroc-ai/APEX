@@ -86,7 +86,7 @@ class EvidenceEvaluator:
             return None
         if not isinstance(user_message, str) or not user_message.strip():
             return None
-        if LearnerSignals.detect(user_message):
+        if LearnerSignals.is_control_only(user_message):
             return None
 
         definition = ConceptCatalog.resolve(

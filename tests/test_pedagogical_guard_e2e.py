@@ -132,6 +132,104 @@ def test_correct_first_answer_advances_and_never_repeats_first_turn(monkeypatch,
     assert evidence["source"] == "deterministic_task"
 
 
+def test_short_acknowledgement_does_not_advance_the_first_task(monkeypatch, tmp_path):
+    prepare(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
+    client = app_module.app.test_client()
+    client.post(
+        "/chat/stream",
+        json={
+            "message": "Quero recomeçar lógica de programação do zero",
+            "area": "ads",
+            "turn_id": "guard-ack-start",
+        },
+    ).get_data(as_text=True)
+
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", TutorOnlyGroq)
+    response = client.post(
+        "/chat/stream",
+        json={"message": "entendi", "area": "ads", "turn_id": "guard-ack"},
+    )
+    body = response.get_data(as_text=True)
+    state = LearnerState.get("ads")
+    evidence = EvidenceEvent.for_turn("guard-ack")
+    message = LearningHistory.find("guard-ack")["assistant_message"]
+
+    assert '"done": true' in body.lower()
+    assert message.startswith("Ainda não há evidência suficiente.\n\n")
+    assert state["stage"] == "compreender"
+    assert state["mastery"] == 0.0
+    assert evidence["outcome"] == "insufficient"
+
+
+def test_first_wrong_answer_reorients_without_delivering_the_solution(monkeypatch, tmp_path):
+    prepare(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
+    client = app_module.app.test_client()
+    client.post(
+        "/chat/stream",
+        json={
+            "message": "Quero recomeçar lógica de programação do zero",
+            "area": "ads",
+            "turn_id": "guard-wrong-start",
+        },
+    ).get_data(as_text=True)
+
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", TutorOnlyGroq)
+    client.post(
+        "/chat/stream",
+        json={
+            "message": "Secar as mãos, abrir a torneira e lavar as mãos.",
+            "area": "ads",
+            "turn_id": "guard-wrong-answer",
+        },
+    ).get_data(as_text=True)
+    state = LearnerState.get("ads")
+    message = LearningHistory.find("guard-wrong-answer")["assistant_message"]
+    assistance = AssistanceEvent.for_turn("guard-wrong-answer")
+
+    assert message.startswith("Ainda não está correto.\n\n")
+    assert "a ordem é abrir" not in message.lower()
+    assert state["stage"] == "corrigir"
+    assert state["difficulty_count"] == 1
+    assert assistance["assistance_level"] == "guided"
+
+
+def test_answer_plus_difficulty_is_evaluated_before_reorientation(monkeypatch, tmp_path):
+    prepare(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
+    client = app_module.app.test_client()
+    client.post(
+        "/chat/stream",
+        json={
+            "message": "Quero recomeçar lógica de programação do zero",
+            "area": "ads",
+            "turn_id": "guard-mixed-start",
+        },
+    ).get_data(as_text=True)
+
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", TutorOnlyGroq)
+    client.post(
+        "/chat/stream",
+        json={
+            "message": (
+                "Abrir a torneira, lavar as mãos e secar as mãos, "
+                "mas não entendi o motivo."
+            ),
+            "area": "ads",
+            "turn_id": "guard-mixed-answer",
+        },
+    ).get_data(as_text=True)
+    state = LearnerState.get("ads")
+    evidence = EvidenceEvent.for_turn("guard-mixed-answer")
+    message = LearningHistory.find("guard-mixed-answer")["assistant_message"]
+
+    assert evidence["outcome"] == "demonstrated"
+    assert message.startswith("Correto.\n\n")
+    assert state["stage"] == "corrigir"
+    assert state["difficulty_count"] == 1
+
+
 def test_unavailable_evaluator_never_repeats_or_commits_as_if_answered(
     monkeypatch,
     tmp_path,

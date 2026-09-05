@@ -38,6 +38,14 @@ def test_rejects_original_wrong_order():
     assert result["outcome"] == "misconception"
 
 
+@pytest.mark.parametrize("answer", ("entendi", "ok", "tá"))
+def test_short_acknowledgement_is_insufficient_and_cannot_advance(answer):
+    result = ObjectiveTaskEvaluator.evaluate(evaluation(answer))
+
+    assert result["outcome"] == "insufficient"
+    assert result["criteria"]["task_response"] == "not_met"
+
+
 def test_does_not_claim_open_or_unrelated_tasks():
     assert ObjectiveTaskEvaluator.evaluate(
         evaluation(
