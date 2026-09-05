@@ -8,6 +8,8 @@ from backend.identity import (
 from backend.concepts import (
     CATALOG_VERSION,
     CONCEPT_SEEDS,
+    CATALOG_V1_VERSION,
+    CORE_CONCEPT_SEEDS,
     legacy_canonical_name,
     legacy_concept_id,
     normalize_alias,
@@ -622,7 +624,8 @@ def add_concept_catalog(connection):
         )
     """)
 
-    for seed in CONCEPT_SEEDS:
+    # A migration histórica permanece congelada no catálogo que existia na v1.
+    for seed in CORE_CONCEPT_SEEDS:
         connection.execute(
             """
             INSERT INTO concept_definitions (
@@ -639,7 +642,7 @@ def add_concept_catalog(connection):
                 seed.concept_id,
                 seed.area,
                 seed.canonical_name,
-                CATALOG_VERSION,
+                CATALOG_V1_VERSION,
             ),
         )
 
@@ -664,7 +667,7 @@ def add_concept_catalog(connection):
                     seed.area,
                     normalized,
                     seed.concept_id,
-                    CATALOG_VERSION,
+                    CATALOG_V1_VERSION,
                 ),
             )
 
@@ -735,7 +738,7 @@ def add_concept_catalog(connection):
                 concept_id,
                 area,
                 legacy_canonical_name(concept_id),
-                CATALOG_VERSION,
+                CATALOG_V1_VERSION,
             ),
         )
 
@@ -755,7 +758,7 @@ def add_concept_catalog(connection):
                     area,
                     normalized,
                     concept_id,
-                    CATALOG_VERSION,
+                    CATALOG_V1_VERSION,
                 ),
             )
         return concept_id
@@ -1956,6 +1959,47 @@ def enable_privacy_lifecycle(connection):
 
 
 
+def sync_executable_curriculum_v2(connection):
+    """Sincroniza os nós executáveis sem reescrever migrations históricas."""
+
+    for seed in CONCEPT_SEEDS:
+        connection.execute(
+            """
+            INSERT INTO concept_definitions (
+                concept_id, area, canonical_name, catalog_version,
+                selectable, source
+            ) VALUES (?, ?, ?, ?, ?, 'seed')
+            ON CONFLICT(concept_id) DO UPDATE SET
+                canonical_name = excluded.canonical_name,
+                catalog_version = excluded.catalog_version,
+                selectable = excluded.selectable,
+                source = 'seed'
+            """,
+            (
+                seed.concept_id,
+                seed.area,
+                seed.canonical_name,
+                CATALOG_VERSION,
+                int(seed.selectable),
+            ),
+        )
+        for alias in (seed.canonical_name, *seed.aliases):
+            normalized = normalize_alias(alias)
+            if not normalized:
+                continue
+            connection.execute(
+                """
+                INSERT INTO concept_aliases (
+                    area, normalized_alias, concept_id, catalog_version
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(area, normalized_alias) DO UPDATE SET
+                    concept_id = excluded.concept_id,
+                    catalog_version = excluded.catalog_version
+                """,
+                (seed.area, normalized, seed.concept_id, CATALOG_VERSION),
+            )
+
+
 MIGRATIONS = (
     Migration(
         1,
@@ -2026,6 +2070,11 @@ MIGRATIONS = (
         14,
         "enable_privacy_lifecycle",
         enable_privacy_lifecycle,
+    ),
+    Migration(
+        15,
+        "sync_executable_curriculum_v2",
+        sync_executable_curriculum_v2,
     ),
 )
 

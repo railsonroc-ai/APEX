@@ -23,6 +23,9 @@ def test_release_gate_covers_core_journeys_and_failure_contracts():
         "tests/test_privacy_api.py",
         "tests/test_chat_engine_stream_confirmation.py",
         "tests/test_session_ui.py",
+        "tests/test_learning_intent.py",
+        "tests/test_tutor_response_validator.py",
+        "tests/test_pedagogical_guard_e2e.py",
     }
     assert set(apex_release_gate.CRITICAL_TEST_FILES) == required
 

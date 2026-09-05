@@ -2,6 +2,7 @@ import json
 
 from backend.services.concept_catalog import ConceptCatalog
 from backend.services.learner_signals import LearnerSignals
+from backend.services.learning_intent import LearningIntent
 
 
 class ConceptTracker:
@@ -40,10 +41,13 @@ class ConceptTracker:
 
     @classmethod
     def is_explicit_study_request(cls, user_message):
-        if not isinstance(user_message, str):
-            return False
-        normalized = " ".join(user_message.lower().split())
-        return any(marker in normalized for marker in cls.EXPLICIT_STUDY_REQUESTS)
+        return LearningIntent.detect(user_message).get("explicit", False)
+
+    @classmethod
+    def identify_locally(cls, user_message, area="ads"):
+        """Resolve pedidos explícitos reconhecíveis sem uma chamada ao LLM."""
+        intent = LearningIntent.detect(user_message, area=area)
+        return intent.get("concept_id") if intent.get("explicit") else None
 
     @classmethod
     def resolve_candidate(cls, state, candidate, area="ads"):

@@ -8,7 +8,7 @@ O objetivo é evoluir além de um chatbot: ensinar, verificar compreensão, adap
 
 A fundação técnica e os blocos estruturais do APEX 1.0 estão concluídos; o projeto entrou em hardening de Release Candidate.
 
-O APEX possui Flask, Groq, streaming SSE, TutorCore, histórico controlado, autenticação vinculada ao aluno, rate limit server-side, headers HTTP de segurança, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn, um ledger imutável de evidências pedagógicas, catálogo mínimo de competências com `concept_id` estável e uma política de domínio baseada em portfólio de evidências. O backend agora expõe `create_app()` sem inicializar o SQLite durante o import; produção e testes fazem o bootstrap do banco explicitamente. A observabilidade operacional usa `request_id`/`turn_id` correlacionados e eventos estruturados sem conteúdo sensível. A camada de privacidade permite exportar os dados do aluno, excluir transacionalmente seus registros e executar retenção administrativa em dry-run por padrão.
+O APEX possui Flask, Groq, SSE, TutorCore, histórico autoritativo, SQLite, identidade pedagógica explícita, notas, health check, síntese de voz, frontend JavaScript modular, timeout da IA, Gunicorn e ledgers imutáveis de tarefa, tentativa, evidência, assistência e domínio. O modo atual é individual e aberto, com um aluno padrão resolvido no servidor. O backend expõe `create_app()` sem inicializar o SQLite durante o import; produção e testes fazem o bootstrap do banco explicitamente.
 
 A fundação do Evidence Engine torna avaliações confirmadas auditáveis por aluno/turno, com rubrica e policy versionadas. A identidade das competências também é estável: aliases convergem para `concept_id` versionado e texto livre do LLM não funciona como chave de negócio. A `MasteryPolicy` adiciona um segundo gate: score sozinho não conclui uma competência; são exigidas evidências aplicadas suficientes, demonstrações, diversidade mínima de etapas e uma evidência atual válida. A assistência é rastreada pelo servidor: cada resposta do tutor recebe um `AssistanceEvent` derivado da ação pedagógica e a evidência seguinte herda esse nível de suporte. A tentativa do aluno existe como entidade própria (`LearningAttempt`), separada do julgamento, e uma `RubricAssessment` imutável registra os critérios usados na avaliação. A partir da migration 11, o fluxo real também registra uma `LearningTask` imutável para o turno do tutor; novas avaliações sem tarefa server-side confirmada não são produzidas pelo app, e a tentativa passa a carregar o `task_id` correspondente. A migration 12 adiciona um lifecycle persistente de sessão: o aluno pode pausar, retomar direto ou iniciar uma revisão de retomada, com transições auditáveis e bloqueio de novos turnos enquanto a sessão está pausada. A interface principal já consome esse lifecycle: exibe o estado server-side, bloqueia o campo de mensagem durante a pausa e oferece as ações **Pausar**, **Retomar direto** e **Revisar antes** sem manter uma segunda fonte de verdade no navegador.
 
@@ -45,6 +45,13 @@ O kernel adaptativo principal e o ciclo de privacidade já estão implementados.
 Depois da auditoria final da 1.0 serão adicionadas experiências de formação profissional, incluindo projetos, debugging, manutenção de código, Git, testes, APIs, bancos de dados, refatoração, code review, logs, deploy e problemas realistas.
 
 A meta continua sendo desenvolver autonomia técnica, não dependência do tutor.
+
+O primeiro percurso com controle pedagógico executável é lógica/algoritmos: o
+pedido começa em `ads.algorithms.ordered_steps`. Nesse percurso, o servidor
+define a única novidade permitida, bloqueia antecipações, limita perguntas e
+assistência, valida a resposta inteira antes da tela e persiste somente a tarefa
+confirmada. O catálogo profissional completo continua incremental e ainda não
+deve ser confundido com um `SkillGraph` pronto.
 
 ## Documentação
 

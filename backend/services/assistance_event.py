@@ -22,6 +22,7 @@ class AssistanceEvent:
         concept_id=None,
         student_id=DEFAULT_STUDENT_ID,
         session_id=None,
+        observed_level=None,
     ):
         normalized_student_id = normalize_student_id(student_id)
         normalized_area = LearningHistory.normalize_area(area)
@@ -63,7 +64,14 @@ class AssistanceEvent:
             raise ValueError("turno sem resposta do tutor")
 
         assistance_id = uuid4().hex
-        assistance_level = AssistancePolicy.level_for_action(normalized_action)
+        assistance_level = (
+            AssistancePolicy.level_for_action(normalized_action)
+            if observed_level is None
+            else AssistancePolicy.validate_observed_level(
+                normalized_action,
+                observed_level,
+            )
+        )
 
         connection = get_db_connection()
         try:
@@ -163,15 +171,13 @@ class AssistanceEvent:
         if not normalized_session_id:
             return EvidencePolicy.ASSISTANCE_UNTRACKED
 
-        tutor_message = LearningHistory.normalize_message(
-            evidence_context.get("tutor_message")
-        )
+        tutor_message = LearningHistory.normalize_message(evidence_context.get("tutor_message"))
         source_turn_id = LearningHistory.normalize_turn_id(
             evidence_context.get("source_turn_id")
         )
         requested_concept = evidence_context.get("concept_id")
         definition = ConceptCatalog.resolve(normalized_area, requested_concept)
-        if not tutor_message or definition is None:
+        if definition is None or (not source_turn_id and not tutor_message):
             return EvidencePolicy.ASSISTANCE_UNTRACKED
 
         connection = get_db_connection()
@@ -181,12 +187,18 @@ class AssistanceEvent:
                 normalized_session_id,
                 normalized_area,
                 definition["concept_id"],
-                tutor_message,
             ]
+            message_filter = ""
             turn_filter = ""
             if source_turn_id:
                 turn_filter = " AND turns.turn_id = ?"
                 params.append(source_turn_id)
+            else:
+                message_filter = (
+                    " AND SUBSTR(TRIM(turns.assistant_message), 1, "
+                    f"{LearningHistory.MAX_CONTENT_CHARS}) = ?"
+                )
+                params.append(tutor_message)
 
             row = connection.execute(
                 f"""
@@ -199,7 +211,7 @@ class AssistanceEvent:
                   AND turns.session_id = ?
                   AND turns.area = ?
                   AND turns.concept_id = ?
-                  AND SUBSTR(TRIM(turns.assistant_message), 1, {LearningHistory.MAX_CONTENT_CHARS}) = ?
+                  {message_filter}
                   {turn_filter}
                 ORDER BY turns.id DESC
                 LIMIT 1

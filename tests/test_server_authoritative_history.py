@@ -175,7 +175,7 @@ def test_chat_uses_only_server_history_and_persists_response(
 
     assert (
         committed["assistant_message"]
-        == "Resposta atual."
+        == "Tarefa: explique com suas palavras o ponto principal de variáveis trabalhado até aqui."
     )
 
 

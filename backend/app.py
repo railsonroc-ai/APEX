@@ -72,6 +72,10 @@ from backend.services.data_lifecycle import (
     DataLifecycle,
     DataLifecycleError,
 )
+from backend.services.learning_intent import LearningIntent
+from backend.services.task_spec import TaskSpec
+from backend.services.turn_teaching_contract import TurnTeachingContract
+from backend.services.tutor_response_validator import TutorResponseValidator
 
 
 # ============================================================
@@ -674,6 +678,8 @@ def chat_stream():
                 student_id=student_id,
                 session_id=session_id,
             )
+            # O estado lido antes da lease pode ter mudado em outro request.
+            session_runtime = current_session
             if current_session.get("status") == LearningSessionLifecycle.PAUSED:
                 Observability.event(
                     current_app.logger,
@@ -727,6 +733,7 @@ def chat_stream():
                 student_id=student_id,
             )
             initial_stage = learner_state.get("stage")
+            learning_intent = LearningIntent.detect(user_message, area=area)
             if session_runtime.get("status") == LearningSessionLifecycle.REVIEWING:
                 tracking_request = None
             else:
@@ -734,7 +741,13 @@ def chat_stream():
                     user_message, learner_state, area
                 )
             identification_messages = None
-            if tracking_request:
+            identified_concept = ConceptTracker.identify_locally(
+                user_message,
+                area=area,
+            )
+            if learning_intent.get("restart") and not identified_concept:
+                identified_concept = learner_state.get("current_concept_id")
+            if tracking_request and not identified_concept:
                 identification_messages = ConceptTracker.build_identification_messages(
                     tracking_request
                 )
@@ -753,8 +766,7 @@ def chat_stream():
                         error_type=type(exc).__name__,
                     )
 
-            identified_concept = None
-            if identification_content:
+            if identification_content and not identified_concept:
                 identified_concept = ConceptTracker.parse_identification_response(
                     identification_content,
                     area=area,
@@ -765,6 +777,7 @@ def chat_stream():
                 learner_state,
                 identified_concept,
                 student_id=student_id,
+                restart=learning_intent.get("restart", False),
             )
 
             history = LearningHistory.get_messages(
@@ -774,6 +787,10 @@ def chat_stream():
                 ),
                 student_id=student_id,
             )
+            if learning_intent.get("restart"):
+                history = []
+            else:
+                history = LearningIntent.history_since_latest_restart(history)
 
             evidence_evaluation = None
             if not tracking_request:
@@ -841,9 +858,18 @@ def chat_stream():
                 student_id=student_id,
                 session_id=session_id,
                 evidence_context=evidence_evaluation,
+                restart=learning_intent.get("restart", False),
             )
             learner_state = turn_result["learner_state"]
             teaching_action = turn_result["teaching_action"]
+            teaching_contract = TurnTeachingContract.build(
+                learner_state,
+                teaching_action,
+                review_mode=(
+                    session_runtime.get("status")
+                    == LearningSessionLifecycle.REVIEWING
+                ),
+            )
 
             messages = (
                 TutorCore.build_messages(
@@ -855,27 +881,33 @@ def chat_stream():
                 )
             )
 
-            assistant_parts = []
-
-            for token in llm.stream_text(
-                messages,
-                purpose=LLMGateway.PURPOSE_TUTOR_RESPONSE,
+            if (
+                tracking_request
+                and learner_state.get("current_concept_id")
+                == TurnTeachingContract.ORDERED_STEPS
             ):
-                assistant_parts.append(token)
-                yield sse(
-                    {
-                        "token": token
-                    }
-                )
-
-            assistant_message = "".join(
-                assistant_parts
-            )
+                assistant_message = teaching_contract.safe_response
+            else:
+                assistant_parts = []
+                for token in llm.stream_text(
+                    messages,
+                    purpose=LLMGateway.PURPOSE_TUTOR_RESPONSE,
+                ):
+                    # Nenhum token não validado atravessa esta fronteira.
+                    assistant_parts.append(token)
+                assistant_message = "".join(assistant_parts)
 
             if not assistant_message.strip():
                 raise RuntimeError(
                     "Resposta vazia recebida do tutor"
                 )
+
+            validation = TutorResponseValidator.validate_or_fallback(
+                assistant_message,
+                teaching_contract,
+            )
+            assistant_message = validation["response"]
+            task_prompt = TaskSpec.extract(assistant_message)
 
             committed_result = ProcessLearningTurn.commit_turn(
                 area,
@@ -888,6 +920,9 @@ def chat_stream():
                 session_id=session_id,
                 evidence_context=evidence_evaluation,
                 teaching_action=teaching_action,
+                observed_assistance_level=validation["assistance_level"],
+                task_prompt=task_prompt,
+                restart=learning_intent.get("restart", False),
             )
 
             final_state = committed_result.get("learner_state", {})
@@ -905,7 +940,12 @@ def chat_stream():
                 ),
                 mastery=final_state.get("mastery"),
                 duplicate=bool(committed_result.get("duplicate")),
+                pedagogical_fallback=bool(validation.get("fallback_used")),
             )
+
+            # A tela recebe apenas conteúdo validado e já confirmado no banco.
+            for chunk in TutorResponseValidator.chunks(assistant_message):
+                yield sse({"token": chunk})
 
             yield sse(
                 {

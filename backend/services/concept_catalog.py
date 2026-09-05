@@ -23,7 +23,7 @@ class ConceptCatalog:
             "area": seed.area,
             "canonical_name": seed.canonical_name,
             "catalog_version": CATALOG_VERSION,
-            "selectable": 1,
+            "selectable": int(seed.selectable),
             "source": "seed",
         }
 
@@ -61,7 +61,10 @@ class ConceptCatalog:
         normalized_area = normalize_area(area)
         seed = seed_for_value(normalized_area, value)
         if seed is not None:
-            return cls._seed_dict(seed)
+            item = cls._seed_dict(seed)
+            if selectable_only and not item["selectable"]:
+                return None
+            return item
 
         if not isinstance(value, str) or not value.strip():
             return None
@@ -98,11 +101,12 @@ class ConceptCatalog:
     @classmethod
     def list_selectable(cls, area):
         normalized_area = normalize_area(area)
-        # Seeds are the complete selectable catalog in v1; no DB read is needed.
+        # Seeds are the executable catalog; internal microconcepts are hidden
+        # from free concept selection.
         return [
             cls._seed_dict(seed)
             for seed in CONCEPT_SEEDS
-            if seed.area == normalized_area
+            if seed.area == normalized_area and seed.selectable
         ]
 
     @classmethod
@@ -118,4 +122,8 @@ class ConceptCatalog:
     @classmethod
     def seeded_ids(cls, area):
         normalized_area = normalize_area(area)
-        return [seed.concept_id for seed in CONCEPT_SEEDS if seed.area == normalized_area]
+        return [
+            seed.concept_id
+            for seed in CONCEPT_SEEDS
+            if seed.area == normalized_area and seed.selectable
+        ]

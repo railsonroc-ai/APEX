@@ -31,6 +31,11 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - `ConceptCatalog`: catálogo mínimo versionado com `concept_id` estável, aliases e nomes canônicos.
 - `ConceptTracker`: seleção do conceito somente entre IDs permitidos pelo catálogo.
 - `ConceptActivation`: início e retomada de conceitos sem contaminação de estado.
+- `LearningIntent`: reconhece início, troca e “recomeçar do zero” sem depender do LLM.
+- `Curriculum`: converte o tópico amplo em uma microcompetência executável.
+- `TurnTeachingContract`: define por turno uma novidade, representação, proibições, limites, tarefa e teto de ajuda.
+- `TutorResponseValidator`: impede que texto não validado chegue à tela e mede a assistência efetivamente observada.
+- `TaskSpec`: separa a tarefa concreta do restante da resposta do tutor.
 - `ConceptProgress`: progresso persistente por `concept_id` estável.
 - `ReviewScheduler`: cálculo de revisão espaçada.
 - `ReviewQueue`: seleção de revisões vencidas.
@@ -73,7 +78,7 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - avaliações abaixo do limiar podem ser auditadas sem alterar o estado pedagógico;
 - conclusão de competência exige decisão explícita da `MasteryPolicy`; chamar a transição isoladamente não contorna o gate;
 - cada evidência confirmada recebe uma avaliação de domínio versionada e explicável por bloqueadores;
-- o nível de assistência não é fornecido pelo navegador nem declarado pela LLM: nasce da `TeachingPolicy`/`AssistancePolicy` e é persistido no turno confirmado;
+- a ação pedagógica define um teto de assistência; o nível persistido é observado na resposta final validada, não fornecido pelo navegador nem autodeclarado pela LLM;
 - a assistência atribuída à resposta do aluno vem da mensagem anterior do tutor, associada por aluno, sessão, área, conceito e turno;
 - conclusão de domínio exige pelo menos uma demonstração com assistência `independent` ou `light`, e a evidência final não pode ser `untracked`, `guided` ou `direct`;
 - conceitos legados desconhecidos são preservados como não selecionáveis e recebem nome seguro;
@@ -93,6 +98,9 @@ A progressão não depende apenas do texto gerado pela LLM. Regras de estado, do
 - pausa → revisar antes → tarefa de retenção → evidência demonstrada → restauração exata da etapa anterior é coberta como jornada única;
 - exportação seguida de exclusão de um aluno populado confirma isolamento, remoção de credencial/rate-limit e ausência de foreign keys órfãs;
 - `apex_apply_update.py` valida manifesto canônico e correspondência exata entre manifesto e conteúdo do pacote, rejeitando manifestos técnicos extras;
+- nenhum token do provider é enviado antes da validação e do commit; a projeção SSE contém somente a resposta pedagógica confirmada;
+- o percurso inicial de lógica usa `ads.algorithms.ordered_steps`, impedindo que domínio de uma microcompetência conclua o tópico amplo inteiro;
+- “recomeçar do zero” limpa domínio, dificuldade, evidência e agenda de revisão da microcompetência ativada;
 
 ## Validação da release
 

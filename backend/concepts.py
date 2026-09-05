@@ -4,7 +4,8 @@ import re
 import unicodedata
 
 
-CATALOG_VERSION = 1
+CATALOG_V1_VERSION = 1
+CATALOG_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -13,9 +14,10 @@ class ConceptSeed:
     area: str
     canonical_name: str
     aliases: tuple[str, ...]
+    selectable: bool = True
 
 
-CONCEPT_SEEDS = (
+CORE_CONCEPT_SEEDS = (
     ConceptSeed(
         "ads.variables",
         "ads",
@@ -69,6 +71,10 @@ CONCEPT_SEEDS = (
             "algoritmo",
             "algorithms",
             "algorithm",
+            "lógica de programação",
+            "logica de programacao",
+            "lógica",
+            "logica",
         ),
     ),
     ConceptSeed(
@@ -124,6 +130,24 @@ CONCEPT_SEEDS = (
         ),
     ),
 )
+
+
+MICRO_CONCEPT_SEEDS = (
+    ConceptSeed(
+        "ads.algorithms.ordered_steps",
+        "ads",
+        "sequência ordenada de passos",
+        (
+            "sequencia ordenada de passos",
+            "passos ordenados",
+            "ordered steps",
+        ),
+        selectable=False,
+    ),
+)
+
+
+CONCEPT_SEEDS = CORE_CONCEPT_SEEDS + MICRO_CONCEPT_SEEDS
 
 
 _SEED_BY_ID = {

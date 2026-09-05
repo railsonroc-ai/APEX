@@ -1,12 +1,13 @@
 from pathlib import Path
 
 
-def test_stream_commits_before_done_confirmation():
+def test_stream_validates_and_commits_before_token_delivery():
     source = Path(
         "backend/app.py"
     ).read_text()
 
-    token_marker = '"token":'
+    validation_marker = "TutorResponseValidator.validate_or_fallback("
+    token_marker = 'yield sse({"token": chunk})'
     commit_marker = (
         "ProcessLearningTurn.commit_turn("
     )
@@ -15,9 +16,8 @@ def test_stream_commits_before_done_confirmation():
     assert source.count(commit_marker) == 1
     assert source.count(done_marker) >= 2
 
-    token_position = source.index(
-        token_marker
-    )
+    validation_position = source.index(validation_marker)
+    token_position = source.index(token_marker)
     commit_position = source.index(
         commit_marker
     )
@@ -26,8 +26,9 @@ def test_stream_commits_before_done_confirmation():
     )
 
     assert (
-        token_position
+        validation_position
         < commit_position
+        < token_position
         < done_position
     )
 

@@ -26,6 +26,7 @@ class LearningTask:
         prompt_text,
         student_id=DEFAULT_STUDENT_ID,
         session_id=None,
+        assistance_level=None,
     ):
         normalized_student_id = normalize_student_id(student_id)
         normalized_area = LearningHistory.normalize_area(area)
@@ -66,10 +67,18 @@ class LearningTask:
             raise ValueError("turno fonte não corresponde à sessão")
         if source_turn.get("concept_id") != definition["concept_id"]:
             raise ValueError("turno fonte não corresponde ao conceito")
-        if LearningHistory.normalize_message(source_turn.get("assistant_message")) != normalized_prompt:
-            raise ValueError("prompt da tarefa não corresponde ao turno confirmado")
+        confirmed_response = LearningHistory.normalize_message(source_turn.get("assistant_message"))
+        if not confirmed_response or normalized_prompt not in confirmed_response:
+            raise ValueError("tarefa não pertence à resposta confirmada")
 
-        assistance_level = AssistancePolicy.level_for_action(teaching_action)
+        assistance_level = (
+            AssistancePolicy.level_for_action(teaching_action)
+            if assistance_level is None
+            else AssistancePolicy.validate_observed_level(
+                teaching_action,
+                assistance_level,
+            )
+        )
         task_id = f"task_{uuid4().hex}"
 
         connection = get_db_connection()

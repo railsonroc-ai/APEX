@@ -28,6 +28,7 @@ from backend.services.rubric_assessment import RubricAssessment
 from backend.services.review_scheduler import ReviewScheduler
 from backend.services.teaching_policy import TeachingPolicy
 from backend.services.task_policy import TaskPolicy
+from backend.services.task_spec import TaskSpec
 
 
 class ProcessLearningTurn:
@@ -38,6 +39,7 @@ class ProcessLearningTurn:
         learner_state,
         identified_concept,
         student_id=DEFAULT_STUDENT_ID,
+        restart=False,
     ):
         if not identified_concept:
             return learner_state
@@ -58,6 +60,7 @@ class ProcessLearningTurn:
             area,
             resolved_concept,
             student_id=student_id,
+            restart=restart,
         )
 
     @classmethod
@@ -67,6 +70,7 @@ class ProcessLearningTurn:
         learner_state,
         identified_concept,
         student_id=DEFAULT_STUDENT_ID,
+        restart=False,
     ):
         with preview_transaction():
             return cls.activate_identified_concept(
@@ -74,6 +78,7 @@ class ProcessLearningTurn:
                 learner_state,
                 identified_concept,
                 student_id=student_id,
+                restart=restart,
             )
 
     @classmethod
@@ -86,6 +91,7 @@ class ProcessLearningTurn:
         student_id=DEFAULT_STUDENT_ID,
         session_id=None,
         evidence_context=None,
+        restart=False,
     ):
         with preview_transaction():
             learner_state = LearnerState.get(
@@ -98,6 +104,7 @@ class ProcessLearningTurn:
                 learner_state,
                 identified_concept,
                 student_id=student_id,
+                restart=restart,
             )
 
             assistance_level = AssistanceEvent.resolve_for_evidence(
@@ -140,6 +147,9 @@ class ProcessLearningTurn:
         evidence_context=None,
         teaching_action=None,
         artifact_ref=None,
+        observed_assistance_level=None,
+        task_prompt=None,
+        restart=False,
     ):
         normalized_turn_id = (
             LearningHistory.normalize_turn_id(
@@ -278,6 +288,7 @@ class ProcessLearningTurn:
                 learner_state,
                 identified_concept,
                 student_id=normalized_student_id,
+                restart=restart,
             )
 
             state_before_evidence = dict(learner_state)
@@ -390,6 +401,7 @@ class ProcessLearningTurn:
                     teaching_action=effective_action,
                     student_id=normalized_student_id,
                     session_id=normalized_session_id,
+                    observed_level=observed_assistance_level,
                 )
 
                 active_concept_id = result["learner_state"].get(
@@ -399,15 +411,24 @@ class ProcessLearningTurn:
                     active_concept_id
                     and TaskPolicy.is_assessable_action(effective_action)
                 ):
+                    # O adaptador HTTP sempre fornece somente a tarefa validada.
+                    # O fallback mantém compatibilidade com chamadas internas
+                    # antigas que tratavam a resposta inteira como tarefa.
+                    extracted_task = (
+                        task_prompt
+                        or TaskSpec.extract(normalized_assistant_message)
+                        or normalized_assistant_message
+                    )
                     learning_task = LearningTask.record(
                         source_turn_id=normalized_turn_id,
                         area=normalized_area,
                         concept_id=active_concept_id,
                         stage=result["learner_state"].get("stage"),
                         teaching_action=effective_action,
-                        prompt_text=normalized_assistant_message,
+                        prompt_text=extracted_task,
                         student_id=normalized_student_id,
                         session_id=normalized_session_id,
+                        assistance_level=observed_assistance_level,
                     )
                     if learning_task is not None:
                         LearningSessionLifecycle.bind_review_task(

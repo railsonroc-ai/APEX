@@ -45,3 +45,18 @@ def test_invented_concept_id_is_rejected():
         )
         is None
     )
+
+
+def test_logic_alias_resolves_selectable_parent_concept():
+    assert ConceptCatalog.concept_id(
+        "ads", "lógica de programação", selectable_only=True
+    ) == "ads.algorithms"
+
+
+def test_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve("ads", "ads.algorithms.ordered_steps")
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "ads.algorithms.ordered_steps", selectable_only=True
+    ) is None
+    assert "ads.algorithms.ordered_steps" not in ConceptCatalog.seeded_ids("ads")

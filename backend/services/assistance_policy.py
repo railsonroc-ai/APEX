@@ -10,7 +10,7 @@ class AssistancePolicy:
     """
 
     POLICY_ID = "server_teaching_assistance"
-    POLICY_VERSION = 1
+    POLICY_VERSION = 2
 
     ACTION_TO_LEVEL = {
         "testar": "independent",
@@ -61,6 +61,21 @@ class AssistancePolicy:
         return cls.ACTION_TO_LEVEL[normalized]
 
     @classmethod
+    def validate_observed_level(cls, teaching_action, observed_level):
+        normalized = EvidencePolicy.normalize_assistance_level(observed_level)
+        ceiling = cls.level_for_action(teaching_action)
+        rank = {
+            EvidencePolicy.ASSISTANCE_UNTRACKED: 0,
+            "independent": 0,
+            "light": 1,
+            "guided": 2,
+            "direct": 3,
+        }
+        if rank[normalized] > rank[ceiling]:
+            raise ValueError("assistência observada excede o teto pedagógico")
+        return normalized
+
+    @classmethod
     def contract_for_action(cls, teaching_action):
         level = cls.level_for_action(teaching_action)
         return {
@@ -68,5 +83,6 @@ class AssistancePolicy:
             "policy_version": cls.POLICY_VERSION,
             "teaching_action": cls.normalize_teaching_action(teaching_action),
             "assistance_level": level,
+            "assistance_ceiling": level,
             "instruction": cls.CONTRACTS[level],
         }

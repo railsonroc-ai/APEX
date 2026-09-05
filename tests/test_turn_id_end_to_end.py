@@ -207,7 +207,7 @@ def test_backend_forwards_turn_id_to_commit(
 
     assert (
         captured["assistant_message"]
-        == "Resposta confirmada."
+        == "Tarefa: explique com suas palavras o ponto principal de variáveis trabalhado até aqui."
     )
 
     assert captured["student_id"] == "student_default"

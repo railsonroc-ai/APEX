@@ -111,13 +111,17 @@ def test_legacy_turn_without_assistance_ledger_remains_untracked(monkeypatch, tm
 def test_process_uses_previous_server_assistance_for_evidence(monkeypatch, tmp_path):
     prepare_database(monkeypatch, tmp_path)
 
+    tutor_response = (
+        "Uma variável associa um nome a um valor.\n\n"
+        "Tarefa: explique com suas palavras o que é uma variável."
+    )
     first = ProcessLearningTurn.commit_turn(
         area="ads",
         user_message="Quero estudar variáveis.",
         identified_concept="variáveis",
         semantic_evidence=None,
         turn_id="turn-assist-first",
-        assistant_message="Explique com suas palavras o que é uma variável.",
+        assistant_message=tutor_response,
     )
     assert first["teaching_action"] == "explicar"
     source = AssistanceEvent.for_turn("turn-assist-first")
@@ -135,10 +139,11 @@ def test_process_uses_previous_server_assistance_for_evidence(monkeypatch, tmp_p
         turn_id="turn-assist-answer",
         assistant_message="Agora aplique isso em um pequeno exemplo.",
         evidence_context={
+            "source_turn_id": "turn-assist-first",
             "concept_id": "ads.variables",
             "concept": "variáveis",
             "stage": "compreender",
-            "tutor_message": "Explique com suas palavras o que é uma variável.",
+            "tutor_message": "explique com suas palavras o que é uma variável.",
             "student_answer": "Uma variável associa um nome a um valor.",
         },
     )

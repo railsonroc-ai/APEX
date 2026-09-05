@@ -1,3 +1,5 @@
+import json
+
 from backend.services.evidence_evaluator import EvidenceEvaluator
 
 
@@ -122,9 +124,10 @@ def test_builds_semantic_evaluation_messages():
     assert "conceptual_correctness" in result[0]["content"]
     assert "understanding_application" in result[0]["content"]
     assert result[1]["role"] == "user"
-    assert "Tarefa: task-test" in result[1]["content"]
-    assert "Tipo: practice" in result[1]["content"]
-    assert "Conceito: variáveis" in result[1]["content"]
+    payload = json.loads(result[1]["content"])
+    assert payload["task_id"] == "task-test"
+    assert payload["task_kind"] == "practice"
+    assert payload["concept"] == "variáveis"
 
 
 def test_untrusted_concept_text_is_not_sent_to_evaluator():

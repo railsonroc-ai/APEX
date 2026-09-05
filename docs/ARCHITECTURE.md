@@ -26,7 +26,12 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 
 - `services/llm_gateway.py`: única fronteira com o SDK do provider; aplica timeout, retries deliberados, limites de geração por finalidade e logs de metadados sem conteúdo.
 - `services/observability.py`: contexto operacional por request/turno, pseudonimização de identidade e emissão de eventos JSON privacy-first.
-- `services/tutor_core.py`: prepara e protege o contexto enviado ao modelo.
+- `services/tutor_core.py`: prepara o contexto e incorpora o contrato executável do turno.
+- `services/learning_intent.py`: resolve pedidos explícitos de início/troca/reinício.
+- `services/curriculum.py`: mapeia conceitos visíveis para a primeira microcompetência.
+- `services/turn_teaching_contract.py`: define novidade permitida, proibições, representação, tarefa, tamanho e teto de ajuda.
+- `services/tutor_response_validator.py`: valida a resposta completa antes da tela e observa a assistência real.
+- `services/task_spec.py`: extrai a tarefa única da resposta confirmada.
 - `prompts/tutor.py`: contém as regras pedagógicas atuais.
 
 ## Kernel pedagógico
@@ -42,7 +47,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `RubricAssessment`: snapshot imutável dos critérios e da origem do outcome.
 - `EvidenceEvent`: ledger imutável de avaliações confirmadas.
 - `EvidencePolicy`: IDs/versões de rubrica e política, além dos níveis válidos de assistência.
-- `AssistancePolicy`: converte somente ações pedagógicas server-side em níveis de ajuda e contratos de geração.
+- `AssistancePolicy`: converte ações pedagógicas server-side em tetos de ajuda e valida a assistência observada.
 - `AssistanceEvent`: ledger imutável da assistência fornecida por turno confirmado.
 - `MasteryPolicy`: decisão determinística de conclusão sobre o portfólio de evidências e assistência.
 - `MasteryAssessment`: snapshot imutável da decisão de domínio ligada ao `EvidenceEvent`.
@@ -100,11 +105,25 @@ A migration 7 introduz `concept_definitions` e `concept_aliases` e reconstrói a
 
 A migration 8 cria `mastery_assessments`, também protegido contra `UPDATE` e `DELETE`. A `MasteryPolicy` não substitui o score numérico por uma fórmula opaca: ela usa o score existente como um sinal, mas exige um portfólio mínimo antes da conclusão. O gate atual exige evidência aplicada suficiente, múltiplas demonstrações, diversidade entre etapas pedagógicas, etapa atual `fixar`, outcome atual `demonstrated` e score mínimo. Quando a assistência deixa de ser `untracked`, ao menos uma demonstração deve ocorrer com assistência `independent` ou `light`. Se um conceito legado chega a `fixar` sem diversidade de etapas, a decisão recomenda `testar` para produzir evidência em outro contexto e evitar retenção infinita em `fixar`. Demonstrações em `reencontrar` são contabilizadas explicitamente como sinal de retenção para a evolução posterior da política.
 
-A migration 9 cria `assistance_events`, também imutável. A classificação não vem do navegador nem de uma autoavaliação da LLM: `AssistancePolicy` deriva o nível do `teaching_action` escolhido pelo kernel. `testar` e `revisar` são contratos `independent`; `verificar` e `consolidar`, `light`; `explicar`, `guided`; `corrigir`, `direct`; `avancar` permanece `untracked`. O `TutorCore` recebe um contrato de geração correspondente para limitar o suporte permitido. Ao avaliar a resposta seguinte, o backend localiza o turno anterior exato do tutor pelo mesmo aluno, sessão, área, `concept_id` e mensagem confirmada, então copia o nível desse `AssistanceEvent` para o `EvidenceEvent`. A `MasteryPolicy` v2 exige pelo menos uma demonstração de baixa assistência e impede conclusão quando a evidência final foi produzida sob ajuda `guided`, `direct` ou não rastreada; nesses casos, em `fixar`, recomenda um novo `testar` para obter uma demonstração mais autônoma.
+A migration 9 cria `assistance_events`, também imutável. A ação escolhida pelo kernel define o teto (`independent`, `light`, `guided` ou `direct`), enquanto o nível persistido vem da resposta final observada pelo validador e nunca pode exceder esse teto. Ao avaliar a resposta seguinte, o backend usa o `source_turn_id` exato e o mesmo aluno, sessão, área e `concept_id` para copiar a assistência ao `EvidenceEvent`.
 
 A migration 10 separa formalmente a ação do aluno do julgamento semântico. `learning_attempts` registra a tentativa confirmada, o estágio, o tipo pedagógico, a assistência observada, o artefato opcional e o turno-fonte do tutor. `rubric_assessments` registra os três critérios da rubrica — resposta à tarefa, correção conceitual e compreensão/aplicação —, sua completude, confiança e origem do outcome. Ambos os ledgers são protegidos contra `UPDATE` e `DELETE`. Na rubrica `semantic_evidence` v2, a LLM deixa de escolher diretamente o outcome global: ela classifica os critérios e `RubricPolicy` deriva `demonstrated`, `partial`, `misconception` ou `insufficient` no servidor. Respostas históricas/internas sem critérios continuam auditáveis como `legacy_outcome`, sem fingir que possuem uma rubrica completa.
 
-A migration 11 cria `learning_tasks` e adiciona `task_id` opcional a `learning_attempts`. O `TaskPolicy` transforma a ação pedagógica controlada pelo servidor em um tipo de tarefa e um contrato de geração; `TutorCore` recebe esse contrato para terminar o turno com uma única microtarefa quando a ação é avaliável. Depois que a resposta do tutor é confirmada, o backend persiste a `LearningTask` usando o texto real do turno, sem pedir à LLM que invente identidade, rubrica ou nível de assistência. No turno seguinte, o app só monta uma nova avaliação semântica se localizar essa tarefa pelo mesmo aluno, sessão, conceito e `source_turn_id`; o `LearningAttempt` resultante recebe o `task_id`. Tentativas anteriores à migration 11 permanecem com `task_id = NULL`, sem retropreenchimento fictício. `AttemptPolicy` v2 e `EvidencePolicy` v5 marcam essa mudança de contrato.
+A migration 11 cria `learning_tasks` e adiciona `task_id` opcional a `learning_attempts`. O `TaskPolicy` define quando há tarefa avaliável. No fluxo HTTP atual, `TaskSpec` extrai somente a tarefa da resposta já validada; `LearningTask` não armazena mais toda a explicação como se fosse o enunciado. No turno seguinte, a associação usa aluno, sessão, conceito e `source_turn_id`.
+
+A migration 15 sincroniza o catálogo v2 e inclui `ads.algorithms.ordered_steps`
+como unidade interna não selecionável. `ads.algorithms` permanece o tópico que o
+aluno escolhe, mas `Curriculum` ativa o primeiro microconceito. Essa é a primeira
+fatia vertical com controle completo; os demais tópicos ainda usam contratos
+genéricos e devem ganhar percursos próprios incrementalmente.
+
+## Fronteira de entrega pedagógica
+
+O provider não transmite mais diretamente ao navegador. A rota acumula a
+resposta, aplica `TutorResponseValidator`, confirma o turno e só então divide o
+texto validado em eventos SSE. Se o modelo antecipar uma novidade ou exceder o
+teto de ajuda no percurso executável, um fallback determinístico e testado é
+usado antes da persistência e da tela.
 
 A migration 12 cria `learning_session_states` e `learning_session_events`. O lifecycle é controlado no servidor: `pause` captura o conceito e a etapa atuais; `resume` em modo `direct` volta a `studying` sem alterar o estado pedagógico, enquanto `review` coloca a sessão em `reviewing` e move temporariamente o `LearnerState` para `reencontrar`. Uma evidência aplicada com outcome `demonstrated` conclui essa revisão e restaura a etapa capturada. Enquanto `paused`, novos turnos são recusados; pause/resume usam o mesmo `LearningTurnLease` de aluno+área e o chat revalida o estado depois de adquirir a lease para fechar a janela de corrida. Eventos anteriores à migration 12 não são inventados: sessões existentes recebem apenas estado inicial `studying`.
 

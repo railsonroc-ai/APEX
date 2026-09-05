@@ -21,6 +21,11 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `services/student_context.py` — resolução server-side da identidade pedagógica.
 - `services/process_learning_turn.py` — preview e commit do turno pedagógico.
 - `services/concept_tracker.py` — seleção de competência somente entre IDs permitidos pelo catálogo.
+- `services/learning_intent.py` — intenção determinística de iniciar, trocar ou recomeçar uma trilha.
+- `services/curriculum.py` — entrada de conceitos amplos em microcompetências executáveis.
+- `services/turn_teaching_contract.py` — contrato server-side da única novidade, representação, limites e tarefa do turno.
+- `services/tutor_response_validator.py` — valida a resposta completa antes de qualquer conteúdo chegar à tela.
+- `services/task_spec.py` — extrai a tarefa única realmente exibida para o ledger.
 - `services/evidence_evaluator.py` — avaliação semântica com critérios estruturados e outcome derivado pelo servidor.
 - `services/rubric_policy.py` — contrato versionado dos critérios e derivação determinística do outcome.
 - `services/attempt_policy.py` — classificação determinística do tipo pedagógico de tentativa.
@@ -64,6 +69,11 @@ O TutorCore aplica o prompt pedagógico, adiciona o estado atual e limita o
 contexto. O histórico usado pelo tutor vem de turnos confirmados no SQLite;
 o navegador não é fonte de verdade para a conversa pedagógica.
 
+No chat, tokens do provider são acumulados no servidor. O
+`TutorResponseValidator` aceita ou substitui a resposta segundo o
+`TurnTeachingContract`; `ProcessLearningTurn` confirma resposta, assistência
+observada e tarefa extraída; somente depois o SSE entrega o texto validado.
+
 ## Testes
 
 Os testes ficam em `tests/`. `tests/conftest.py` força `APP_ENV=test`, cria um diretório SQLite temporário por execução e inicializa esse banco explicitamente antes da coleta. Importar `backend.app` não cria nem migra o banco.
@@ -88,6 +98,11 @@ Valide a configuração com:
 ## Privacidade e retenção
 
 A migration 14 cria `privacy_deletion_authorizations` e altera apenas os triggers de `DELETE` dos ledgers imutáveis. Fora de uma autorização temporária para o `student_id` específico, `DELETE` continua abortando como antes. `DataLifecycle.delete_student()` cria a autorização e remove todos os registros dependentes dentro da mesma transação; qualquer falha faz rollback inclusive da autorização.
+
+A migration 15 sincroniza o catálogo v2 e adiciona a microcompetência interna
+`ads.algorithms.ordered_steps` como não selecionável. O conceito amplo
+`ads.algorithms` continua sendo a intenção visível; `Curriculum` escolhe sua
+primeira unidade executável.
 
 A exportação inclui identidade, sessões, estado, progresso, turnos, tarefas, tentativas, rubricas, evidências, mastery, assistência, eventos de sessão, notas e metadados de credenciais. `key_hash` e valores secretos nunca entram no arquivo.
 

@@ -5,6 +5,7 @@ from backend.prompts.tutor import TUTOR_SYSTEM_PROMPT
 from backend.services.concept_catalog import ConceptCatalog
 from backend.services.assistance_policy import AssistancePolicy
 from backend.services.task_policy import TaskPolicy
+from backend.services.turn_teaching_contract import TurnTeachingContract
 
 
 class TutorCore:
@@ -67,7 +68,13 @@ class TutorCore:
         return normalized
 
     @classmethod
-    def build_system_message(cls, area, learner_state=None, teaching_action=None):
+    def build_system_message(
+        cls,
+        area,
+        learner_state=None,
+        teaching_action=None,
+        teaching_contract=None,
+    ):
         """
         Combina o prompt pedagógico principal
         com o contexto da área atual.
@@ -121,6 +128,14 @@ class TutorCore:
                     "empilhar múltiplas novidades ou múltiplas perguntas.\n"
                 )
 
+        if teaching_contract is None and isinstance(learner_state, dict):
+            teaching_contract = TurnTeachingContract.build(
+                learner_state,
+                teaching_action,
+            )
+        if isinstance(teaching_contract, TurnTeachingContract):
+            pedagogical_context += f"\n{teaching_contract.as_prompt()}\n"
+
         return (
             f"{TUTOR_SYSTEM_PROMPT}\n\n"
             "CONTEXTO DA SESSÃO ATUAL:\n"
@@ -140,6 +155,7 @@ class TutorCore:
         area="ads",
         learner_state=None,
         teaching_action=None,
+        teaching_contract=None,
     ):
         """
         Produz a lista final de mensagens
@@ -153,6 +169,7 @@ class TutorCore:
                     area,
                     learner_state=learner_state,
                     teaching_action=teaching_action,
+                    teaching_contract=teaching_contract,
                 ),
             }
         ]
