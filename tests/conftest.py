@@ -19,7 +19,7 @@ def _cleanup_pytest_data():
 atexit.register(_cleanup_pytest_data)
 
 # Inicialização explícita do banco de teste. Importar backend.app deixou de
-# ter esse efeito colateral no v15.
+# ter esse efeito colateral desde o v15.
 from backend.database import init_database  # noqa: E402
 
 init_database()

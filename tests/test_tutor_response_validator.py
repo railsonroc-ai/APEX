@@ -24,6 +24,27 @@ def ordered_contract(
     )
 
 
+def goal_contract(
+    action="explicar",
+    review=False,
+    evidence_outcome=None,
+    difficulty_count=0,
+    mastery=0.0,
+):
+    return TurnTeachingContract.build(
+        {
+            "area": "ads",
+            "current_concept_id": "ads.algorithms.goal_result",
+            "current_concept": "objetivo e resultado de uma sequência",
+            "difficulty_count": difficulty_count,
+            "mastery": mastery,
+        },
+        action,
+        review_mode=review,
+        evidence_outcome=evidence_outcome,
+    )
+
+
 def test_forbidden_novelty_is_replaced_before_delivery():
     result = TutorResponseValidator.validate_or_fallback(
         "Agora use uma variável em Python. Tarefa: escreva o código.",
@@ -187,4 +208,36 @@ def test_completed_microconcept_does_not_create_a_phantom_task():
 
     assert contract.task_required is False
     assert "Tarefa:" not in contract.safe_response
+    assert "Envie continuar" in contract.safe_response
+    assert result["valid"] is True
+
+
+def test_goal_result_starts_concrete_and_blocks_future_novelties():
+    contract = goal_contract()
+    result = TutorResponseValidator.validate(contract.safe_response, contract)
+
+    assert result["valid"] is True
+    assert contract.focus == "objetivo e resultado de uma sequência"
+    assert contract.allow_code is False
+    assert "variável" in contract.forbidden_terms
+    assert "carregar o celular" in contract.safe_response
+
+
+def test_goal_result_uses_distinct_production_tasks_as_mastery_grows():
+    document = goal_contract("consolidar", mastery=0.2).safe_response
+    dishes = goal_contract("consolidar", mastery=0.4).safe_response
+    backpack = goal_contract("consolidar", mastery=0.6).safe_response
+
+    assert "salvar um documento" in document
+    assert "lavar a louça" in dishes
+    assert "organizar uma mochila" in backpack
+    assert len({document, dishes, backpack}) == 3
+
+
+def test_goal_result_review_retrieves_before_explaining():
+    contract = goal_contract("revisar", review=True, mastery=0.8)
+    result = TutorResponseValidator.validate(contract.safe_response, contract)
+
+    assert contract.review_mode is True
+    assert contract.safe_response.startswith("Tarefa:")
     assert result["valid"] is True

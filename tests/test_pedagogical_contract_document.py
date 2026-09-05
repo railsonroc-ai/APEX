@@ -6,7 +6,7 @@ CONTRACT = (ROOT / "docs" / "PEDAGOGICAL_CONTRACT.md").read_text()
 
 
 def test_all_kernel_requirements_remain_registered():
-    for number in range(1, 16):
+    for number in range(1, 17):
         assert f"PED-{number:03d}" in CONTRACT
 
 

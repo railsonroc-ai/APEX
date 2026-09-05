@@ -46,12 +46,14 @@ Depois da auditoria final da 1.0 serão adicionadas experiências de formação 
 
 A meta continua sendo desenvolver autonomia técnica, não dependência do tutor.
 
-O primeiro percurso com controle pedagógico executável é lógica/algoritmos: o
-pedido começa em `ads.algorithms.ordered_steps`. Nesse percurso, o servidor
-define a única novidade permitida, bloqueia antecipações, limita perguntas e
-assistência, valida a resposta inteira antes da tela e persiste somente a tarefa
-confirmada. O catálogo profissional completo continua incremental e ainda não
-deve ser confundido com um `SkillGraph` pronto.
+O primeiro percurso com controle pedagógico executável é lógica/algoritmos. Ele
+começa em `ads.algorithms.ordered_steps` e, somente depois da conclusão e do
+comando explícito `continuar`, libera `ads.algorithms.goal_result`. Nos dois nós,
+o servidor define a única novidade permitida, bloqueia antecipações, limita
+perguntas e assistência, corrige as tarefas localmente, valida a resposta inteira
+antes da tela e persiste somente a tarefa confirmada. O catálogo profissional
+completo continua incremental e ainda não deve ser confundido com um
+`SkillGraph` pronto.
 
 ## Documentação
 

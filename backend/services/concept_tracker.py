@@ -3,6 +3,7 @@ import json
 from backend.services.concept_catalog import ConceptCatalog
 from backend.services.learner_signals import LearnerSignals
 from backend.services.learning_intent import LearningIntent
+from backend.services.curriculum import Curriculum
 
 
 class ConceptTracker:
@@ -63,6 +64,16 @@ class ConceptTracker:
 
     @classmethod
     def resolve_identified_candidate(cls, state, candidate, area="ads"):
+        if (
+            isinstance(state, dict)
+            and state.get("stage") == "concluido"
+            and Curriculum.allows_progression(
+                state.get("current_concept_id"),
+                candidate,
+            )
+        ):
+            concept = ConceptCatalog.resolve(area, candidate)
+            return concept.get("concept_id") if concept else None
         concept = ConceptCatalog.resolve(area, candidate, selectable_only=True)
         if concept:
             return concept["concept_id"]

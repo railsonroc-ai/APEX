@@ -14,6 +14,14 @@ def evaluation(answer, prompt=None):
     }
 
 
+def goal_evaluation(answer, prompt):
+    return {
+        "concept_id": "ads.algorithms.goal_result",
+        "tutor_message": prompt,
+        "student_answer": answer,
+    }
+
+
 @pytest.mark.parametrize(
     "answer",
     (
@@ -109,3 +117,64 @@ def test_known_file_task_does_not_accept_three_unrelated_steps():
     )
 
     assert result["outcome"] == "insufficient"
+
+
+def test_goal_result_choice_is_evaluated_without_llm():
+    prompt = (
+        "para a atividade carregar o celular, escolha o resultado esperado: "
+        "A) celular conectado e carregando; B) quarto varrido; C) porta trancada"
+    )
+
+    assert ObjectiveTaskEvaluator.evaluate(
+        goal_evaluation("A", prompt)
+    )["outcome"] == "demonstrated"
+    assert ObjectiveTaskEvaluator.evaluate(
+        goal_evaluation("B", prompt)
+    )["outcome"] == "misconception"
+    assert ObjectiveTaskEvaluator.evaluate(
+        goal_evaluation("entendi", prompt)
+    )["outcome"] == "insufficient"
+
+
+@pytest.mark.parametrize(
+    ("prompt", "answer"),
+    (
+        (
+            "escreva somente o resultado esperado de salvar um documento, "
+            "começando com Resultado:",
+            "Resultado: documento salvo no local escolhido.",
+        ),
+        (
+            "escreva somente o resultado esperado de lavar a louça, "
+            "começando com Resultado:",
+            "Resultado: louça limpa e guardada.",
+        ),
+        (
+            "escreva somente o resultado esperado de organizar uma mochila para "
+            "a aula, começando com Resultado:",
+            "Resultado: mochila organizada com os materiais da aula.",
+        ),
+        (
+            "sem consultar, escreva somente o resultado esperado de escovar os "
+            "dentes, começando com Resultado:",
+            "Resultado: dentes limpos.",
+        ),
+    ),
+)
+def test_goal_result_production_tasks_are_evaluated_locally(prompt, answer):
+    result = ObjectiveTaskEvaluator.evaluate(goal_evaluation(answer, prompt))
+
+    assert result["outcome"] == "demonstrated"
+    assert result["source"] == "deterministic_task"
+
+
+def test_goal_result_rejects_a_list_of_actions_as_the_final_result():
+    result = ObjectiveTaskEvaluator.evaluate(
+        goal_evaluation(
+            "Resultado: primeiro abrir, depois clicar e selecionar.",
+            "escreva somente o resultado esperado de salvar um documento, "
+            "começando com Resultado:",
+        )
+    )
+
+    assert result["outcome"] == "misconception"

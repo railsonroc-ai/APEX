@@ -76,6 +76,8 @@ from backend.services.learning_intent import LearningIntent
 from backend.services.task_spec import TaskSpec
 from backend.services.turn_teaching_contract import TurnTeachingContract
 from backend.services.tutor_response_validator import TutorResponseValidator
+from backend.services.curriculum import Curriculum
+from backend.services.concept_catalog import ConceptCatalog
 
 
 # ============================================================
@@ -361,8 +363,22 @@ def _with_learning_focus(session, context):
         "corrigir": "Observe o recorte menor e faça uma nova tentativa.",
         "consolidar": "Aplique a mesma ideia na nova tarefa.",
         "revisar": "Recupere de memória e responda à revisão.",
-        "avancar": "O próximo passo será escolhido após confirmar o domínio.",
+        "avancar": "Percurso atual concluído.",
     }
+    if action == "avancar":
+        next_concept_id = Curriculum.next_concept_id(
+            state.get("current_concept_id")
+        )
+        next_concept = ConceptCatalog.resolve(
+            context["area"],
+            next_concept_id,
+        )
+        if next_concept:
+            next_step_by_action["avancar"] = (
+                "Envie continuar para iniciar "
+                + next_concept["canonical_name"]
+                + "."
+            )
     return {
         **session,
         "learning_focus": {
@@ -768,7 +784,19 @@ def chat_stream():
             )
             initial_stage = learner_state.get("stage")
             learning_intent = LearningIntent.detect(user_message, area=area)
-            if session_runtime.get("status") == LearningSessionLifecycle.REVIEWING:
+            progression_target = None
+            advance_request = (
+                learning_intent.get("kind") == "advance"
+                and learner_state.get("stage") == "concluido"
+            )
+            if advance_request:
+                progression_target = Curriculum.next_concept_id(
+                    learner_state.get("current_concept_id")
+                )
+            if (
+                session_runtime.get("status") == LearningSessionLifecycle.REVIEWING
+                or advance_request
+            ):
                 tracking_request = None
             else:
                 tracking_request = ConceptTracker.build_tracking_request(
@@ -779,6 +807,8 @@ def chat_stream():
                 user_message,
                 area=area,
             )
+            if progression_target:
+                identified_concept = progression_target
             if learning_intent.get("restart") and not identified_concept:
                 identified_concept = learner_state.get("current_concept_id")
             if tracking_request and not identified_concept:
@@ -944,7 +974,7 @@ def chat_stream():
 
             if (
                 learner_state.get("current_concept_id")
-                == TurnTeachingContract.ORDERED_STEPS
+                in TurnTeachingContract.CONTROLLED_CONCEPTS
             ):
                 # A fatia curricular atual é inteiramente controlada: tarefa,
                 # feedback e progressão têm respostas seguras definidas pelo

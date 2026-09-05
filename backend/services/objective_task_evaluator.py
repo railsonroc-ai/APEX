@@ -13,6 +13,7 @@ class ObjectiveTaskEvaluator:
     """
 
     ORDERED_STEPS = "ads.algorithms.ordered_steps"
+    GOAL_RESULT = "ads.algorithms.goal_result"
     HAND_WASHING_MARKERS = (
         "abrir a torneira",
         "lavar as maos",
@@ -67,6 +68,73 @@ class ObjectiveTaskEvaluator:
         },
     )
 
+    GOAL_RESULT_TASKS = (
+        {
+            "kind": "choice",
+            "prompt_markers": (
+                "carregar o celular",
+                "resultado esperado",
+                "celular conectado e carregando",
+            ),
+            "required_groups": (
+                ("celular", "aparelho"),
+                ("carreg", "carga"),
+            ),
+            "success": "Identificou o resultado esperado de carregar o celular.",
+        },
+        {
+            "kind": "result",
+            "prompt_markers": (
+                "resultado esperado de salvar um documento",
+                "comecando com resultado",
+            ),
+            "required_groups": (
+                ("documento", "arquivo"),
+                ("salv", "armazen"),
+                ("local", "pasta", "destino"),
+            ),
+            "success": "Descreveu o resultado final de salvar um documento.",
+        },
+        {
+            "kind": "result",
+            "prompt_markers": (
+                "resultado esperado de lavar a louca",
+                "comecando com resultado",
+            ),
+            "required_groups": (
+                ("louca",),
+                ("limp", "lavada"),
+                ("guard", "organiz"),
+            ),
+            "success": "Descreveu o resultado final de lavar a louça.",
+        },
+        {
+            "kind": "result",
+            "prompt_markers": (
+                "resultado esperado de organizar uma mochila",
+                "comecando com resultado",
+            ),
+            "required_groups": (
+                ("mochila",),
+                ("organiz", "pront"),
+                ("materi", "cadern", "livr", "itens"),
+            ),
+            "success": "Descreveu o resultado final de organizar a mochila.",
+        },
+        {
+            "kind": "result",
+            "prompt_markers": (
+                "resultado esperado de escovar os dentes",
+                "comecando com resultado",
+            ),
+            "required_groups": (
+                ("dentes",),
+                ("limp", "escov"),
+            ),
+            "success": "Recuperou o resultado final de escovar os dentes.",
+        },
+    )
+
     @classmethod
     def _is_hand_washing_order_task(cls, evaluation):
         if not isinstance(evaluation, dict):
@@ -84,6 +152,18 @@ class ObjectiveTaskEvaluator:
             return None
         prompt = normalize_alias(evaluation.get("tutor_message")) or ""
         for definition in cls.ORDERED_TASKS:
+            if all(marker in prompt for marker in definition["prompt_markers"]):
+                return definition
+        return None
+
+    @classmethod
+    def _goal_result_definition(cls, evaluation):
+        if not isinstance(evaluation, dict):
+            return None
+        if evaluation.get("concept_id") != cls.GOAL_RESULT:
+            return None
+        prompt = normalize_alias(evaluation.get("tutor_message")) or ""
+        for definition in cls.GOAL_RESULT_TASKS:
             if all(marker in prompt for marker in definition["prompt_markers"]):
                 return definition
         return None
@@ -143,10 +223,82 @@ class ObjectiveTaskEvaluator:
         }
 
     @classmethod
+    def _evaluate_goal_result(cls, evaluation, definition):
+        answer = normalize_alias(evaluation.get("student_answer")) or ""
+        groups_met = [
+            any(marker in answer for marker in group)
+            for group in definition["required_groups"]
+        ]
+
+        if definition["kind"] == "choice":
+            choice = re.fullmatch(r"(?:opcao |alternativa )?([abc])", answer)
+            if choice:
+                if choice.group(1) == "a":
+                    groups_met = [True] * len(groups_met)
+                else:
+                    return cls._evidence(
+                        {
+                            RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                            RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.NOT_MET,
+                            RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                        },
+                        "Escolheu uma situação que não corresponde ao resultado pedido.",
+                    )
+
+        has_result_prefix = answer.startswith("resultado")
+        if all(groups_met) and (
+            definition["kind"] == "choice" or has_result_prefix
+        ):
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                },
+                definition["success"],
+            )
+
+        sequence_markers = (
+            "primeiro", "depois", "em seguida", "por ultimo",
+            "abrir", "clicar", "selecionar", "pegar",
+        )
+        if has_result_prefix and any(marker in answer for marker in sequence_markers):
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.NOT_MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "Listou ações em vez de descrever a situação final desejada.",
+            )
+
+        if has_result_prefix or any(groups_met):
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "Indicou parte do resultado, mas a situação final ainda está incompleta.",
+            )
+
+        return cls._evidence(
+            {
+                RubricPolicy.TASK_RESPONSE: RubricPolicy.NOT_MET,
+                RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
+            },
+            "A resposta não descreveu o resultado final solicitado.",
+        )
+
+    @classmethod
     def evaluate(cls, evaluation):
         definition = cls._task_definition(evaluation)
         if definition is None:
-            return None
+            goal_definition = cls._goal_result_definition(evaluation)
+            if goal_definition is None:
+                return None
+            return cls._evaluate_goal_result(evaluation, goal_definition)
 
         correct, complete = cls._matches_order(
             evaluation.get("student_answer"),

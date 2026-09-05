@@ -14,7 +14,7 @@ Status usados:
 
 | ID | Requisito | Status | Enforcement principal | Evidência automatizada |
 |---|---|---|---|---|
-| PED-001 | Uma novidade cognitiva principal por turno | PARCIAL | `TurnTeachingContract` bloqueia termos no primeiro microconceito | `test_pedagogical_guard_e2e.py`, `test_tutor_response_validator.py` |
+| PED-001 | Uma novidade cognitiva principal por turno | PARCIAL | `TurnTeachingContract` bloqueia termos nos dois microconceitos executáveis | `test_pedagogical_guard_e2e.py`, `test_tutor_response_validator.py` |
 | PED-002 | “Entendi”, “ok” ou concordância não avançam | ENFORCED nas tarefas controladas do percurso atual | `ObjectiveTaskEvaluator` produz `insufficient` | `test_objective_task_evaluator.py`, `test_pedagogical_guard_e2e.py` |
 | PED-003 | Avanço exige tarefa vinculada e evidência aplicada | ENFORCED | `LearningTask`, `EvidenceEvaluator`, `ProcessLearningTurn` | `test_e2e_learning_pipeline.py`, `test_learning_task.py` |
 | PED-004 | Toda evidência recebe veredito antes da próxima tarefa | ENFORCED | prefixo decidido e validado pelo servidor | `test_tutor_response_validator.py`, `test_pedagogical_guard_e2e.py` |
@@ -29,17 +29,18 @@ Status usados:
 | PED-013 | O aluno vê o foco e a próxima ação | ENFORCED | projeção read-only de `LearnerState` em `/api/session` | `test_session_api.py`, `test_session_ui.py` |
 | PED-014 | Histórico pedagógico é confirmado pelo servidor | ENFORCED | `LearningHistory` ignora histórico do navegador | `test_server_authoritative_history.py` |
 | PED-015 | Falha do avaliador não altera progresso | ENFORCED; o percurso controlado atual não depende da LLM | avaliação local das tarefas conhecidas e fluxo fail-closed para tarefas futuras abertas | `test_objective_task_evaluator.py`, `test_pedagogical_guard_e2e.py`, `test_chat_stream.py` |
+| PED-016 | A próxima microcompetência exige conclusão do pré-requisito e ação explícita do aluno | ENFORCED na fatia atual | `Curriculum` declara aresta/pré-requisito; `LearningIntent` reconhece `continuar`; `ConceptTracker` restringe a ativação | `test_curriculum.py`, `test_concept_tracker.py`, `test_pedagogical_guard_e2e.py` |
 
 ## Diretrizes preservadas que ainda não estão completas
 
 | ID | Requisito | Status | Lacuna atual |
 |---|---|---|---|
-| ROAD-001 | Concreto → lógica → representação → código | PARCIAL | somente `ads.algorithms.ordered_steps` possui contrato curricular específico |
+| ROAD-001 | Concreto → lógica → representação → código | PARCIAL | os dois primeiros nós concretos possuem contrato; representação e código ainda não estão disponíveis |
 | ROAD-002 | LER → COMPREENDER → EXPLICAR → TESTAR → CORRIGIR → FIXAR → CONCLUIR → REENCONTRAR | PARCIAL | os nomes ainda não correspondem a uma FSM integralmente observável |
 | ROAD-003 | Revisões vencidas reaparecem sem depender da memória do aluno | PARCIAL | scheduler e fila existem; falta dispatcher automático com política de interrupção |
 | ROAD-004 | Ajuda diminui progressivamente com medida robusta | PARCIAL | assistência observada ainda usa heurísticas textuais |
 | ROAD-005 | Conceitos antigos reaparecem intercalados com novos | PLANEJADO | requer instância de revisão e trilha com mais microcompetências |
-| ROAD-006 | Trilha completa de fundamentos em microcompetências | PLANEJADO | a fatia executável atual contém uma microcompetência |
+| ROAD-006 | Trilha completa de fundamentos em microcompetências | PARCIAL | a fatia executável atual contém dois nós ligados por pré-requisito; a trilha completa ainda não existe |
 | ROAD-007 | Competência profissional por artefatos executáveis | PLANEJADO | requer ChallengeEngine, rubricas de artefato e workspace isolado |
 | ROAD-008 | Tickets, código legado, testes, Git, PR, incidentes e deploy | PLANEJADO | não pertence ao kernel vertical atual |
 | ROAD-009 | Inglês técnico progressivo dentro do trabalho | PLANEJADO | deve acompanhar artefatos profissionais, não virar curso genérico de inglês |

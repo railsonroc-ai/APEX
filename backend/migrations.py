@@ -7,6 +7,8 @@ from backend.identity import (
 )
 from backend.concepts import (
     CATALOG_VERSION,
+    CATALOG_V2_VERSION,
+    CATALOG_V2_SEEDS,
     CONCEPT_SEEDS,
     CATALOG_V1_VERSION,
     CORE_CONCEPT_SEEDS,
@@ -1959,10 +1961,8 @@ def enable_privacy_lifecycle(connection):
 
 
 
-def sync_executable_curriculum_v2(connection):
-    """Sincroniza os nós executáveis sem reescrever migrations históricas."""
-
-    for seed in CONCEPT_SEEDS:
+def _sync_catalog_seeds(connection, seeds, catalog_version):
+    for seed in seeds:
         connection.execute(
             """
             INSERT INTO concept_definitions (
@@ -1979,7 +1979,7 @@ def sync_executable_curriculum_v2(connection):
                 seed.concept_id,
                 seed.area,
                 seed.canonical_name,
-                CATALOG_VERSION,
+                catalog_version,
                 int(seed.selectable),
             ),
         )
@@ -1996,8 +1996,28 @@ def sync_executable_curriculum_v2(connection):
                     concept_id = excluded.concept_id,
                     catalog_version = excluded.catalog_version
                 """,
-                (seed.area, normalized, seed.concept_id, CATALOG_VERSION),
+                (seed.area, normalized, seed.concept_id, catalog_version),
             )
+
+
+def sync_executable_curriculum_v2(connection):
+    """Migration histórica congelada no primeiro nó executável."""
+
+    _sync_catalog_seeds(
+        connection,
+        CATALOG_V2_SEEDS,
+        CATALOG_V2_VERSION,
+    )
+
+
+def sync_executable_curriculum_v3(connection):
+    """Adiciona objetivo/resultado como segunda microcompetência."""
+
+    _sync_catalog_seeds(
+        connection,
+        CONCEPT_SEEDS,
+        CATALOG_VERSION,
+    )
 
 
 MIGRATIONS = (
@@ -2075,6 +2095,11 @@ MIGRATIONS = (
         15,
         "sync_executable_curriculum_v2",
         sync_executable_curriculum_v2,
+    ),
+    Migration(
+        16,
+        "sync_executable_curriculum_v3",
+        sync_executable_curriculum_v3,
     ),
 )
 

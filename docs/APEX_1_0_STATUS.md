@@ -35,7 +35,7 @@ em `docs/PEDAGOGICAL_CONTRACT.md`.
 - `ConceptTracker`: seleção do conceito somente entre IDs permitidos pelo catálogo.
 - `ConceptActivation`: início e retomada de conceitos sem contaminação de estado.
 - `LearningIntent`: reconhece início, troca e “recomeçar do zero” sem depender do LLM.
-- `Curriculum`: converte o tópico amplo em uma microcompetência executável.
+- `Curriculum`: converte o tópico amplo em uma sequência explícita de microcompetências com pré-requisitos.
 - `TurnTeachingContract`: define por turno uma novidade, representação, proibições, limites, tarefa e teto de ajuda.
 - `TutorResponseValidator`: impede que texto não validado chegue à tela e mede a assistência efetivamente observada.
 - `TaskSpec`: separa a tarefa concreta do restante da resposta do tutor.
@@ -102,15 +102,22 @@ em `docs/PEDAGOGICAL_CONTRACT.md`.
 - exportação seguida de exclusão de um aluno populado confirma isolamento, remoção de credencial/rate-limit e ausência de foreign keys órfãs;
 - `apex_apply_update.py` valida manifesto canônico e correspondência exata entre manifesto e conteúdo do pacote, rejeitando manifestos técnicos extras;
 - nenhum token do provider é enviado antes da validação e do commit; a projeção SSE contém somente a resposta pedagógica confirmada;
-- o percurso inicial de lógica usa `ads.algorithms.ordered_steps`, impedindo que domínio de uma microcompetência conclua o tópico amplo inteiro;
+- o percurso inicial de lógica usa `ads.algorithms.ordered_steps` e
+  `ads.algorithms.goal_result`, impedindo que domínio de uma microcompetência
+  conclua o tópico amplo inteiro;
 - “recomeçar do zero” limpa domínio, dificuldade, evidência e agenda de revisão da microcompetência ativada;
-- todas as tarefas controladas da primeira microcompetência são corrigidas
-  deterministicamente; o percurso atual completo pode ser concluído mesmo se
-  o avaliador LLM estiver indisponível;
+- todas as tarefas controladas das duas microcompetências são corrigidas
+  deterministicamente; essa fatia do percurso pode ser concluída mesmo se o
+  avaliador LLM estiver indisponível;
 - as respostas desse percurso também vêm do contrato executável, impedindo que
   a LLM crie uma tarefa para a qual o servidor ainda não possua rubrica;
-- as atividades de consolidação variam conforme o domínio e a conclusão não
-  cria uma tarefa fantasma enquanto a próxima microcompetência não existe;
+- as atividades de consolidação variam conforme o domínio; concluir o primeiro
+  nó não introduz novidade no mesmo turno, e `continuar` só ativa o segundo se o
+  pré-requisito estiver concluído;
+- a troca preserva o progresso do primeiro nó e inicia domínio, dificuldade e
+  evidência isolados no segundo;
+- a conclusão do último nó disponível não cria tarefa fantasma nem tenta
+  identificar conteúdo novo pela LLM;
 - o avaliador semântico aceita rubrica completa encapsulada em bloco JSON,
   mantendo a validação estrita do conteúdo;
 - falha ou resposta inválida do avaliador semântico não gera resposta pedagógica, commit ou repetição silenciosa da explicação;

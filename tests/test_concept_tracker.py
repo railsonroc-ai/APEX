@@ -76,6 +76,26 @@ def test_completed_concept_allows_new_tracking():
     assert result == {"area": "ads", "student_message": "Quero aprender funções"}
 
 
+def test_completed_curriculum_node_allows_only_its_declared_successor():
+    state = {
+        "area": "ads",
+        "current_concept_id": "ads.algorithms.ordered_steps",
+        "current_concept": "sequência ordenada de passos",
+        "stage": "concluido",
+    }
+
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.goal_result",
+        area="ads",
+    ) == "ads.algorithms.goal_result"
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.ordered_steps",
+        area="ads",
+    ) is None
+
+
 def test_untrusted_free_text_does_not_become_active_concept():
     state = {
         "area": "ads",

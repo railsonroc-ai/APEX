@@ -28,7 +28,7 @@ Navegador -> JS -> Flask/SSE -> serviços pedagógicos -> Groq
 - `services/observability.py`: contexto operacional por request/turno, pseudonimização de identidade e emissão de eventos JSON privacy-first.
 - `services/tutor_core.py`: prepara o contexto e incorpora o contrato executável do turno.
 - `services/learning_intent.py`: resolve pedidos explícitos de início/troca/reinício.
-- `services/curriculum.py`: mapeia conceitos visíveis para a primeira microcompetência.
+- `services/curriculum.py`: mapeia conceitos visíveis, pré-requisitos e a próxima microcompetência executável.
 - `services/turn_teaching_contract.py`: define novidade permitida, proibições, representação, tarefa, tamanho e teto de ajuda.
 - `services/tutor_response_validator.py`: valida a resposta completa antes da tela e observa a assistência real.
 - `services/task_spec.py`: extrai a tarefa única da resposta confirmada.
@@ -140,6 +140,14 @@ como unidade interna não selecionável. `ads.algorithms` permanece o tópico qu
 aluno escolhe, mas `Curriculum` ativa o primeiro microconceito. Essa é a primeira
 fatia vertical com controle completo; os demais tópicos ainda usam contratos
 genéricos e devem ganhar percursos próprios incrementalmente.
+
+A migration 16 sincroniza o catálogo v3 e inclui
+`ads.algorithms.goal_result` como segundo nó interno. O `Curriculum` declara a
+aresta e o pré-requisito; a rota só fornece esse candidato ao `ConceptTracker`
+quando o primeiro nó está `concluido` e o aluno envia `continuar`. A conclusão e
+a ativação ficam em turnos diferentes, evitando empilhar a novidade seguinte no
+feedback final. `ConceptActivation` então carrega ou cria o progresso isolado do
+novo `concept_id`. As tarefas dos dois nós são avaliadas localmente.
 
 ## Fronteira de entrega pedagógica
 

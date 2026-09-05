@@ -43,3 +43,14 @@ def test_concept_tracker_prefers_deterministic_local_identity():
     assert ConceptTracker.identify_locally(
         "Quero aprender lógica de programação", area="ads"
     ) == "ads.algorithms"
+
+
+def test_continue_is_an_explicit_curriculum_advance_command():
+    intent = LearningIntent.detect("Continuar", area="ads")
+
+    assert intent == {
+        "kind": "advance",
+        "concept_id": None,
+        "restart": False,
+        "explicit": False,
+    }

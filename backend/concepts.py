@@ -5,7 +5,8 @@ import unicodedata
 
 
 CATALOG_V1_VERSION = 1
-CATALOG_VERSION = 2
+CATALOG_V2_VERSION = 2
+CATALOG_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -132,18 +133,38 @@ CORE_CONCEPT_SEEDS = (
 )
 
 
-MICRO_CONCEPT_SEEDS = (
-    ConceptSeed(
-        "ads.algorithms.ordered_steps",
-        "ads",
-        "sequência ordenada de passos",
-        (
-            "sequencia ordenada de passos",
-            "passos ordenados",
-            "ordered steps",
-        ),
-        selectable=False,
+ORDERED_STEPS_SEED = ConceptSeed(
+    "ads.algorithms.ordered_steps",
+    "ads",
+    "sequência ordenada de passos",
+    (
+        "sequencia ordenada de passos",
+        "passos ordenados",
+        "ordered steps",
     ),
+    selectable=False,
+)
+
+
+GOAL_RESULT_SEED = ConceptSeed(
+    "ads.algorithms.goal_result",
+    "ads",
+    "objetivo e resultado de uma sequência",
+    (
+        "objetivo de uma sequencia",
+        "resultado de uma sequencia",
+        "goal and result",
+    ),
+    selectable=False,
+)
+
+
+CATALOG_V2_SEEDS = CORE_CONCEPT_SEEDS + (ORDERED_STEPS_SEED,)
+
+
+MICRO_CONCEPT_SEEDS = (
+    ORDERED_STEPS_SEED,
+    GOAL_RESULT_SEED,
 )
 
 

@@ -22,7 +22,7 @@ O diretório `backend` contém a aplicação Flask e os serviços centrais do AP
 - `services/process_learning_turn.py` — preview e commit do turno pedagógico.
 - `services/concept_tracker.py` — seleção de competência somente entre IDs permitidos pelo catálogo.
 - `services/learning_intent.py` — intenção determinística de iniciar, trocar ou recomeçar uma trilha.
-- `services/curriculum.py` — entrada de conceitos amplos em microcompetências executáveis.
+- `services/curriculum.py` — entrada, pré-requisitos e sequência das microcompetências executáveis.
 - `services/turn_teaching_contract.py` — contrato server-side da única novidade, representação, limites e tarefa do turno.
 - `services/tutor_response_validator.py` — valida a resposta completa antes de qualquer conteúdo chegar à tela.
 - `services/task_spec.py` — extrai a tarefa única realmente exibida para o ledger.
@@ -74,10 +74,10 @@ No chat, tokens do provider são acumulados no servidor. O
 `TutorResponseValidator` aceita ou substitui a resposta segundo o
 `TurnTeachingContract`; `ProcessLearningTurn` confirma resposta, assistência
 observada e tarefa extraída; somente depois o SSE entrega o texto validado.
-Todas as respostas e tarefas controladas da primeira microcompetência são
-produzidas pelo contrato e avaliadas localmente, inclusive a produção em três
-passos. Isso impede variações sem rubrica e faz o percurso mínimo funcionar
-mesmo com o provider indisponível.
+Todas as respostas e tarefas controladas das duas primeiras microcompetências
+são produzidas pelo contrato e avaliadas localmente, inclusive as produções de
+sequências e de resultados. Isso impede variações sem rubrica e faz essa fatia
+do percurso funcionar mesmo com o provider indisponível.
 Se uma tarefa futura realmente aberta exigir avaliação semântica e o provider
 devolver JSON dentro de um único bloco Markdown, o parser aceita o envelope e
 continua exigindo a rubrica completa. Se o provider não devolver uma rubrica
@@ -121,6 +121,11 @@ A migration 15 sincroniza o catálogo v2 e adiciona a microcompetência interna
 `ads.algorithms.ordered_steps` como não selecionável. O conceito amplo
 `ads.algorithms` continua sendo a intenção visível; `Curriculum` escolhe sua
 primeira unidade executável.
+
+A migration 16 sincroniza o catálogo v3 e adiciona
+`ads.algorithms.goal_result`. O `Curriculum` registra o primeiro nó como
+pré-requisito e só permite a troca depois de sua conclusão e do comando explícito
+`continuar`; domínio, dificuldade e evidência do novo nó começam isolados.
 
 A exportação inclui identidade, sessões, estado, progresso, turnos, tarefas, tentativas, rubricas, evidências, mastery, assistência, eventos de sessão, notas e metadados de credenciais. `key_hash` e valores secretos nunca entram no arquivo.
 

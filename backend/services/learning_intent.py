@@ -22,6 +22,13 @@ class LearningIntent:
         r"\bnao\s+quero\s+(?:aprender|estudar)\b",
         r"\bnao\s+(?:me\s+)?ensine\b",
     )
+    ADVANCE_MESSAGES = {
+        "continuar",
+        "continue",
+        "proximo passo",
+        "proxima etapa",
+        "avancar",
+    }
 
     @classmethod
     def detect(cls, message, area="ads"):
@@ -36,6 +43,13 @@ class LearningIntent:
             return result
         if any(re.search(pattern, normalized) for pattern in cls.NEGATION_PATTERNS):
             return result
+        if normalized in cls.ADVANCE_MESSAGES:
+            return {
+                "kind": "advance",
+                "concept_id": None,
+                "restart": False,
+                "explicit": False,
+            }
 
         explicit = any(marker in normalized for marker in cls.START_MARKERS)
         restart = any(marker in normalized for marker in cls.RESTART_MARKERS)

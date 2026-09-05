@@ -38,6 +38,39 @@ def test_session_status_uses_server_context(monkeypatch):
     }
 
 
+def test_session_focus_names_declared_next_curriculum_step(monkeypatch):
+    monkeypatch.setattr(app_module, "verify_auth", lambda: True)
+    monkeypatch.setattr(
+        app_module.LearningSessionLifecycle,
+        "get",
+        lambda area, **kwargs: {
+            "student_id": kwargs["student_id"],
+            "session_id": kwargs["session_id"],
+            "area": area,
+            "status": "studying",
+        },
+    )
+    monkeypatch.setattr(
+        app_module.LearnerState,
+        "get",
+        lambda area, **kwargs: {
+            "area": area,
+            "current_concept_id": "ads.algorithms.ordered_steps",
+            "current_concept": "sequência ordenada de passos",
+            "stage": "concluido",
+            "mastery": 0.8,
+        },
+    )
+
+    response = app_module.app.test_client().get("/api/session?area=ads")
+    focus = response.get_json()["session"]["learning_focus"]
+
+    assert focus["teaching_action"] == "avancar"
+    assert focus["next_step"] == (
+        "Envie continuar para iniciar objetivo e resultado de uma sequência."
+    )
+
+
 def test_pause_and_resume_api_delegate_to_lifecycle(monkeypatch):
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
     monkeypatch.setattr(

@@ -168,7 +168,7 @@ def test_known_ordered_steps_journey_never_needs_llm_evaluation(
         (
             "known-journey-cup",
             "pegar o copo; beber a água; guardar o copo",
-            "próxima microcompetência ainda não está disponível",
+            "envie continuar",
         ),
     )
 
@@ -191,6 +191,141 @@ def test_known_ordered_steps_journey_never_needs_llm_evaluation(
     assert state["stage"] == "concluido"
     assert state["mastery"] == 0.8
     assert LearningTask.find_by_source_turn("known-journey-cup") is None
+
+
+def test_completed_first_node_advances_to_goal_result_and_completes_locally(
+    monkeypatch,
+    tmp_path,
+):
+    prepare(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
+    ConceptProgress.update(
+        "ads",
+        "ads.algorithms.ordered_steps",
+        mastery=0.8,
+        last_evidence="Portfólio confirmado.",
+    )
+    LearnerState.update(
+        "ads",
+        current_concept_id="ads.algorithms.ordered_steps",
+        stage="concluido",
+        mastery=0.8,
+        last_evidence="Portfólio confirmado.",
+    )
+    client = app_module.app.test_client()
+
+    started = client.post(
+        "/chat/stream",
+        json={
+            "message": "continuar",
+            "area": "ads",
+            "turn_id": "goal-result-start",
+        },
+    ).get_data(as_text=True)
+    start_turn = LearningHistory.find("goal-result-start")
+    start_task = LearningTask.find_by_source_turn("goal-result-start")
+
+    assert '"done": true' in started.lower()
+    assert "resultado esperado" in start_turn["assistant_message"].lower()
+    assert start_turn["concept_id"] == "ads.algorithms.goal_result"
+    assert start_task["concept_id"] == "ads.algorithms.goal_result"
+    assert EvidenceEvent.for_turn("goal-result-start") is None
+    assert LearnerState.get("ads")["mastery"] == 0.0
+
+    answers = (
+        ("goal-choice", "A", "salvar um documento"),
+        (
+            "goal-document",
+            "Resultado: documento salvo no local escolhido.",
+            "lavar a louça",
+        ),
+        (
+            "goal-dishes",
+            "Resultado: louça limpa e guardada.",
+            "organizar uma mochila",
+        ),
+        (
+            "goal-backpack",
+            "Resultado: mochila organizada com os materiais da aula.",
+            "próxima microcompetência ainda não está disponível",
+        ),
+    )
+
+    for turn_id, answer, expected_next in answers:
+        body = client.post(
+            "/chat/stream",
+            json={"message": answer, "area": "ads", "turn_id": turn_id},
+        ).get_data(as_text=True)
+        turn = LearningHistory.find(turn_id)
+        evidence = EvidenceEvent.for_turn(turn_id)
+
+        assert '"done": true' in body.lower()
+        assert turn["assistant_message"].startswith("Correto.\n\n")
+        assert expected_next.lower() in turn["assistant_message"].lower()
+        assert evidence["concept_id"] == "ads.algorithms.goal_result"
+        assert evidence["outcome"] == "demonstrated"
+        assert evidence["source"] == "deterministic_task"
+
+    state = LearnerState.get("ads")
+    first_progress = ConceptProgress.get(
+        "ads",
+        "ads.algorithms.ordered_steps",
+    )
+    assert state["current_concept_id"] == "ads.algorithms.goal_result"
+    assert state["stage"] == "concluido"
+    assert state["mastery"] == 0.8
+    assert first_progress["mastery"] == 0.8
+    assert LearningTask.find_by_source_turn("goal-backpack") is None
+
+    end = client.post(
+        "/chat/stream",
+        json={"message": "continuar", "area": "ads", "turn_id": "goal-end"},
+    ).get_data(as_text=True)
+    end_turn = LearningHistory.find("goal-end")
+
+    assert '"done": true' in end.lower()
+    assert "próxima microcompetência ainda não está disponível" in end_turn[
+        "assistant_message"
+    ].lower()
+    assert LearnerState.get("ads")["current_concept_id"] == (
+        "ads.algorithms.goal_result"
+    )
+    assert LearningTask.find_by_source_turn("goal-end") is None
+
+
+def test_acknowledgement_does_not_advance_goal_result(monkeypatch, tmp_path):
+    prepare(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
+    LearnerState.update(
+        "ads",
+        current_concept_id="ads.algorithms.ordered_steps",
+        stage="concluido",
+        mastery=0.8,
+    )
+    client = app_module.app.test_client()
+    client.post(
+        "/chat/stream",
+        json={
+            "message": "continuar",
+            "area": "ads",
+            "turn_id": "goal-ack-start",
+        },
+    ).get_data(as_text=True)
+
+    body = client.post(
+        "/chat/stream",
+        json={"message": "entendi", "area": "ads", "turn_id": "goal-ack"},
+    ).get_data(as_text=True)
+    state = LearnerState.get("ads")
+    turn = LearningHistory.find("goal-ack")
+
+    assert '"done": true' in body.lower()
+    assert turn["assistant_message"].startswith(
+        "Ainda não há evidência suficiente.\n\n"
+    )
+    assert state["current_concept_id"] == "ads.algorithms.goal_result"
+    assert state["stage"] == "compreender"
+    assert state["mastery"] == 0.0
 
 
 def test_short_acknowledgement_does_not_advance_the_first_task(monkeypatch, tmp_path):

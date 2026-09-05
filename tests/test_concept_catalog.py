@@ -60,3 +60,10 @@ def test_internal_microconcept_is_resolvable_but_not_selectable():
         "ads", "ads.algorithms.ordered_steps", selectable_only=True
     ) is None
     assert "ads.algorithms.ordered_steps" not in ConceptCatalog.seeded_ids("ads")
+
+    next_concept = ConceptCatalog.resolve("ads", "ads.algorithms.goal_result")
+    assert next_concept["canonical_name"] == "objetivo e resultado de uma sequência"
+    assert next_concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "ads.algorithms.goal_result", selectable_only=True
+    ) is None
