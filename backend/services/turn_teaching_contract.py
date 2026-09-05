@@ -75,6 +75,10 @@ class TurnTeachingContract:
         feedback = cls._feedback(evidence_outcome)
 
         if concept_id == cls.ORDERED_STEPS:
+            try:
+                mastery = min(1.0, max(0.0, float(state.get("mastery", 0.0))))
+            except (TypeError, ValueError):
+                mastery = 0.0
             if review_mode:
                 safe = (
                     "Tarefa: de memória, descreva uma atividade cotidiana "
@@ -97,10 +101,31 @@ class TurnTeachingContract:
                     "as mãos.\n\n"
                     "Tarefa: coloque em ordem: guardar o copo; pegar o copo; beber a água."
                 )
-            elif teaching_action in {"testar", "verificar", "consolidar"}:
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu esta microcompetência com evidências em mais de uma "
+                    "atividade. A próxima microcompetência ainda não está disponível "
+                    "nesta versão do percurso."
+                )
+            elif (
+                teaching_action in {"testar", "verificar", "consolidar"}
+                and mastery < 0.4
+            ):
                 safe = (
                     "Tarefa: descreva como guardar um arquivo usando exatamente três passos "
                     "na ordem em que precisam acontecer."
+                )
+            elif (
+                teaching_action in {"testar", "verificar", "consolidar"}
+                and mastery < 0.6
+            ):
+                safe = (
+                    "Tarefa: coloque em ordem: clicar em Enviar; escrever a mensagem; "
+                    "abrir a conversa."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                safe = (
+                    "Tarefa: coloque em ordem: guardar o copo; pegar o copo; beber a água."
                 )
             else:
                 safe = (
@@ -120,7 +145,7 @@ class TurnTeachingContract:
                 allow_code=False,
                 max_chars=750,
                 max_questions=1,
-                task_required=True,
+                task_required=task_required,
                 assistance_ceiling=ceiling,
                 review_mode=review_mode,
                 feedback_text=feedback,

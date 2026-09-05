@@ -1,4 +1,5 @@
 import json
+import re
 
 from backend.services.concept_catalog import ConceptCatalog
 from backend.services.learner_signals import LearnerSignals
@@ -173,6 +174,15 @@ class EvidenceEvaluator:
     def parse_evaluation_response(cls, content):
         if not isinstance(content, str) or not content.strip():
             return None
+
+        content = content.strip()
+        fenced = re.fullmatch(
+            r"```(?:json)?\s*(\{.*\})\s*```",
+            content,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if fenced:
+            content = fenced.group(1)
 
         try:
             data = json.loads(content)

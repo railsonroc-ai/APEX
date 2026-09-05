@@ -15,7 +15,7 @@ Status usados:
 | ID | Requisito | Status | Enforcement principal | Evidência automatizada |
 |---|---|---|---|---|
 | PED-001 | Uma novidade cognitiva principal por turno | PARCIAL | `TurnTeachingContract` bloqueia termos no primeiro microconceito | `test_pedagogical_guard_e2e.py`, `test_tutor_response_validator.py` |
-| PED-002 | “Entendi”, “ok” ou concordância não avançam | ENFORCED na tarefa objetiva inicial | `ObjectiveTaskEvaluator` produz `insufficient` | `test_objective_task_evaluator.py`, `test_pedagogical_guard_e2e.py` |
+| PED-002 | “Entendi”, “ok” ou concordância não avançam | ENFORCED nas tarefas controladas do percurso atual | `ObjectiveTaskEvaluator` produz `insufficient` | `test_objective_task_evaluator.py`, `test_pedagogical_guard_e2e.py` |
 | PED-003 | Avanço exige tarefa vinculada e evidência aplicada | ENFORCED | `LearningTask`, `EvidenceEvaluator`, `ProcessLearningTurn` | `test_e2e_learning_pipeline.py`, `test_learning_task.py` |
 | PED-004 | Toda evidência recebe veredito antes da próxima tarefa | ENFORCED | prefixo decidido e validado pelo servidor | `test_tutor_response_validator.py`, `test_pedagogical_guard_e2e.py` |
 | PED-005 | Falta isolada do veredito não apaga conteúdo válido | ENFORCED | reparo específico de `feedback_missing` | `test_tutor_response_validator.py` |
@@ -28,7 +28,7 @@ Status usados:
 | PED-012 | Pausa e revisão de retomada restauram o ponto exato | ENFORCED | `LearningSessionLifecycle` server-side | `test_e2e_session_resume_review.py` |
 | PED-013 | O aluno vê o foco e a próxima ação | ENFORCED | projeção read-only de `LearnerState` em `/api/session` | `test_session_api.py`, `test_session_ui.py` |
 | PED-014 | Histórico pedagógico é confirmado pelo servidor | ENFORCED | `LearningHistory` ignora histórico do navegador | `test_server_authoritative_history.py` |
-| PED-015 | Falha do avaliador não altera progresso | ENFORCED | fluxo fail-closed | `test_pedagogical_guard_e2e.py`, `test_chat_stream.py` |
+| PED-015 | Falha do avaliador não altera progresso | ENFORCED; o percurso controlado atual não depende da LLM | avaliação local das tarefas conhecidas e fluxo fail-closed para tarefas futuras abertas | `test_objective_task_evaluator.py`, `test_pedagogical_guard_e2e.py`, `test_chat_stream.py` |
 
 ## Diretrizes preservadas que ainda não estão completas
 

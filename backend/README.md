@@ -74,10 +74,15 @@ No chat, tokens do provider são acumulados no servidor. O
 `TutorResponseValidator` aceita ou substitui a resposta segundo o
 `TurnTeachingContract`; `ProcessLearningTurn` confirma resposta, assistência
 observada e tarefa extraída; somente depois o SSE entrega o texto validado.
-Tarefas objetivas conhecidas são avaliadas localmente antes da LLM. Se uma
-tarefa aberta exigir avaliação semântica e o provider não devolver uma rubrica
-válida, o turno falha fechado: não repete a explicação, não cria falsa
-evidência e não altera o progresso.
+Todas as respostas e tarefas controladas da primeira microcompetência são
+produzidas pelo contrato e avaliadas localmente, inclusive a produção em três
+passos. Isso impede variações sem rubrica e faz o percurso mínimo funcionar
+mesmo com o provider indisponível.
+Se uma tarefa futura realmente aberta exigir avaliação semântica e o provider
+devolver JSON dentro de um único bloco Markdown, o parser aceita o envelope e
+continua exigindo a rubrica completa. Se o provider não devolver uma rubrica
+válida, o turno continua falhando fechado: não repete a explicação, não cria
+falsa evidência e não altera o progresso.
 Quando existe evidência válida, o `TurnTeachingContract` exige que a resposta
 comece com feedback explícito sobre o resultado antes de apresentar a próxima
 tarefa. Quando somente esse prefixo falta, o validador o acrescenta e preserva

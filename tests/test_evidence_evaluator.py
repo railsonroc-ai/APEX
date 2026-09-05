@@ -123,6 +123,23 @@ def test_parses_semantic_evaluation_response():
     assert EvidenceEvaluator.parse_evaluation_response("resposta inválida") is None
 
 
+def test_parses_complete_rubric_inside_json_fence():
+    fenced = (
+        "```json\n"
+        '{"criteria":{'
+        '"task_response":"met",'
+        '"conceptual_correctness":"met",'
+        '"understanding_application":"met"},'
+        '"confidence":0.92,"evidence":"Aplicou em ordem."}'
+        "\n```"
+    )
+
+    result = EvidenceEvaluator.parse_evaluation_response(fenced)
+
+    assert result["outcome"] == "demonstrated"
+    assert result["confidence"] == 0.92
+
+
 
 
 def test_builds_semantic_evaluation_messages():

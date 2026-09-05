@@ -104,7 +104,15 @@ em `docs/PEDAGOGICAL_CONTRACT.md`.
 - nenhum token do provider é enviado antes da validação e do commit; a projeção SSE contém somente a resposta pedagógica confirmada;
 - o percurso inicial de lógica usa `ads.algorithms.ordered_steps`, impedindo que domínio de uma microcompetência conclua o tópico amplo inteiro;
 - “recomeçar do zero” limpa domínio, dificuldade, evidência e agenda de revisão da microcompetência ativada;
-- a primeira tarefa objetiva é corrigida deterministicamente e sua resposta correta avança o estado mesmo se o avaliador LLM estiver indisponível;
+- todas as tarefas controladas da primeira microcompetência são corrigidas
+  deterministicamente; o percurso atual completo pode ser concluído mesmo se
+  o avaliador LLM estiver indisponível;
+- as respostas desse percurso também vêm do contrato executável, impedindo que
+  a LLM crie uma tarefa para a qual o servidor ainda não possua rubrica;
+- as atividades de consolidação variam conforme o domínio e a conclusão não
+  cria uma tarefa fantasma enquanto a próxima microcompetência não existe;
+- o avaliador semântico aceita rubrica completa encapsulada em bloco JSON,
+  mantendo a validação estrita do conteúdo;
 - falha ou resposta inválida do avaliador semântico não gera resposta pedagógica, commit ou repetição silenciosa da explicação;
 - toda evidência válida exige feedback explícito do resultado antes da próxima tarefa;
 - concordância curta sem os elementos pedidos na tarefa objetiva produz

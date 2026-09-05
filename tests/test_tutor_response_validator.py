@@ -8,6 +8,7 @@ def ordered_contract(
     review=False,
     evidence_outcome=None,
     difficulty_count=0,
+    mastery=0.0,
 ):
     return TurnTeachingContract.build(
         {
@@ -15,6 +16,7 @@ def ordered_contract(
             "current_concept_id": "ads.algorithms.ordered_steps",
             "current_concept": "sequência ordenada de passos",
             "difficulty_count": difficulty_count,
+            "mastery": mastery,
         },
         action,
         review_mode=review,
@@ -166,3 +168,23 @@ def test_every_feedback_outcome_is_enforced(outcome, feedback):
     )
 
     assert result["response"].startswith(feedback + "\n\n")
+
+
+def test_consolidation_uses_different_known_tasks_as_mastery_grows():
+    file_task = ordered_contract("consolidar", mastery=0.2).safe_response
+    message_task = ordered_contract("consolidar", mastery=0.4).safe_response
+    cup_task = ordered_contract("consolidar", mastery=0.6).safe_response
+
+    assert "guardar um arquivo" in file_task
+    assert "abrir a conversa" in message_task
+    assert "pegar o copo" in cup_task
+    assert len({file_task, message_task, cup_task}) == 3
+
+
+def test_completed_microconcept_does_not_create_a_phantom_task():
+    contract = ordered_contract("avancar", mastery=0.8)
+    result = TutorResponseValidator.validate(contract.safe_response, contract)
+
+    assert contract.task_required is False
+    assert "Tarefa:" not in contract.safe_response
+    assert result["valid"] is True

@@ -59,3 +59,53 @@ def test_does_not_claim_open_or_unrelated_tasks():
             "concept_id": "ads.variables",
         }
     ) is None
+
+
+def test_accepts_known_open_file_task_without_llm():
+    result = ObjectiveTaskEvaluator.evaluate(
+        evaluation(
+            "abrir o menu Arquivo; selecionar Salvar como; "
+            "escolher o local e confirmar o salvamento",
+            prompt=(
+                "descreva como guardar um arquivo usando exatamente três passos "
+                "na ordem em que precisam acontecer"
+            ),
+        )
+    )
+
+    assert result["outcome"] == "demonstrated"
+    assert result["source"] == "deterministic_task"
+
+
+@pytest.mark.parametrize(
+    ("prompt", "answer"),
+    (
+        (
+            "coloque em ordem: clicar em Enviar; escrever a mensagem; abrir a conversa",
+            "abrir a conversa; escrever a mensagem; clicar em Enviar",
+        ),
+        (
+            "coloque em ordem: guardar o copo; pegar o copo; beber a água",
+            "pegar o copo; beber a água; guardar o copo",
+        ),
+    ),
+)
+def test_accepts_known_consolidation_tasks_without_llm(prompt, answer):
+    result = ObjectiveTaskEvaluator.evaluate(evaluation(answer, prompt=prompt))
+
+    assert result["outcome"] == "demonstrated"
+    assert result["source"] == "deterministic_task"
+
+
+def test_known_file_task_does_not_accept_three_unrelated_steps():
+    result = ObjectiveTaskEvaluator.evaluate(
+        evaluation(
+            "abrir a janela; fechar a janela; tomar café",
+            prompt=(
+                "descreva como guardar um arquivo usando exatamente três passos "
+                "na ordem em que precisam acontecer"
+            ),
+        )
+    )
+
+    assert result["outcome"] == "insufficient"

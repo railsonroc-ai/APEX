@@ -132,6 +132,67 @@ def test_correct_first_answer_advances_and_never_repeats_first_turn(monkeypatch,
     assert evidence["source"] == "deterministic_task"
 
 
+def test_known_ordered_steps_journey_never_needs_llm_evaluation(
+    monkeypatch,
+    tmp_path,
+):
+    prepare(monkeypatch, tmp_path)
+    client = app_module.app.test_client()
+    monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
+    client.post(
+        "/chat/stream",
+        json={
+            "message": "Quero recomeçar lógica de programação do zero",
+            "area": "ads",
+            "turn_id": "known-journey-start",
+        },
+    ).get_data(as_text=True)
+
+    answers = (
+        (
+            "known-journey-hands",
+            "abrir a torneira; lavar as mãos; secar as mãos",
+            "guardar um arquivo",
+        ),
+        (
+            "known-journey-file",
+            "abrir o menu Arquivo; selecionar Salvar como; "
+            "escolher o local e confirmar o salvamento",
+            "abrir a conversa",
+        ),
+        (
+            "known-journey-message",
+            "abrir a conversa; escrever a mensagem; clicar em Enviar",
+            "pegar o copo",
+        ),
+        (
+            "known-journey-cup",
+            "pegar o copo; beber a água; guardar o copo",
+            "próxima microcompetência ainda não está disponível",
+        ),
+    )
+
+    for turn_id, answer, expected_next in answers:
+        response = client.post(
+            "/chat/stream",
+            json={"message": answer, "area": "ads", "turn_id": turn_id},
+        )
+        body = response.get_data(as_text=True)
+        message = LearningHistory.find(turn_id)["assistant_message"]
+        evidence = EvidenceEvent.for_turn(turn_id)
+
+        assert '"done": true' in body.lower()
+        assert message.startswith("Correto.\n\n")
+        assert expected_next.lower() in message.lower()
+        assert evidence["outcome"] == "demonstrated"
+        assert evidence["source"] == "deterministic_task"
+
+    state = LearnerState.get("ads")
+    assert state["stage"] == "concluido"
+    assert state["mastery"] == 0.8
+    assert LearningTask.find_by_source_turn("known-journey-cup") is None
+
+
 def test_short_acknowledgement_does_not_advance_the_first_task(monkeypatch, tmp_path):
     prepare(monkeypatch, tmp_path)
     monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)

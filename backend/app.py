@@ -943,10 +943,13 @@ def chat_stream():
             )
 
             if (
-                tracking_request
-                and learner_state.get("current_concept_id")
+                learner_state.get("current_concept_id")
                 == TurnTeachingContract.ORDERED_STEPS
             ):
+                # A fatia curricular atual é inteiramente controlada: tarefa,
+                # feedback e progressão têm respostas seguras definidas pelo
+                # contrato. Não delegar sua redação à LLM impede variações que
+                # criariam tarefas sem uma rubrica local correspondente.
                 assistant_message = teaching_contract.safe_response
             else:
                 assistant_parts = []
