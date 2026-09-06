@@ -1,3 +1,9 @@
+# APEX_GOAL_RESULT_FIX_V3_IMPORT
+try:
+    from backend.services.goal_result_evidence_policy import normalize_goal_result_evidence as _normalize_goal_result_evidence
+except ImportError:
+    from services.goal_result_evidence_policy import normalize_goal_result_evidence as _normalize_goal_result_evidence
+
 from backend.database import (
     preview_transaction,
     transaction,
@@ -289,6 +295,14 @@ class ProcessLearningTurn:
                 identified_concept,
                 student_id=normalized_student_id,
                 restart=restart,
+            )
+
+            # APEX_GOAL_RESULT_FIX_V3_CALL
+            semantic_evidence = _normalize_goal_result_evidence(
+                semantic_evidence,
+                task_prompt=task_prompt,
+                evidence_context=evidence_context,
+                user_message=normalized_user_message,
             )
 
             state_before_evidence = dict(learner_state)
