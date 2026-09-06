@@ -222,3 +222,16 @@ class EvidenceEvaluator:
             "rubric_complete": True,
             "outcome_source": "rubric",
         }
+
+# APEX_PEDAGOGICAL_EVAL_FIX_V2
+# Conservative evaluator-only compatibility hook.
+try:
+    from backend.services.evaluation_policy import install_evaluator_policy as _apex_install_eval_v2
+except ImportError:
+    try:
+        from services.evaluation_policy import install_evaluator_policy as _apex_install_eval_v2
+    except ImportError:
+        _apex_install_eval_v2 = None
+if _apex_install_eval_v2 is not None:
+    _apex_install_eval_v2(globals())
+

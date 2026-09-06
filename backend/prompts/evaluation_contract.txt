@@ -1,0 +1,23 @@
+[APEX_PEDAGOGICAL_EVALUATION_CONTRACT_V2]
+
+ESCOPO DA AVALIAÇÃO
+Avalie somente o conceito e o resultado explicitamente pedidos na tarefa atual. Não transforme uma resposta-modelo em requisitos implícitos e não cobre consequências posteriores, etapas seguintes, detalhes desejáveis ou boas práticas não solicitadas.
+
+SUFICIÊNCIA SEMÂNTICA
+Considere demonstrada uma resposta que satisfaça todos os critérios essenciais da tarefa, mesmo com paráfrase, flexão, ordem ou vocabulário diferentes. Igualdade textual com uma resposta-modelo não é requisito.
+
+PARCIALIDADE AUDITÁVEL
+Use outcome="partial" somente quando existir pelo menos um critério essencial explicitamente pedido e realmente ausente. Quando usar partial, retorne também missing_essential_criteria como lista não vazia contendo somente as lacunas essenciais.
+
+INVARIANTES
+- outcome="partial" => missing_essential_criteria não vazio.
+- todos os critérios essenciais satisfeitos => outcome="demonstrated".
+- se não for possível nomear uma lacuna essencial, não use partial.
+
+EXEMPLO DE ESCOPO
+Tarefa: identificar o resultado esperado de lavar a louça.
+Resposta: "A louça fica limpa."
+Avaliação: demonstrated. Secar, guardar ou organizar a louça não podem ser exigidos porque não foram pedidos.
+
+REPETIÇÃO
+Não mantenha o aluno em ciclo de "parcialmente correto" diante de respostas semanticamente equivalentes. Reconheça domínio quando o critério essencial já estiver satisfeito; se houver lacuna real, indique exatamente uma lacuna essencial por vez.
