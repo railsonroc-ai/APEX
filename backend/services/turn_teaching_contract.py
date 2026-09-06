@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from backend.services.assistance_policy import AssistancePolicy
 from backend.services.task_policy import TaskPolicy
+from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -83,26 +84,7 @@ class TurnTeachingContract:
 
     @classmethod
     def _goal_result_task(cls, mastery):
-        if mastery < 0.2:
-            return (
-                "Tarefa: para a atividade carregar o celular, escolha o resultado "
-                "esperado: A) celular conectado e carregando; B) quarto varrido; "
-                "C) porta trancada."
-            )
-        if mastery < 0.4:
-            return (
-                "Tarefa: escreva somente o resultado esperado de salvar um documento, "
-                "começando com Resultado:."
-            )
-        if mastery < 0.6:
-            return (
-                "Tarefa: escreva somente o resultado esperado de lavar a louça, "
-                "começando com Resultado:."
-            )
-        return (
-            "Tarefa: escreva somente o resultado esperado de organizar uma mochila "
-            "para a aula, começando com Resultado:."
-        )
+        return GoalResultTasks.prompt_for_mastery(mastery)
 
     @classmethod
     def build(
@@ -188,10 +170,7 @@ class TurnTeachingContract:
         if concept_id == cls.GOAL_RESULT:
             mastery = cls._normalized_mastery(state)
             if review_mode:
-                safe = (
-                    "Tarefa: sem consultar, escreva somente o resultado esperado de "
-                    "escovar os dentes, começando com Resultado:."
-                )
+                safe = GoalResultTasks.review_prompt()
             elif evidence_outcome in {"insufficient", "unverified"}:
                 safe = cls._goal_result_task(mastery)
             elif teaching_action == "corrigir" and difficulty < 2:

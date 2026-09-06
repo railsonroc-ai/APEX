@@ -142,17 +142,17 @@ def test_goal_result_choice_is_evaluated_without_llm():
         (
             "escreva somente o resultado esperado de salvar um documento, "
             "começando com Resultado:",
-            "Resultado: documento salvo no local escolhido.",
+            "Resultado: documento salvo.",
         ),
         (
             "escreva somente o resultado esperado de lavar a louça, "
             "começando com Resultado:",
-            "Resultado: louça limpa e guardada.",
+            "Resultado: louça limpa.",
         ),
         (
             "escreva somente o resultado esperado de organizar uma mochila para "
             "a aula, começando com Resultado:",
-            "Resultado: mochila organizada com os materiais da aula.",
+            "Resultado: mochila organizada para a aula.",
         ),
         (
             "sem consultar, escreva somente o resultado esperado de escovar os "
@@ -178,3 +178,45 @@ def test_goal_result_rejects_a_list_of_actions_as_the_final_result():
     )
 
     assert result["outcome"] == "misconception"
+
+
+def test_goal_result_partial_identifies_missing_essential_criterion():
+    result = ObjectiveTaskEvaluator.evaluate(
+        goal_evaluation(
+            "Resultado: mochila.",
+            "escreva somente o resultado esperado de organizar uma mochila "
+            "para a aula, começando com Resultado:",
+        )
+    )
+
+    assert result["outcome"] == "partial"
+    assert result["missing_essential_criteria"]
+    assert any(
+        "organizada" in item or "pronta" in item
+        for item in result["missing_essential_criteria"]
+    )
+
+
+def test_goal_result_does_not_require_unasked_consequences():
+    cases = (
+        (
+            "escreva somente o resultado esperado de salvar um documento, "
+            "começando com Resultado:",
+            "Resultado: documento salvo.",
+        ),
+        (
+            "escreva somente o resultado esperado de lavar a louça, "
+            "começando com Resultado:",
+            "Resultado: louça limpa.",
+        ),
+        (
+            "escreva somente o resultado esperado de organizar uma mochila "
+            "para a aula, começando com Resultado:",
+            "Resultado: mochila organizada para a aula.",
+        ),
+    )
+
+    for prompt, answer in cases:
+        result = ObjectiveTaskEvaluator.evaluate(goal_evaluation(answer, prompt))
+        assert result["outcome"] == "demonstrated"
+        assert result["missing_essential_criteria"] == []

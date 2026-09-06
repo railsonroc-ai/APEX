@@ -2,6 +2,7 @@ import re
 
 from backend.concepts import normalize_alias
 from backend.services.rubric_policy import RubricPolicy
+from backend.services.goal_result_tasks import GoalResultTasks
 
 
 class ObjectiveTaskEvaluator:
@@ -68,73 +69,6 @@ class ObjectiveTaskEvaluator:
         },
     )
 
-    GOAL_RESULT_TASKS = (
-        {
-            "kind": "choice",
-            "prompt_markers": (
-                "carregar o celular",
-                "resultado esperado",
-                "celular conectado e carregando",
-            ),
-            "required_groups": (
-                ("celular", "aparelho"),
-                ("carreg", "carga"),
-            ),
-            "success": "Identificou o resultado esperado de carregar o celular.",
-        },
-        {
-            "kind": "result",
-            "prompt_markers": (
-                "resultado esperado de salvar um documento",
-                "comecando com resultado",
-            ),
-            "required_groups": (
-                ("documento", "arquivo"),
-                ("salv", "armazen"),
-                ("local", "pasta", "destino"),
-            ),
-            "success": "Descreveu o resultado final de salvar um documento.",
-        },
-        {
-            "kind": "result",
-            "prompt_markers": (
-                "resultado esperado de lavar a louca",
-                "comecando com resultado",
-            ),
-            "required_groups": (
-                ("louca",),
-                ("limp", "lavada"),
-                ("guard", "organiz"),
-            ),
-            "success": "Descreveu o resultado final de lavar a louça.",
-        },
-        {
-            "kind": "result",
-            "prompt_markers": (
-                "resultado esperado de organizar uma mochila",
-                "comecando com resultado",
-            ),
-            "required_groups": (
-                ("mochila",),
-                ("organiz", "pront"),
-                ("materi", "cadern", "livr", "itens"),
-            ),
-            "success": "Descreveu o resultado final de organizar a mochila.",
-        },
-        {
-            "kind": "result",
-            "prompt_markers": (
-                "resultado esperado de escovar os dentes",
-                "comecando com resultado",
-            ),
-            "required_groups": (
-                ("dentes",),
-                ("limp", "escov"),
-            ),
-            "success": "Recuperou o resultado final de escovar os dentes.",
-        },
-    )
-
     @classmethod
     def _is_hand_washing_order_task(cls, evaluation):
         if not isinstance(evaluation, dict):
@@ -162,11 +96,9 @@ class ObjectiveTaskEvaluator:
             return None
         if evaluation.get("concept_id") != cls.GOAL_RESULT:
             return None
-        prompt = normalize_alias(evaluation.get("tutor_message")) or ""
-        for definition in cls.GOAL_RESULT_TASKS:
-            if all(marker in prompt for marker in definition["prompt_markers"]):
-                return definition
-        return None
+        return GoalResultTasks.definition_for_prompt(
+            evaluation.get("tutor_message")
+        )
 
     @classmethod
     def _submitted_order(cls, answer):
@@ -210,9 +142,9 @@ class ObjectiveTaskEvaluator:
         return positions == sorted(positions), True
 
     @staticmethod
-    def _evidence(criteria, evidence):
+    def _evidence(criteria, evidence, *, missing_essential_criteria=None):
         normalized = RubricPolicy.normalize_payload({"criteria": criteria})
-        return {
+        result = {
             "outcome": normalized["outcome"],
             "confidence": 1.0,
             "evidence": evidence,
@@ -221,13 +153,24 @@ class ObjectiveTaskEvaluator:
             "outcome_source": "rubric",
             "source": "deterministic_task",
         }
+        if missing_essential_criteria is not None:
+            result["missing_essential_criteria"] = list(
+                missing_essential_criteria
+            )
+        return result
 
     @classmethod
     def _evaluate_goal_result(cls, evaluation, definition):
         answer = normalize_alias(evaluation.get("student_answer")) or ""
+        essential_criteria = definition["essential_criteria"]
         groups_met = [
-            any(marker in answer for marker in group)
-            for group in definition["required_groups"]
+            any(marker in answer for marker in criterion["markers"])
+            for criterion in essential_criteria
+        ]
+        missing = [
+            criterion["label"]
+            for criterion, met in zip(essential_criteria, groups_met)
+            if not met
         ]
 
         if definition["kind"] == "choice":
@@ -235,6 +178,7 @@ class ObjectiveTaskEvaluator:
             if choice:
                 if choice.group(1) == "a":
                     groups_met = [True] * len(groups_met)
+                    missing = []
                 else:
                     return cls._evidence(
                         {
@@ -256,6 +200,7 @@ class ObjectiveTaskEvaluator:
                     RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
                 },
                 definition["success"],
+                missing_essential_criteria=[],
             )
 
         sequence_markers = (
@@ -270,16 +215,27 @@ class ObjectiveTaskEvaluator:
                     RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
                 },
                 "Listou ações em vez de descrever a situação final desejada.",
+                missing_essential_criteria=[
+                    "descrever a situação final, sem listar os passos"
+                ],
             )
 
+        if definition["kind"] == "result" and not has_result_prefix:
+            missing = [*missing, "usar o formato solicitado Resultado:"]
+
         if has_result_prefix or any(groups_met):
+            # Para esta família controlada, PARTIAL sempre precisa explicar
+            # qual critério essencial explicitamente pedido ainda não apareceu.
+            if not missing:
+                missing = ["completar o resultado explicitamente solicitado"]
             return cls._evidence(
                 {
                     RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
                     RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
                     RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
                 },
-                "Indicou parte do resultado, mas a situação final ainda está incompleta.",
+                "Indicou parte do resultado, mas falta um critério essencial da tarefa.",
+                missing_essential_criteria=missing,
             )
 
         return cls._evidence(
@@ -289,6 +245,7 @@ class ObjectiveTaskEvaluator:
                 RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
             },
             "A resposta não descreveu o resultado final solicitado.",
+            missing_essential_criteria=missing,
         )
 
     @classmethod

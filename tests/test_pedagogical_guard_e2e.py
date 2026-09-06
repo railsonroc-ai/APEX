@@ -236,17 +236,17 @@ def test_completed_first_node_advances_to_goal_result_and_completes_locally(
         ("goal-choice", "A", "salvar um documento"),
         (
             "goal-document",
-            "Resultado: documento salvo no local escolhido.",
+            "Resultado: documento salvo.",
             "lavar a louça",
         ),
         (
             "goal-dishes",
-            "Resultado: louça limpa e guardada.",
+            "Resultado: louça limpa.",
             "organizar uma mochila",
         ),
         (
             "goal-backpack",
-            "Resultado: mochila organizada com os materiais da aula.",
+            "Resultado: mochila organizada para a aula.",
             "próxima microcompetência ainda não está disponível",
         ),
     )
