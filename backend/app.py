@@ -59,6 +59,7 @@ from backend.services.concept_tracker import ConceptTracker
 from backend.services.evidence_evaluator import EvidenceEvaluator
 from backend.services.concept_progress import ConceptProgress
 from backend.services.review_scheduler import ReviewScheduler
+from backend.services.review_queue import ReviewQueue
 from backend.services.concept_activation import ConceptActivation
 from backend.services.review_lifecycle import ReviewLifecycle
 from backend.services.process_learning_turn import ProcessLearningTurn
@@ -278,9 +279,14 @@ def sse(data):
 
 @bp.route("/")
 def index():
+    area = TutorCore.normalize_area(
+        request.args.get("area", "ads")
+    )
     return render_template(
         "index.html",
         max_history_messages=MAX_HISTORY_MESSAGES,
+        area=area,
+        area_label="ADS" if area == "ads" else "TI",
     )
 
 
@@ -408,6 +414,273 @@ def session_status():
     )
     session = _with_learning_focus(session, context)
     return jsonify({"ok": True, "session": session}), 200
+
+
+@bp.route("/api/dashboard", methods=["GET"])
+def dashboard_status():
+    """Projeta a tela inicial a partir do estado autoritativo do servidor."""
+    if not verify_auth():
+        return _auth_failure_response()
+
+    _, context = _resolve_session_request()
+    _bind_observability_context(context)
+    session = LearningSessionLifecycle.get(
+        context["area"],
+        student_id=context["student_id"],
+        session_id=context["session_id"],
+    )
+    session = _with_learning_focus(session, context)
+    progress = ConceptProgress.list_all(
+        context["area"],
+        student_id=context["student_id"],
+    )
+    due_reviews = ReviewQueue.due(
+        context["area"],
+        student_id=context["student_id"],
+    )
+    selectable = ConceptCatalog.list_selectable(context["area"])
+    started = [item for item in progress if item.get("updated_at")]
+    mastered = [
+        item
+        for item in started
+        if float(item.get("mastery") or 0.0) >= 0.80
+    ]
+    difficulties = [
+        item
+        for item in started
+        if int(item.get("difficulty_count") or 0) > 0
+    ]
+    mean_mastery = (
+        sum(float(item.get("mastery") or 0.0) for item in started)
+        / len(started)
+        if started
+        else 0.0
+    )
+
+    return jsonify(
+        {
+            "ok": True,
+            "area": context["area"],
+            "area_label": "ADS" if context["area"] == "ads" else "TI",
+            "session": session,
+            "selectable_concepts": selectable,
+            "progress": progress,
+            "due_reviews": due_reviews,
+            "difficulties": difficulties,
+            "summary": {
+                "started": len(started),
+                "mastered": len(mastered),
+                "due_reviews": len(due_reviews),
+                "mean_mastery": round(mean_mastery, 4),
+            },
+        }
+    ), 200
+
+
+@bp.route("/api/study/start", methods=["POST"])
+def start_study():
+    """Inicia ou reinicia um conteúdo escolhido na tela inicial."""
+    if not verify_auth():
+        return _auth_failure_response()
+
+    data, context = _resolve_session_request()
+    _bind_observability_context(context)
+    concept = ConceptCatalog.resolve(
+        context["area"],
+        data.get("concept_id"),
+        selectable_only=True,
+    )
+    if concept is None:
+        return jsonify({"error": "conteúdo inválido"}), 400
+
+    runtime = LearningSessionLifecycle.get(
+        context["area"],
+        student_id=context["student_id"],
+        session_id=context["session_id"],
+    )
+    if runtime.get("status") != LearningSessionLifecycle.STUDYING:
+        return jsonify(
+            {
+                "error": "Retome ou conclua a sessão atual antes de iniciar outro conteúdo.",
+                "code": "session_not_studying",
+            }
+        ), 409
+
+    owner = f"study-control-{uuid4().hex}"
+    acquired = LearningTurnLease.acquire(
+        context["area"],
+        owner,
+        student_id=context["student_id"],
+    )
+    if not acquired:
+        return jsonify(
+            {
+                "error": "Há um turno em processamento. Aguarde antes de iniciar o conteúdo.",
+                "code": "turn_in_progress",
+            }
+        ), 409
+
+    try:
+        runtime = LearningSessionLifecycle.get(
+            context["area"],
+            student_id=context["student_id"],
+            session_id=context["session_id"],
+        )
+        if runtime.get("status") != LearningSessionLifecycle.STUDYING:
+            return jsonify(
+                {
+                    "error": "A sessão mudou. Retome ou conclua a sessão atual.",
+                    "code": "session_not_studying",
+                }
+            ), 409
+        state = ConceptActivation.activate(
+            context["area"],
+            concept["concept_id"],
+            student_id=context["student_id"],
+            restart=data.get("restart") is True,
+        )
+        runtime = LearningSessionLifecycle.get(
+            context["area"],
+            student_id=context["student_id"],
+            session_id=context["session_id"],
+        )
+        runtime = _with_learning_focus(runtime, context)
+    finally:
+        LearningTurnLease.release(
+            context["area"],
+            owner,
+            student_id=context["student_id"],
+        )
+
+    Observability.event(
+        current_app.logger,
+        "home_study_started",
+        concept_id=concept["concept_id"],
+        restart=data.get("restart") is True,
+    )
+    return jsonify(
+        {"ok": True, "state": state, "session": runtime}
+    ), 200
+
+
+@bp.route("/api/review/start", methods=["POST"])
+def start_review():
+    """Ativa uma revisão manual ou a próxima revisão programada."""
+    if not verify_auth():
+        return _auth_failure_response()
+
+    data, context = _resolve_session_request()
+    _bind_observability_context(context)
+    runtime = LearningSessionLifecycle.get(
+        context["area"],
+        student_id=context["student_id"],
+        session_id=context["session_id"],
+    )
+    if runtime.get("status") != LearningSessionLifecycle.STUDYING:
+        return jsonify(
+            {
+                "error": "Retome ou conclua a sessão atual antes de iniciar outra revisão.",
+                "code": "session_not_studying",
+            }
+        ), 409
+
+    requested = data.get("concept_id")
+    concept = (
+        ConceptCatalog.resolve(context["area"], requested)
+        if requested
+        else None
+    )
+    if requested and concept is None:
+        return jsonify({"error": "conteúdo inválido"}), 400
+
+    owner = f"review-control-{uuid4().hex}"
+    acquired = LearningTurnLease.acquire(
+        context["area"],
+        owner,
+        student_id=context["student_id"],
+    )
+    if not acquired:
+        return jsonify(
+            {
+                "error": "Há um turno em processamento. Aguarde antes de iniciar a revisão.",
+                "code": "turn_in_progress",
+            }
+        ), 409
+
+    try:
+        runtime = LearningSessionLifecycle.get(
+            context["area"],
+            student_id=context["student_id"],
+            session_id=context["session_id"],
+        )
+        if runtime.get("status") != LearningSessionLifecycle.STUDYING:
+            return jsonify(
+                {
+                    "error": "A sessão mudou. Retome ou conclua a sessão atual.",
+                    "code": "session_not_studying",
+                }
+            ), 409
+        if concept is None:
+            state = ReviewLifecycle.activate_due(
+                context["area"],
+                student_id=context["student_id"],
+            )
+            if state is None:
+                current = LearnerState.get(
+                    context["area"],
+                    student_id=context["student_id"],
+                )
+                if not current.get("current_concept_id"):
+                    return jsonify(
+                        {"error": "nenhum conteúdo disponível para revisão"}
+                    ), 409
+                state = LearnerState.update(
+                    context["area"],
+                    stage="reencontrar",
+                    student_id=context["student_id"],
+                )
+        else:
+            progress = ConceptProgress.get(
+                context["area"],
+                concept["concept_id"],
+                student_id=context["student_id"],
+            )
+            if progress is None or not progress.get("updated_at"):
+                return jsonify(
+                    {"error": "esse conteúdo ainda não possui progresso para revisar"}
+                ), 409
+            state = LearnerState.update(
+                context["area"],
+                current_concept_id=concept["concept_id"],
+                stage="reencontrar",
+                last_evidence=progress.get("last_evidence") or "",
+                difficulty_count=progress.get("difficulty_count", 0),
+                mastery=progress.get("mastery", 0.0),
+                student_id=context["student_id"],
+            )
+
+        runtime = LearningSessionLifecycle.get(
+            context["area"],
+            student_id=context["student_id"],
+            session_id=context["session_id"],
+        )
+        runtime = _with_learning_focus(runtime, context)
+    finally:
+        LearningTurnLease.release(
+            context["area"],
+            owner,
+            student_id=context["student_id"],
+        )
+
+    Observability.event(
+        current_app.logger,
+        "home_review_started",
+        concept_id=state.get("current_concept_id"),
+        scheduled=concept is None,
+    )
+    return jsonify(
+        {"ok": True, "state": state, "session": runtime}
+    ), 200
 
 
 @bp.route("/api/session/pause", methods=["POST"])

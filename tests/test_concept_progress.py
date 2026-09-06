@@ -113,3 +113,29 @@ def test_list_scheduled_returns_only_scheduled_concepts(monkeypatch, tmp_path):
         "ads.variables", "ads.conditionals",
     ]
     assert [item["concept"] for item in scheduled] == ["variáveis", "condicionais"]
+
+
+def test_list_all_joins_catalog_with_real_student_progress(monkeypatch, tmp_path):
+    path = tmp_path / "concept-list-all.db"
+    create_concept_progress_database(path)
+    use_test_database(monkeypatch, path)
+    ConceptProgress.update(
+        "ads",
+        "variáveis",
+        mastery=0.8,
+        difficulty_count=1,
+    )
+
+    items = ConceptProgress.list_all("ads")
+
+    assert [item["concept_id"] for item in items] == [
+        "ads.conditionals",
+        "ads.functions",
+        "ads.variables",
+    ]
+    by_id = {item["concept_id"]: item for item in items}
+    assert by_id["ads.variables"]["mastery"] == 0.8
+    assert by_id["ads.variables"]["difficulty_count"] == 1
+    assert by_id["ads.variables"]["updated_at"] is not None
+    assert by_id["ads.functions"]["mastery"] == 0.0
+    assert by_id["ads.functions"]["updated_at"] is None

@@ -166,3 +166,40 @@ class ConceptProgress:
             return [dict(row) for row in rows]
         finally:
             connection.close()
+
+    @classmethod
+    def list_all(cls, area, student_id=DEFAULT_STUDENT_ID):
+        """Lista o catálogo da área unido ao progresso real do estudante."""
+        area = cls.normalize_area(area)
+        student_id = normalize_student_id(student_id)
+        connection = get_db_connection()
+        try:
+            rows = connection.execute(
+                """
+                SELECT
+                    definition.concept_id,
+                    definition.area,
+                    definition.canonical_name AS concept,
+                    definition.selectable,
+                    COALESCE(progress.mastery, 0.0) AS mastery,
+                    COALESCE(progress.difficulty_count, 0) AS difficulty_count,
+                    progress.last_evidence,
+                    COALESCE(progress.review_count, 0) AS review_count,
+                    progress.next_review_at,
+                    progress.last_reviewed_at,
+                    progress.updated_at
+                FROM concept_definitions AS definition
+                LEFT JOIN concept_progress AS progress
+                  ON progress.student_id = ?
+                 AND progress.area = definition.area
+                 AND progress.concept_id = definition.concept_id
+                WHERE definition.area = ?
+                ORDER BY
+                    definition.selectable DESC,
+                    definition.concept_id ASC
+                """,
+                (student_id, area),
+            ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            connection.close()

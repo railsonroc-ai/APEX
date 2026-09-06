@@ -165,6 +165,20 @@ A interface não cria uma segunda máquina de estados. `apex-api.js` apenas cons
 pedagógica e o próximo passo. A interface usa essa projeção para externalizar o
 foco sem decidir ou persistir transições no navegador.
 
+A tela inicial é uma camada de navegação sobre essa mesma autoridade. O arquivo
+`apex-shell.js` não mantém domínio ou agenda próprios: consulta `/api/dashboard`
+e usa os endpoints server-side de sessão, estudo e revisão. A arte aprovada fica
+em `backend/static/img/apex-home.jpg`; em telas largas, os alvos HTML coincidem
+com as quatro teclas da composição, e em telas estreitas os mesmos controles são
+reorganizados para toque sem duplicar estado. `chat-engine.js` continua dono da
+conversa e expõe somente operações transitórias de interface por `ApexChat`.
+
+`POST /api/study/start` aceita apenas conceitos selecionáveis do catálogo.
+`POST /api/review/start` aceita revisão programada ou conceito já estudado.
+Ambos rejeitam sessão pausada/revisando, adquirem `LearningTurnLease`, releem o
+lifecycle depois da aquisição e só então alteram o `LearnerState`. A mudança de
+interface não adiciona migration nem altera o formato dos ledgers existentes.
+
 O schema não é mais alterado por comandos avulsos no `init_database`. Cada
 mudança possui versão e nome, é aplicada junto do seu registro em uma transação
 e pode ser executada novamente com segurança durante a inicialização.

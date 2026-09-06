@@ -5,6 +5,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = (ROOT / "backend" / "templates" / "index.html").read_text()
 API_JS = (ROOT / "backend" / "static" / "js" / "apex-api.js").read_text()
 CHAT_JS = (ROOT / "backend" / "static" / "js" / "chat-engine.js").read_text()
+SHELL_JS = (ROOT / "backend" / "static" / "js" / "apex-shell.js").read_text()
+THEME_CSS = (ROOT / "backend" / "static" / "css" / "apex-theme.css").read_text()
 
 
 def test_session_controls_are_present_in_main_interface():
@@ -66,3 +68,34 @@ def test_resume_review_starts_review_turn_and_refreshes_after_chat():
     assert "await sendMessage();" in CHAT_JS
     assert "await refreshSessionRuntime({\n          quiet: true\n        });" in CHAT_JS
     assert "Responda à revisão de retomada..." in CHAT_JS
+
+
+def test_futuristic_home_keeps_real_session_controls_and_art():
+    required_ids = {
+        'id="home-screen"',
+        'id="study-screen"',
+        'id="home-continue-btn"',
+        'id="home-review-btn"',
+        'id="home-new-btn"',
+        'id="home-progress-btn"',
+        'id="home-panel"',
+        'id="back-home-btn"',
+    }
+    for marker in required_ids:
+        assert marker in TEMPLATE
+
+    assert "img/apex-home.jpg" in TEMPLATE
+    assert "css/apex-theme.css" in TEMPLATE
+    assert "js/apex-shell.js" in TEMPLATE
+    assert ".home-menu" in THEME_CSS
+    assert "@media (max-width: 640px)" in THEME_CSS
+
+
+def test_home_actions_use_server_authoritative_controls():
+    assert "Api.getDashboard(AREA)" in SHELL_JS
+    assert "Chat.pauseLearningSession()" in SHELL_JS
+    assert "Chat.resumeLearningSession('direct')" in SHELL_JS
+    assert "Chat.resumeLearningSession('review')" in SHELL_JS
+    assert "Api.startStudy(" in SHELL_JS
+    assert "Api.startReview(AREA, conceptId)" in SHELL_JS
+    assert "window.ApexChat = Object.freeze" in CHAT_JS

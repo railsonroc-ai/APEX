@@ -133,6 +133,17 @@ em `docs/PEDAGOGICAL_CONTRACT.md`.
   fica reservada para dificuldade recorrente;
 - `/api/session` projeta o conceito e a próxima ação para a interface sem criar
   uma segunda fonte de estado;
+- a tela inicial usa a identidade visual futurista aprovada e oferece quatro
+  teclas funcionais: continuar estudos, revisar conteúdo, novo estudo e
+  progresso;
+- `/api/dashboard` reúne sessão, catálogo, domínio, dificuldades e revisões
+  reais para a tela inicial; nível, experiência e progresso não são inventados
+  no navegador;
+- iniciar/reiniciar conteúdo e abrir revisão manual passam por endpoints
+  autoritativos, pela mesma lease aluno+área e por revalidação do estado da
+  sessão antes de qualquer mutação;
+- a tela de estudo conserva os controles persistentes de pausar, retomar direto
+  e revisar antes, e pode voltar à tela inicial sem perder o checkpoint;
 
 ## Validação da release
 

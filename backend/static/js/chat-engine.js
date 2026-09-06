@@ -378,6 +378,22 @@
     }
 
     syncInputAvailability();
+
+    if (
+      typeof document.dispatchEvent === 'function'
+      && typeof window.CustomEvent === 'function'
+    ) {
+      document.dispatchEvent(
+        new window.CustomEvent(
+          'apex:session-updated',
+          {
+            detail: {
+              session: { ...sessionRuntime }
+            }
+          }
+        )
+      );
+    }
   }
 
 
@@ -453,6 +469,7 @@
       );
 
       toast('Estudo pausado.');
+      return result.session;
     } catch (error) {
       toast(
         error.message
@@ -462,6 +479,7 @@
       await refreshSessionRuntime({
         quiet: true
       });
+      return null;
     } finally {
       sessionControlBusy = false;
       syncInputAvailability();
@@ -510,6 +528,8 @@
           input.focus();
         }
       }
+
+      return result.session;
     } catch (error) {
       toast(
         error.message
@@ -519,6 +539,7 @@
       await refreshSessionRuntime({
         quiet: true
       });
+      return null;
     } finally {
       sessionControlBusy = false;
       syncInputAvailability();
@@ -1468,5 +1489,20 @@
 
   window.toast =
     toast;
+
+  window.ApexChat = Object.freeze({
+    ask,
+    pauseLearningSession,
+    resumeLearningSession,
+    refreshSessionRuntime,
+    getSessionRuntime() {
+      return { ...sessionRuntime };
+    },
+    focusInput() {
+      if (input) {
+        input.focus();
+      }
+    }
+  });
 
 }());

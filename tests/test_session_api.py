@@ -168,3 +168,197 @@ def test_paused_session_blocks_new_chat_before_groq(monkeypatch):
         "error": "Sessão pausada",
         "code": "session_paused",
     }
+
+
+def test_dashboard_projects_real_progress_and_due_reviews(monkeypatch):
+    monkeypatch.setattr(app_module, "verify_auth", lambda: True)
+    monkeypatch.setattr(
+        app_module.LearningSessionLifecycle,
+        "get",
+        lambda area, **kwargs: {"status": "studying", "area": area},
+    )
+    monkeypatch.setattr(
+        app_module.LearnerState,
+        "get",
+        lambda area, **kwargs: {
+            "area": area,
+            "current_concept_id": "ads.variables",
+            "current_concept": "variáveis",
+            "stage": "fixar",
+        },
+    )
+    monkeypatch.setattr(
+        app_module.TeachingPolicy,
+        "choose_action",
+        lambda state: "consolidar",
+    )
+    progress = [
+        {
+            "concept_id": "ads.variables",
+            "concept": "variáveis",
+            "mastery": 0.8,
+            "difficulty_count": 1,
+            "updated_at": "2026-09-06 10:00:00",
+        },
+        {
+            "concept_id": "ads.functions",
+            "concept": "funções",
+            "mastery": 0.0,
+            "difficulty_count": 0,
+            "updated_at": None,
+        },
+    ]
+    monkeypatch.setattr(app_module.ConceptProgress, "list_all", lambda *a, **k: progress)
+    monkeypatch.setattr(app_module.ReviewQueue, "due", lambda *a, **k: [progress[0]])
+    monkeypatch.setattr(
+        app_module.ConceptCatalog,
+        "list_selectable",
+        lambda area: [{"concept_id": "ads.variables", "canonical_name": "variáveis"}],
+    )
+
+    response = app_module.app.test_client().get("/api/dashboard?area=ads")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["summary"] == {
+        "started": 1,
+        "mastered": 1,
+        "due_reviews": 1,
+        "mean_mastery": 0.8,
+    }
+    assert payload["session"]["learning_focus"]["concept"] == "variáveis"
+    assert payload["difficulties"][0]["concept_id"] == "ads.variables"
+
+
+def test_start_study_activates_selected_catalog_concept(monkeypatch):
+    monkeypatch.setattr(app_module, "verify_auth", lambda: True)
+    monkeypatch.setattr(
+        app_module.ConceptCatalog,
+        "resolve",
+        lambda area, value, selectable_only=False: {
+            "concept_id": "ads.algorithms",
+            "canonical_name": "algoritmos",
+        },
+    )
+    monkeypatch.setattr(
+        app_module.LearningSessionLifecycle,
+        "get",
+        lambda *a, **k: {"status": "studying"},
+    )
+    monkeypatch.setattr(app_module.LearningTurnLease, "acquire", lambda *a, **k: True)
+    monkeypatch.setattr(app_module.LearningTurnLease, "release", lambda *a, **k: True)
+    captured = {}
+
+    def activate(area, concept_id, **kwargs):
+        captured.update(area=area, concept_id=concept_id, **kwargs)
+        return {"current_concept_id": concept_id, "stage": "compreender"}
+
+    monkeypatch.setattr(app_module.ConceptActivation, "activate", activate)
+    monkeypatch.setattr(
+        app_module,
+        "_with_learning_focus",
+        lambda session, context: {**session, "learning_focus": {"concept": "algoritmos"}},
+    )
+
+    response = app_module.app.test_client().post(
+        "/api/study/start",
+        json={"area": "ads", "concept_id": "ads.algorithms", "restart": True},
+    )
+
+    assert response.status_code == 200
+    assert captured["concept_id"] == "ads.algorithms"
+    assert captured["restart"] is True
+    assert response.get_json()["session"]["learning_focus"]["concept"] == "algoritmos"
+
+
+def test_start_review_restores_selected_concept_progress(monkeypatch):
+    monkeypatch.setattr(app_module, "verify_auth", lambda: True)
+    monkeypatch.setattr(
+        app_module.LearningSessionLifecycle,
+        "get",
+        lambda *a, **k: {"status": "studying"},
+    )
+    monkeypatch.setattr(
+        app_module.ConceptCatalog,
+        "resolve",
+        lambda area, value: {
+            "concept_id": "ads.variables",
+            "canonical_name": "variáveis",
+        },
+    )
+    monkeypatch.setattr(
+        app_module.ConceptProgress,
+        "get",
+        lambda *a, **k: {
+            "concept_id": "ads.variables",
+            "mastery": 0.7,
+            "difficulty_count": 2,
+            "last_evidence": "evidência anterior",
+            "updated_at": "2026-09-06 10:00:00",
+        },
+    )
+    monkeypatch.setattr(app_module.LearningTurnLease, "acquire", lambda *a, **k: True)
+    monkeypatch.setattr(app_module.LearningTurnLease, "release", lambda *a, **k: True)
+    captured = {}
+
+    def update(area, **changes):
+        captured.update(changes)
+        return {"area": area, **changes}
+
+    monkeypatch.setattr(app_module.LearnerState, "update", update)
+    monkeypatch.setattr(
+        app_module,
+        "_with_learning_focus",
+        lambda session, context: {**session, "learning_focus": {"concept": "variáveis"}},
+    )
+
+    response = app_module.app.test_client().post(
+        "/api/review/start",
+        json={"area": "ads", "concept_id": "ads.variables"},
+    )
+
+    assert response.status_code == 200
+    assert captured["current_concept_id"] == "ads.variables"
+    assert captured["stage"] == "reencontrar"
+    assert captured["mastery"] == 0.7
+
+
+def test_start_study_rechecks_session_after_acquiring_lease(monkeypatch):
+    monkeypatch.setattr(app_module, "verify_auth", lambda: True)
+    monkeypatch.setattr(
+        app_module.ConceptCatalog,
+        "resolve",
+        lambda area, value, selectable_only=False: {
+            "concept_id": "ads.algorithms",
+            "canonical_name": "algoritmos",
+        },
+    )
+    statuses = iter(("studying", "paused"))
+    monkeypatch.setattr(
+        app_module.LearningSessionLifecycle,
+        "get",
+        lambda *a, **k: {"status": next(statuses)},
+    )
+    monkeypatch.setattr(app_module.LearningTurnLease, "acquire", lambda *a, **k: True)
+    released = {"value": False}
+    monkeypatch.setattr(
+        app_module.LearningTurnLease,
+        "release",
+        lambda *a, **k: released.update(value=True),
+    )
+    activated = {"value": False}
+    monkeypatch.setattr(
+        app_module.ConceptActivation,
+        "activate",
+        lambda *a, **k: activated.update(value=True),
+    )
+
+    response = app_module.app.test_client().post(
+        "/api/study/start",
+        json={"area": "ads", "concept_id": "ads.algorithms"},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "session_not_studying"
+    assert activated["value"] is False
+    assert released["value"] is True

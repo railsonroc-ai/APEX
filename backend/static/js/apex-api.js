@@ -126,6 +126,22 @@
   }
 
 
+  async function getDashboard(area) {
+    const query = new URLSearchParams({
+      area: String(area || 'ads'),
+    });
+
+    const response = await fetchApi(
+      `/api/dashboard?${query.toString()}`,
+      {
+        method: 'GET',
+      }
+    );
+
+    return readJsonResponse(response);
+  }
+
+
   async function pauseSession(area) {
     const response = await fetchApi(
       '/api/session/pause',
@@ -153,6 +169,50 @@
           area: String(area || 'ads'),
           mode: String(mode || 'direct'),
         }),
+      }
+    );
+
+    return readJsonResponse(response);
+  }
+
+
+  async function startStudy(
+    area,
+    conceptId,
+    restart = false
+  ) {
+    const response = await fetchApi(
+      '/api/study/start',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          area: String(area || 'ads'),
+          concept_id: String(conceptId || ''),
+          restart: restart === true,
+        }),
+      }
+    );
+
+    return readJsonResponse(response);
+  }
+
+
+  async function startReview(
+    area,
+    conceptId = null
+  ) {
+    const payload = {
+      area: String(area || 'ads'),
+    };
+    if (conceptId) {
+      payload.concept_id = String(conceptId);
+    }
+
+    const response = await fetchApi(
+      '/api/review/start',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
       }
     );
 
@@ -341,8 +401,11 @@
     getHeaders,
     saveNote,
     getSession,
+    getDashboard,
     pauseSession,
     resumeSession,
+    startStudy,
+    startReview,
     streamChat,
   };
 
