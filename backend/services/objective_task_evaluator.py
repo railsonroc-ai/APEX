@@ -5,6 +5,7 @@ from backend.services.rubric_policy import RubricPolicy
 from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
+from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 
 
 class ObjectiveTaskEvaluator:
@@ -19,6 +20,7 @@ class ObjectiveTaskEvaluator:
     GOAL_RESULT = "ads.algorithms.goal_result"
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
     STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
+    PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
     HAND_WASHING_MARKERS = (
         "abrir a torneira",
         "lavar as maos",
@@ -118,6 +120,16 @@ class ObjectiveTaskEvaluator:
         if evaluation.get("concept_id") != cls.STRUCTURED_SEQUENCE:
             return None
         return StructuredSequenceTasks.definition_for_prompt(
+            evaluation.get("tutor_message")
+        )
+
+    @classmethod
+    def _portugol_skeleton_definition(cls, evaluation):
+        if not isinstance(evaluation, dict):
+            return None
+        if evaluation.get("concept_id") != cls.PORTUGOL_SKELETON:
+            return None
+        return PortugolSkeletonTasks.definition_for_prompt(
             evaluation.get("tutor_message")
         )
 
@@ -336,6 +348,89 @@ class ObjectiveTaskEvaluator:
         )
 
     @classmethod
+    def _evaluate_portugol_skeleton(cls, evaluation, definition):
+        normalized = normalize_alias(evaluation.get("student_answer")) or ""
+        kind = definition.get("kind")
+
+        if kind == "single_keyword":
+            required = definition["required_keyword"]
+            if re.search(rf"\b{re.escape(required)}\b", normalized):
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.NOT_MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
+                },
+                "A resposta ainda não identifica a palavra estrutural pedida.",
+                missing_essential_criteria=[f"identificar {required}"],
+            )
+
+        keywords = tuple(definition.get("ordered_keywords") or ())
+        positions = []
+        missing = []
+        for keyword in keywords:
+            match = re.search(rf"\b{re.escape(keyword)}\b", normalized)
+            if match is None:
+                positions.append(None)
+                missing.append(f"incluir {keyword}")
+            else:
+                positions.append(match.start())
+
+        if not missing and positions == sorted(positions):
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                },
+                definition["success"],
+                missing_essential_criteria=[],
+            )
+
+        if not missing:
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.NOT_MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "As três palavras aparecem, mas a ordem estrutural está incorreta.",
+                missing_essential_criteria=[
+                    "manter algoritmo antes de inicio e fimalgoritmo depois de inicio"
+                ],
+            )
+
+        if any(position is not None for position in positions):
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "A estrutura está parcialmente representada, mas falta palavra essencial.",
+                missing_essential_criteria=missing,
+            )
+
+        return cls._evidence(
+            {
+                RubricPolicy.TASK_RESPONSE: RubricPolicy.NOT_MET,
+                RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
+            },
+            "A resposta ainda não representa a estrutura mínima pedida.",
+            missing_essential_criteria=missing,
+        )
+
+    @classmethod
     def _submitted_order(cls, answer):
         normalized = normalize_alias(answer) or ""
         numbers = tuple(re.findall(r"\b[123]\b", normalized))
@@ -500,6 +595,12 @@ class ObjectiveTaskEvaluator:
                 return cls._evaluate_structured_sequence(
                     evaluation,
                     structured_definition,
+                )
+            portugol_definition = cls._portugol_skeleton_definition(evaluation)
+            if portugol_definition is not None:
+                return cls._evaluate_portugol_skeleton(
+                    evaluation,
+                    portugol_definition,
                 )
             return None
 

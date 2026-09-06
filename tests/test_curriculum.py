@@ -50,3 +50,21 @@ def test_input_process_output_progresses_to_structured_sequence_without_skip():
         Curriculum.GOAL_RESULT,
         Curriculum.STRUCTURED_SEQUENCE,
     )
+
+
+def test_structured_sequence_progresses_to_portugol_skeleton_without_skip():
+    assert (
+        Curriculum.next_concept_id(Curriculum.STRUCTURED_SEQUENCE)
+        == Curriculum.PORTUGOL_SKELETON
+    )
+    assert Curriculum.prerequisites_for(Curriculum.PORTUGOL_SKELETON) == (
+        Curriculum.STRUCTURED_SEQUENCE,
+    )
+    assert Curriculum.allows_progression(
+        Curriculum.STRUCTURED_SEQUENCE,
+        Curriculum.PORTUGOL_SKELETON,
+    )
+    assert not Curriculum.allows_progression(
+        Curriculum.INPUT_PROCESS_OUTPUT,
+        Curriculum.PORTUGOL_SKELETON,
+    )

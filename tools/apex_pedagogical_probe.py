@@ -78,6 +78,17 @@ def classify_task(prompt: str | None) -> str | None:
     if not folded:
         return None
 
+    if all(marker in folded for marker in ("primeira linha", "rotina", "palavra que falta")):
+        return "portugol_keyword_algoritmo"
+    if all(marker in folded for marker in ("algoritmo", "rotina", "passos comecam")):
+        return "portugol_keyword_inicio"
+    if all(marker in folded for marker in ("algoritmo", "rotina", "inicio", "encerra essa estrutura")):
+        return "portugol_keyword_fimalgoritmo"
+    if all(marker in folded for marker in ("tres lacunas", "rotina", "tres palavras-chave")):
+        return "portugol_skeleton_integration"
+    if all(marker in folded for marker in ("tres lacunas", "estudo", "tres palavras-chave")):
+        return "portugol_skeleton_review"
+
     # As tarefas estruturadas reutilizam situações antigas; por isso precisam
     # ser reconhecidas antes dos classificadores mais amplos de ordered/IPO.
     if all(marker in folded for marker in ("pegar o pao", "colocar o pao", "retirar a torrada", "1", "2", "3")):
@@ -143,6 +154,11 @@ def correct_answer(kind: str) -> str:
         "structured_message_missing_step": "escrever a mensagem.",
         "structured_coffee_flow": "INÍCIO; receber água e pó de café; preparar a bebida; entregar café pronto; FIM.",
         "structured_review_toaster": "INÍCIO; receber pão; aquecer o pão; entregar torrada; FIM.",
+        "portugol_keyword_algoritmo": "algoritmo",
+        "portugol_keyword_inicio": "inicio",
+        "portugol_keyword_fimalgoritmo": "fimalgoritmo",
+        "portugol_skeleton_integration": "algoritmo; inicio; fimalgoritmo",
+        "portugol_skeleton_review": "algoritmo; inicio; fimalgoritmo",
     }
     if kind not in answers:
         raise RuntimeError(f"tarefa não reconhecida pelo probe: {kind}")
@@ -506,7 +522,7 @@ def run_happy_path(report: ProbeReport, timeout: float):
         result_answers_without_label = []
         completed = False
 
-        for index in range(24):
+        for index in range(32):
             folded = fold_text(current)
             if "envie continuar" in folded:
                 turn_id = f"probe-{scenario_id}-continue-{index}-{uuid4().hex}"
@@ -574,7 +590,7 @@ def run_happy_path(report: ProbeReport, timeout: float):
         report.check(
             f"{scenario_id}.curriculum_slice_completed",
             completed
-            and state.get("current_concept_id") == "ads.algorithms.structured_sequence"
+            and state.get("current_concept_id") == "ads.algorithms.portugol_skeleton"
             and state.get("stage") == "concluido",
             f"completed={completed}, concept={state.get('current_concept_id')}, stage={state.get('stage')}, mastery={state.get('mastery')}",
         )
@@ -653,6 +669,19 @@ def run_happy_path(report: ProbeReport, timeout: float):
             f"tarefas estruturadas vistas={structured_tasks}",
         )
         report.metrics["happy_structured_task_kinds"] = structured_tasks
+
+        portugol_tasks = [kind for kind in seen_kinds if kind.startswith("portugol_")]
+        report.check(
+            f"{scenario_id}.portugol_skeleton_progression_reached",
+            {
+                "portugol_keyword_algoritmo",
+                "portugol_keyword_inicio",
+                "portugol_keyword_fimalgoritmo",
+                "portugol_skeleton_integration",
+            }.issubset(set(portugol_tasks)),
+            f"tarefas de estrutura mínima do Portugol vistas={portugol_tasks}",
+        )
+        report.metrics["happy_portugol_task_kinds"] = portugol_tasks
 
         report.metrics["happy_goal_task_kinds"] = goal_tasks
         report.metrics["happy_distinct_demonstrated_goal_tasks"] = distinct_kinds
@@ -908,6 +937,24 @@ def structural_checks(report: ProbeReport):
         report.warn(
             "structural.next_after_ipo",
             "Curriculum ainda não define sucessor executável após entrada/processamento/saída.",
+        )
+
+    has_next_after_structured = bool(
+        re.search(
+            r"STRUCTURED_SEQUENCE\s*:\s*PORTUGOL_SKELETON",
+            curriculum,
+        )
+    )
+    if has_next_after_structured:
+        report.check(
+            "structural.next_after_structured_sequence",
+            True,
+            "Curriculum define estrutura mínima do Portugol como sucessor executável após representação estruturada.",
+        )
+    else:
+        report.warn(
+            "structural.next_after_structured_sequence",
+            "Curriculum ainda não define sucessor executável após representação estruturada.",
         )
 
     # MasteryPolicy anuncia diversidade de contexto, mas a versão atual conta

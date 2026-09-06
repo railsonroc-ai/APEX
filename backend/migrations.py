@@ -13,6 +13,8 @@ from backend.concepts import (
     CATALOG_V3_SEEDS,
     CATALOG_V4_VERSION,
     CATALOG_V4_SEEDS,
+    CATALOG_V5_VERSION,
+    CATALOG_V5_SEEDS,
     CONCEPT_SEEDS,
     CATALOG_V1_VERSION,
     CORE_CONCEPT_SEEDS,
@@ -2035,7 +2037,17 @@ def sync_executable_curriculum_v4(connection):
 
 
 def sync_executable_curriculum_v5(connection):
-    """Adiciona representação estruturada como quarta microcompetência."""
+    """Migration histórica congelada na quarta microcompetência."""
+
+    _sync_catalog_seeds(
+        connection,
+        CATALOG_V5_SEEDS,
+        CATALOG_V5_VERSION,
+    )
+
+
+def sync_executable_curriculum_v6(connection):
+    """Adiciona a estrutura mínima do Portugol como quinta microcompetência."""
 
     _sync_catalog_seeds(
         connection,
@@ -2134,6 +2146,11 @@ MIGRATIONS = (
         18,
         "sync_executable_curriculum_v5",
         sync_executable_curriculum_v5,
+    ),
+    Migration(
+        19,
+        "sync_executable_curriculum_v6",
+        sync_executable_curriculum_v6,
     ),
 )
 

@@ -145,3 +145,23 @@ def test_completed_input_process_output_allows_only_structured_sequence_successo
         "ads.algorithms.goal_result",
         area="ads",
     ) is None
+
+
+def test_completed_structured_sequence_allows_only_portugol_skeleton_successor():
+    state = {
+        "area": "ads",
+        "current_concept_id": "ads.algorithms.structured_sequence",
+        "current_concept": "representação estruturada de uma sequência",
+        "stage": "concluido",
+    }
+
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.portugol_skeleton",
+        area="ads",
+    ) == "ads.algorithms.portugol_skeleton"
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.input_process_output",
+        area="ads",
+    ) is None

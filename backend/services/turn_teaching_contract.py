@@ -5,6 +5,7 @@ from backend.services.task_policy import TaskPolicy
 from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
+from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -28,11 +29,13 @@ class TurnTeachingContract:
     GOAL_RESULT = "ads.algorithms.goal_result"
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
     STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
+    PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
         INPUT_PROCESS_OUTPUT,
         STRUCTURED_SEQUENCE,
+        PORTUGOL_SKELETON,
     }
     ORDERED_STEPS_FORBIDDEN = (
         "entrada", "processamento", "saída", "saida", "variável", "variavel",
@@ -56,6 +59,14 @@ class TurnTeachingContract:
         "portugol", "python", "sintaxe", "código", "codigo", "programação",
         "programacao", "fluxograma", "pseudocódigo", "pseudocodigo", "tipo de dado",
         "escreva", "algoritmo", "var", "classe", "objeto", "api",
+        "banco de dados",
+    )
+    PORTUGOL_FUTURE_FORBIDDEN = (
+        "variável", "variavel", "var", "inteiro", "real", "caractere", "cadeia",
+        "lógico", "logico", "leia", "escreva", "operador", "condicional",
+        "decisão", "decisao", "se", "então", "entao", "senão", "senao",
+        "repetição", "repeticao", "enquanto", "para", "repita", "função",
+        "funcao", "procedimento", "lista", "python", "classe", "objeto", "api",
         "banco de dados",
     )
 
@@ -116,6 +127,10 @@ class TurnTeachingContract:
         return StructuredSequenceTasks.prompt_for_mastery(mastery)
 
     @classmethod
+    def _portugol_task(cls, mastery):
+        return PortugolSkeletonTasks.prompt_for_mastery(mastery)
+
+    @classmethod
     def _ipo_forbidden(cls, mastery):
         if mastery < 0.20:
             return ("processamento", "saída", "saida", *cls.IPO_FUTURE_FORBIDDEN)
@@ -128,6 +143,14 @@ class TurnTeachingContract:
         if mastery < 0.20:
             return ("início", "inicio", "fim", *cls.STRUCTURED_FUTURE_FORBIDDEN)
         return cls.STRUCTURED_FUTURE_FORBIDDEN
+
+    @classmethod
+    def _portugol_forbidden(cls, mastery):
+        if mastery < 0.20:
+            return ("início", "inicio", "fimalgoritmo", *cls.PORTUGOL_FUTURE_FORBIDDEN)
+        if mastery < 0.40:
+            return ("fimalgoritmo", *cls.PORTUGOL_FUTURE_FORBIDDEN)
+        return cls.PORTUGOL_FUTURE_FORBIDDEN
 
     @classmethod
     def build(
@@ -353,7 +376,8 @@ class TurnTeachingContract:
             elif teaching_action == "avancar":
                 safe = (
                     "Você concluiu representação estruturada de uma sequência com evidências "
-                    "em atividades diferentes. Esta fatia do percurso está concluída."
+                    "em atividades diferentes. Envie continuar quando estiver pronto para "
+                    "iniciar a próxima microcompetência."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 safe = cls._structured_task(mastery)
@@ -374,6 +398,77 @@ class TurnTeachingContract:
                 representation="passos estruturados, ainda sem código",
                 forbidden_terms=cls._structured_forbidden(mastery),
                 allow_code=False,
+                max_chars=850,
+                max_questions=1,
+                task_required=task_required,
+                assistance_ceiling=ceiling,
+                review_mode=review_mode,
+                feedback_text=feedback,
+                safe_response=safe,
+            )
+
+        if concept_id == cls.PORTUGOL_SKELETON:
+            mastery = cls._normalized_mastery(state)
+            focus = PortugolSkeletonTasks.focus_for_mastery(mastery)
+            if review_mode:
+                safe = PortugolSkeletonTasks.review_prompt()
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = cls._portugol_task(mastery)
+            elif teaching_action == "corrigir" and difficulty < 2:
+                if mastery < 0.20:
+                    hint = "A primeira palavra identifica que a estrutura é um algoritmo."
+                elif mastery < 0.40:
+                    hint = "A palavra pedida marca exatamente onde os passos começam."
+                elif mastery < 0.60:
+                    hint = "A palavra pedida encerra a estrutura inteira."
+                else:
+                    hint = "Mantenha as três palavras na mesma ordem em que a estrutura abre, começa e encerra."
+                safe = hint + "\n\n" + cls._portugol_task(mastery)
+            elif teaching_action == "corrigir":
+                safe = (
+                    "Retome somente a palavra estrutural pedida neste turno.\n\n"
+                    + cls._portugol_task(mastery)
+                )
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu a estrutura mínima do Portugol com evidências em "
+                    "atividades diferentes. Esta fatia do percurso está concluída."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                if mastery < 0.20:
+                    safe = cls._portugol_task(mastery)
+                elif mastery < 0.40:
+                    safe = (
+                        "Agora uma novidade: inicio marca onde os passos começam.\n\n"
+                        + cls._portugol_task(mastery)
+                    )
+                elif mastery < 0.60:
+                    safe = (
+                        "Agora uma novidade: fimalgoritmo marca onde a estrutura termina.\n\n"
+                        + cls._portugol_task(mastery)
+                    )
+                else:
+                    safe = (
+                        "Agora reúna somente as três palavras já estudadas, sem acrescentar "
+                        "nenhum comando novo.\n\n" + cls._portugol_task(mastery)
+                    )
+            else:
+                safe = (
+                    "Você já sabe representar uma sequência. Agora vamos trocar somente a "
+                    "primeira marca por uma palavra do Portugol: algoritmo identifica o "
+                    "cabeçalho da estrutura.\n\n" + cls._portugol_task(mastery)
+                )
+            safe = cls._prepend_feedback(safe, feedback)
+            return cls(
+                concept_id=concept_id,
+                focus=focus,
+                objective=(
+                    "reconhecer e ordenar algoritmo, inicio e fimalgoritmo, uma palavra nova "
+                    "por vez, sem introduzir comandos internos"
+                ),
+                representation="sintaxe mínima de Portugol, limitada à estrutura externa",
+                forbidden_terms=cls._portugol_forbidden(mastery),
+                allow_code=True,
                 max_chars=850,
                 max_questions=1,
                 task_required=task_required,

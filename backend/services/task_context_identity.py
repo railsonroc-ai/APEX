@@ -2,6 +2,7 @@ from backend.concepts import normalize_alias
 from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
+from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 
 
 class TaskContextIdentity:
@@ -16,12 +17,14 @@ class TaskContextIdentity:
     GOAL_RESULT = "ads.algorithms.goal_result"
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
     STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
+    PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
 
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
         INPUT_PROCESS_OUTPUT,
         STRUCTURED_SEQUENCE,
+        PORTUGOL_SKELETON,
     }
 
     ORDERED_CONTEXTS = (
@@ -63,6 +66,10 @@ class TaskContextIdentity:
 
         if concept_id == cls.STRUCTURED_SEQUENCE:
             definition = StructuredSequenceTasks.definition_for_prompt(prompt)
+            return definition.get("task_id") if definition else None
+
+        if concept_id == cls.PORTUGOL_SKELETON:
+            definition = PortugolSkeletonTasks.definition_for_prompt(prompt)
             return definition.get("task_id") if definition else None
 
         if concept_id == cls.ORDERED_STEPS:

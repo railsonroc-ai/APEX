@@ -89,3 +89,14 @@ def test_fourth_internal_microconcept_is_resolvable_but_not_selectable():
     assert ConceptCatalog.resolve(
         "ads", "sequência estruturada", selectable_only=True
     ) is None
+
+
+def test_fifth_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve(
+        "ads", "ads.algorithms.portugol_skeleton"
+    )
+    assert concept["canonical_name"] == "estrutura mínima do Portugol"
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "estrutura mínima do Portugol", selectable_only=True
+    ) is None
