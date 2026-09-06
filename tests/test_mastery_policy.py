@@ -163,3 +163,59 @@ def test_missing_stage_diversity_recommends_testing(monkeypatch):
     assert decision["can_complete"] is False
     assert MasteryPolicy.BLOCK_STAGE_DIVERSITY in decision["blockers"]
     assert decision["recommended_stage"] == "testar"
+
+
+def controlled_event(outcome, stage, prompt, *, assistance="independent"):
+    return {
+        "outcome": outcome,
+        "stage_before": stage,
+        "applied": 1,
+        "assistance_level": assistance,
+        "concept_id": "ads.algorithms.goal_result",
+        "tutor_message": prompt,
+    }
+
+
+def test_controlled_mastery_blocks_repeated_same_activity_context(monkeypatch):
+    from backend.services.goal_result_tasks import GoalResultTasks
+
+    backpack = GoalResultTasks.prompt_for_mastery(0.75)
+    existing = [
+        controlled_event("demonstrated", "compreender", backpack),
+        controlled_event("demonstrated", "testar", backpack),
+    ]
+    decision = evaluate(
+        monkeypatch,
+        existing,
+        concept="ads.algorithms.goal_result",
+        stage_before="fixar",
+        mastery_score=0.8,
+        current_context_id="goal_backpack_organized",
+    )
+
+    assert decision["can_complete"] is False
+    assert decision["demonstrated_context_count"] == 1
+    assert MasteryPolicy.BLOCK_CONTEXT_DIVERSITY in decision["blockers"]
+
+
+def test_controlled_mastery_accepts_two_real_task_contexts(monkeypatch):
+    from backend.services.goal_result_tasks import GoalResultTasks
+
+    document = GoalResultTasks.prompt_for_mastery(0.25)
+    dishes = GoalResultTasks.prompt_for_mastery(0.45)
+    existing = [
+        controlled_event("demonstrated", "compreender", document),
+        controlled_event("demonstrated", "testar", dishes),
+    ]
+    decision = evaluate(
+        monkeypatch,
+        existing,
+        concept="ads.algorithms.goal_result",
+        stage_before="fixar",
+        mastery_score=0.8,
+        current_context_id="goal_backpack_organized",
+    )
+
+    assert decision["can_complete"] is True
+    assert decision["demonstrated_context_count"] == 3
+    assert MasteryPolicy.BLOCK_CONTEXT_DIVERSITY not in decision["blockers"]

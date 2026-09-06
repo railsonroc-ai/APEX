@@ -105,3 +105,23 @@ def test_untrusted_free_text_does_not_become_active_concept():
     }
 
     assert ConceptTracker.has_current_concept(state) is False
+
+
+def test_completed_goal_result_allows_only_input_process_output_successor():
+    state = {
+        "area": "ads",
+        "current_concept_id": "ads.algorithms.goal_result",
+        "current_concept": "objetivo e resultado de uma sequência",
+        "stage": "concluido",
+    }
+
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.input_process_output",
+        area="ads",
+    ) == "ads.algorithms.input_process_output"
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.ordered_steps",
+        area="ads",
+    ) is None

@@ -95,6 +95,16 @@ def classify_task(prompt: str | None) -> str | None:
         return "goal_backpack_organized"
     if "resultado esperado de escovar os dentes" in folded:
         return "goal_teeth_clean_review"
+    if all(marker in folded for marker in ("liquidificador", "banana", "leite", "entrada")):
+        return "ipo_blender_input"
+    if all(marker in folded for marker in ("maquina de lavar", "roupas", "processamento")):
+        return "ipo_washing_processing"
+    if all(marker in folded for marker in ("calculadora", "2", "3", "5", "saida")):
+        return "ipo_calculator_output"
+    if all(marker in folded for marker in ("cafeteira", "agua", "po de cafe", "cafe pronto")):
+        return "ipo_coffee_mapping"
+    if all(marker in folded for marker in ("torradeira", "pao", "torrada")):
+        return "ipo_review_mapping"
     return "unknown"
 
 
@@ -109,6 +119,11 @@ def correct_answer(kind: str) -> str:
         "goal_dishes_clean": "louça limpa.",
         "goal_backpack_organized": "mochila organizada para a aula.",
         "goal_teeth_clean_review": "dentes limpos.",
+        "ipo_blender_input": "banana e leite.",
+        "ipo_washing_processing": "lavar as roupas.",
+        "ipo_calculator_output": "5.",
+        "ipo_coffee_mapping": "água e pó de café; preparar a bebida; café pronto.",
+        "ipo_review_mapping": "pão; aquecer; torrada.",
     }
     if kind not in answers:
         raise RuntimeError(f"tarefa não reconhecida pelo probe: {kind}")
@@ -486,7 +501,7 @@ def run_happy_path(report: ProbeReport, timeout: float):
                 transcript.append({"user": "continuar", "assistant": current})
                 continue
 
-            if "proxima microcompetencia ainda nao esta disponivel" in folded:
+            if "esta fatia do percurso esta concluida" in folded:
                 completed = True
                 break
 
@@ -538,9 +553,9 @@ def run_happy_path(report: ProbeReport, timeout: float):
         exported = client.export()
         state = latest_state(exported) or {}
         report.check(
-            f"{scenario_id}.goal_result_completed",
+            f"{scenario_id}.curriculum_slice_completed",
             completed
-            and state.get("current_concept_id") == "ads.algorithms.goal_result"
+            and state.get("current_concept_id") == "ads.algorithms.input_process_output"
             and state.get("stage") == "concluido",
             f"completed={completed}, concept={state.get('current_concept_id')}, stage={state.get('stage')}, mastery={state.get('mastery')}",
         )
@@ -583,7 +598,9 @@ def run_happy_path(report: ProbeReport, timeout: float):
                 demonstrated_kinds.append(kind)
         distinct_kinds = sorted(set(demonstrated_kinds))
         completion_claim = any(
-            "evidencias em atividades diferentes" in fold_text(item.get("assistant"))
+            "evidencias" in fold_text(item.get("assistant"))
+            and "atividades" in fold_text(item.get("assistant"))
+            and "diferentes" in fold_text(item.get("assistant"))
             for item in transcript
         )
         report.check(
@@ -591,6 +608,19 @@ def run_happy_path(report: ProbeReport, timeout: float):
             (not completion_claim) or len(distinct_kinds) >= 2,
             f"mensagem afirma diversidade={completion_claim}; atividades demonstradas distintas={distinct_kinds}",
         )
+
+        ipo_tasks = [kind for kind in seen_kinds if kind.startswith("ipo_")]
+        report.check(
+            f"{scenario_id}.ipo_progression_reached",
+            {"ipo_blender_input", "ipo_washing_processing", "ipo_calculator_output", "ipo_coffee_mapping"}.issubset(set(ipo_tasks)),
+            f"tarefas IPO vistas={ipo_tasks}",
+        )
+        report.check(
+            f"{scenario_id}.ipo_mapping_without_required_labels",
+            "ipo_coffee_mapping" in ipo_tasks,
+            "o mapeamento final foi respondido sem exigir os rótulos literais entrada/processamento/saída",
+        )
+        report.metrics["happy_ipo_task_kinds"] = ipo_tasks
 
         report.metrics["happy_goal_task_kinds"] = goal_tasks
         report.metrics["happy_distinct_demonstrated_goal_tasks"] = distinct_kinds

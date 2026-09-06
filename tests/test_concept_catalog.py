@@ -67,3 +67,14 @@ def test_internal_microconcept_is_resolvable_but_not_selectable():
     assert ConceptCatalog.resolve(
         "ads", "ads.algorithms.goal_result", selectable_only=True
     ) is None
+
+
+def test_third_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve(
+        "ads", "ads.algorithms.input_process_output"
+    )
+    assert concept["canonical_name"] == "entrada, processamento e saída"
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "ads.algorithms.input_process_output", selectable_only=True
+    ) is None

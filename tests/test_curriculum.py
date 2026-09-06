@@ -16,9 +16,19 @@ def test_second_microconcept_has_one_declared_prerequisite():
     )
 
 
-def test_curriculum_rejects_skips_and_has_no_invented_third_node():
-    assert not Curriculum.allows_progression(
-        "ads.variables",
+def test_goal_result_progresses_to_input_process_output_without_skip():
+    assert (
+        Curriculum.next_concept_id(Curriculum.GOAL_RESULT)
+        == Curriculum.INPUT_PROCESS_OUTPUT
+    )
+    assert Curriculum.prerequisites_for(Curriculum.INPUT_PROCESS_OUTPUT) == (
         Curriculum.GOAL_RESULT,
     )
-    assert Curriculum.next_concept_id(Curriculum.GOAL_RESULT) is None
+    assert Curriculum.allows_progression(
+        Curriculum.GOAL_RESULT,
+        Curriculum.INPUT_PROCESS_OUTPUT,
+    )
+    assert not Curriculum.allows_progression(
+        Curriculum.ORDERED_STEPS,
+        Curriculum.INPUT_PROCESS_OUTPUT,
+    )

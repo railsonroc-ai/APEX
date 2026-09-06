@@ -29,6 +29,7 @@ from backend.services.review_scheduler import ReviewScheduler
 from backend.services.teaching_policy import TeachingPolicy
 from backend.services.task_policy import TaskPolicy
 from backend.services.task_spec import TaskSpec
+from backend.services.task_context_identity import TaskContextIdentity
 
 
 class ProcessLearningTurn:
@@ -120,6 +121,7 @@ class ProcessLearningTurn:
                 semantic_evidence=semantic_evidence,
                 student_id=student_id,
                 assistance_level=assistance_level,
+                evidence_context=evidence_context,
             )
 
             return cls._finalize(
@@ -316,6 +318,7 @@ class ProcessLearningTurn:
                 student_id=normalized_student_id,
                 assistance_level=assistance_level,
                 proposed_changes=proposed_changes,
+                evidence_context=evidence_context,
             )
 
             result = cls._finalize(
@@ -460,6 +463,7 @@ class ProcessLearningTurn:
         student_id,
         assistance_level,
         proposed_changes=None,
+        evidence_context=None,
     ):
         if not isinstance(semantic_evidence, dict):
             return None
@@ -481,6 +485,13 @@ class ProcessLearningTurn:
             learner_state.get("mastery", 0.0),
         )
 
+        current_context_id = None
+        if isinstance(evidence_context, dict):
+            current_context_id = TaskContextIdentity.for_prompt(
+                concept_id,
+                evidence_context.get("tutor_message"),
+            )
+
         return MasteryPolicy.evaluate(
             area=area,
             concept=concept_id,
@@ -490,6 +501,7 @@ class ProcessLearningTurn:
             current_applied=bool(proposed_changes),
             student_id=student_id,
             assistance_level=assistance_level,
+            current_context_id=current_context_id,
         )
 
     @classmethod

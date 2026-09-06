@@ -3,6 +3,7 @@ class Curriculum:
 
     ORDERED_STEPS = "ads.algorithms.ordered_steps"
     GOAL_RESULT = "ads.algorithms.goal_result"
+    INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
 
     ENTRY_CONCEPTS = {
         "ads.algorithms": ORDERED_STEPS,
@@ -10,11 +11,13 @@ class Curriculum:
 
     NEXT_CONCEPTS = {
         ORDERED_STEPS: GOAL_RESULT,
+        GOAL_RESULT: INPUT_PROCESS_OUTPUT,
     }
 
     PREREQUISITES = {
         ORDERED_STEPS: (),
         GOAL_RESULT: (ORDERED_STEPS,),
+        INPUT_PROCESS_OUTPUT: (GOAL_RESULT,),
     }
 
     @classmethod

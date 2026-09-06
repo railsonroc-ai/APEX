@@ -193,7 +193,7 @@ def test_known_ordered_steps_journey_never_needs_llm_evaluation(
     assert LearningTask.find_by_source_turn("known-journey-cup") is None
 
 
-def test_completed_first_node_advances_to_goal_result_and_completes_locally(
+def test_completed_first_node_advances_to_goal_result_then_to_input_process_output(
     monkeypatch,
     tmp_path,
 ):
@@ -225,7 +225,7 @@ def test_completed_first_node_advances_to_goal_result_and_completes_locally(
     start_turn = LearningHistory.find("goal-result-start")
     start_task = LearningTask.find_by_source_turn("goal-result-start")
 
-    assert '"done": true' in started.lower()
+    assert '\"done\": true' in started.lower()
     assert "resultado esperado" in start_turn["assistant_message"].lower()
     assert start_turn["concept_id"] == "ads.algorithms.goal_result"
     assert start_task["concept_id"] == "ads.algorithms.goal_result"
@@ -247,7 +247,7 @@ def test_completed_first_node_advances_to_goal_result_and_completes_locally(
         (
             "goal-backpack",
             "mochila organizada para a aula.",
-            "próxima microcompetência ainda não está disponível",
+            "envie continuar",
         ),
     )
 
@@ -259,7 +259,7 @@ def test_completed_first_node_advances_to_goal_result_and_completes_locally(
         turn = LearningHistory.find(turn_id)
         evidence = EvidenceEvent.for_turn(turn_id)
 
-        assert '"done": true' in body.lower()
+        assert '\"done\": true' in body.lower()
         assert turn["assistant_message"].startswith("Correto.\n\n")
         assert expected_next.lower() in turn["assistant_message"].lower()
         assert evidence["concept_id"] == "ads.algorithms.goal_result"
@@ -282,15 +282,18 @@ def test_completed_first_node_advances_to_goal_result_and_completes_locally(
         json={"message": "continuar", "area": "ads", "turn_id": "goal-end"},
     ).get_data(as_text=True)
     end_turn = LearningHistory.find("goal-end")
+    end_task = LearningTask.find_by_source_turn("goal-end")
+    end_state = LearnerState.get("ads")
 
-    assert '"done": true' in end.lower()
-    assert "próxima microcompetência ainda não está disponível" in end_turn[
-        "assistant_message"
-    ].lower()
-    assert LearnerState.get("ads")["current_concept_id"] == (
-        "ads.algorithms.goal_result"
-    )
-    assert LearningTask.find_by_source_turn("goal-end") is None
+    assert '\"done\": true' in end.lower()
+    assert "entrada é" in end_turn["assistant_message"].lower()
+    assert "liquidificador" in end_turn["assistant_message"].lower()
+    assert end_state["current_concept_id"] == "ads.algorithms.input_process_output"
+    assert end_state["stage"] == "compreender"
+    assert end_state["mastery"] == 0.0
+    assert EvidenceEvent.for_turn("goal-end") is None
+    assert end_task is not None
+    assert end_task["concept_id"] == "ads.algorithms.input_process_output"
 
 
 def test_acknowledgement_does_not_advance_goal_result(monkeypatch, tmp_path):

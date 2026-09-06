@@ -6,7 +6,8 @@ import unicodedata
 
 CATALOG_V1_VERSION = 1
 CATALOG_V2_VERSION = 2
-CATALOG_VERSION = 3
+CATALOG_V3_VERSION = 3
+CATALOG_VERSION = 4
 
 
 @dataclass(frozen=True)
@@ -159,12 +160,31 @@ GOAL_RESULT_SEED = ConceptSeed(
 )
 
 
+INPUT_PROCESS_OUTPUT_SEED = ConceptSeed(
+    "ads.algorithms.input_process_output",
+    "ads",
+    "entrada, processamento e saída",
+    (
+        "entrada processamento saida",
+        "entrada processamento e saida",
+        "input process output",
+        "input processing output",
+    ),
+    selectable=False,
+)
+
+
 CATALOG_V2_SEEDS = CORE_CONCEPT_SEEDS + (ORDERED_STEPS_SEED,)
+CATALOG_V3_SEEDS = CORE_CONCEPT_SEEDS + (
+    ORDERED_STEPS_SEED,
+    GOAL_RESULT_SEED,
+)
 
 
 MICRO_CONCEPT_SEEDS = (
     ORDERED_STEPS_SEED,
     GOAL_RESULT_SEED,
+    INPUT_PROCESS_OUTPUT_SEED,
 )
 
 

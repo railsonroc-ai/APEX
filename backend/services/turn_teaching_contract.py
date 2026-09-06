@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from backend.services.assistance_policy import AssistancePolicy
 from backend.services.task_policy import TaskPolicy
 from backend.services.goal_result_tasks import GoalResultTasks
+from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -24,9 +25,11 @@ class TurnTeachingContract:
 
     ORDERED_STEPS = "ads.algorithms.ordered_steps"
     GOAL_RESULT = "ads.algorithms.goal_result"
+    INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
+        INPUT_PROCESS_OUTPUT,
     }
     ORDERED_STEPS_FORBIDDEN = (
         "entrada", "processamento", "saída", "saida", "variável", "variavel",
@@ -37,6 +40,13 @@ class TurnTeachingContract:
         "classe", "objeto", "api", "banco de dados",
     )
     GOAL_RESULT_FORBIDDEN = ORDERED_STEPS_FORBIDDEN
+    IPO_FUTURE_FORBIDDEN = (
+        "variável", "variavel", "operador", "condicional", "decisão", "decisao",
+        "repetição", "repeticao", "laço", "laco", "função", "funcao", "lista",
+        "portugol", "python", "sintaxe", "código", "codigo", "programação",
+        "programacao", "fluxograma", "pseudocódigo", "pseudocodigo", "tipo de dado",
+        "classe", "objeto", "api", "banco de dados",
+    )
 
     FEEDBACK_BY_OUTCOME = {
         "demonstrated": "Correto.",
@@ -85,6 +95,18 @@ class TurnTeachingContract:
     @classmethod
     def _goal_result_task(cls, mastery):
         return GoalResultTasks.prompt_for_mastery(mastery)
+
+    @classmethod
+    def _ipo_task(cls, mastery):
+        return InputProcessOutputTasks.prompt_for_mastery(mastery)
+
+    @classmethod
+    def _ipo_forbidden(cls, mastery):
+        if mastery < 0.20:
+            return ("processamento", "saída", "saida", *cls.IPO_FUTURE_FORBIDDEN)
+        if mastery < 0.40:
+            return ("saída", "saida", *cls.IPO_FUTURE_FORBIDDEN)
+        return cls.IPO_FUTURE_FORBIDDEN
 
     @classmethod
     def build(
@@ -188,8 +210,8 @@ class TurnTeachingContract:
             elif teaching_action == "avancar":
                 safe = (
                     "Você concluiu objetivo e resultado de uma sequência com evidências "
-                    "em atividades diferentes. A próxima microcompetência ainda não está "
-                    "disponível nesta versão do percurso."
+                    "em atividades realmente diferentes. Envie continuar quando estiver "
+                    "pronto para iniciar a próxima microcompetência."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 safe = cls._goal_result_task(mastery)
@@ -212,6 +234,71 @@ class TurnTeachingContract:
                 forbidden_terms=cls.GOAL_RESULT_FORBIDDEN,
                 allow_code=False,
                 max_chars=750,
+                max_questions=1,
+                task_required=task_required,
+                assistance_ceiling=ceiling,
+                review_mode=review_mode,
+                feedback_text=feedback,
+                safe_response=safe,
+            )
+
+        if concept_id == cls.INPUT_PROCESS_OUTPUT:
+            mastery = cls._normalized_mastery(state)
+            focus = InputProcessOutputTasks.focus_for_mastery(mastery)
+            if review_mode:
+                safe = InputProcessOutputTasks.review_prompt()
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = cls._ipo_task(mastery)
+            elif teaching_action == "corrigir" and difficulty < 2:
+                safe = (
+                    f"Retome apenas a ideia de {focus}: observe qual parte da situação "
+                    "a tarefa está pedindo.\n\n" + cls._ipo_task(mastery)
+                )
+            elif teaching_action == "corrigir":
+                safe = (
+                    f"Vamos separar somente {focus} nesta tentativa.\n\n"
+                    + cls._ipo_task(mastery)
+                )
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu entrada, processamento e saída com evidências em "
+                    "atividades realmente diferentes. Esta fatia do percurso está concluída."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                if mastery < 0.40 and focus == "processamento":
+                    safe = (
+                        "Agora uma novidade: processamento é o que acontece com o que a "
+                        "atividade recebeu.\n\n" + cls._ipo_task(mastery)
+                    )
+                elif mastery < 0.60 and focus == "saída":
+                    safe = (
+                        "Agora uma novidade: saída é o que a atividade entrega no final.\n\n"
+                        + cls._ipo_task(mastery)
+                    )
+                elif mastery >= 0.60:
+                    safe = (
+                        "Agora reúna as três ideias que você já viu, sem acrescentar uma "
+                        "nova.\n\n" + cls._ipo_task(mastery)
+                    )
+                else:
+                    safe = cls._ipo_task(mastery)
+            else:
+                safe = (
+                    "Entrada é o que uma atividade recebe para começar. Pense somente no "
+                    "que chega antes de qualquer mudança.\n\n" + cls._ipo_task(mastery)
+                )
+            safe = cls._prepend_feedback(safe, feedback)
+            return cls(
+                concept_id=concept_id,
+                focus=focus,
+                objective=(
+                    "reconhecer entrada, processamento e saída em situações concretas, "
+                    "uma ideia nova por vez"
+                ),
+                representation="situação cotidiana concreta, sem código",
+                forbidden_terms=cls._ipo_forbidden(mastery),
+                allow_code=False,
+                max_chars=800,
                 max_questions=1,
                 task_required=task_required,
                 assistance_ceiling=ceiling,
