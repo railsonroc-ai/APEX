@@ -78,6 +78,17 @@ def classify_task(prompt: str | None) -> str | None:
     if not folded:
         return None
 
+    if all(marker in folded for marker in ("qual palavra marca a area", "variaveis", "antes de inicio", "palavra que falta")):
+        return "declaration_var_section"
+    if all(marker in folded for marker in ("somente numeros sem parte decimal", "como 7", "qual palavra representa esse tipo")):
+        return "declaration_integer_type"
+    if all(marker in folded for marker in ("declaracao da variavel pontos", "tipo inteiro")):
+        return "declaration_line_points"
+    if all(marker in folded for marker in ("coloque em ordem estes elementos", "saldo: inteiro", "fimalgoritmo", "var", 'algoritmo "conta"')):
+        return "declaration_block_order"
+    if all(marker in folded for marker in ("de memoria", "declaracao da variavel tentativas", "tipo inteiro")):
+        return "declaration_review_attempts"
+
     if all(marker in folded for marker in ("lugar chamado pontos", "guarda o valor 10", "pontos ou 10")):
         return "variable_named_place_points"
     if all(marker in folded for marker in ("variavel chamada idade", "guarda 25", "valor guardado")):
@@ -207,6 +218,11 @@ def correct_answer(kind: str) -> str:
         "variable_stable_name_attempts": "tentativas",
         "variable_current_value_balance": "saldo 80",
         "variable_review_level": "nivel 4",
+        "declaration_var_section": "var",
+        "declaration_integer_type": "inteiro",
+        "declaration_line_points": "pontos: inteiro",
+        "declaration_block_order": 'algoritmo "conta"; var; saldo: inteiro; inicio; fimalgoritmo',
+        "declaration_review_attempts": "tentativas: inteiro",
     }
     if kind not in answers:
         raise RuntimeError(f"tarefa não reconhecida pelo probe: {kind}")
@@ -570,7 +586,7 @@ def run_happy_path(report: ProbeReport, timeout: float):
         result_answers_without_label = []
         completed = False
 
-        for index in range(48):
+        for index in range(56):
             folded = fold_text(current)
             if "envie continuar" in folded:
                 turn_id = f"probe-{scenario_id}-continue-{index}-{uuid4().hex}"
@@ -638,7 +654,7 @@ def run_happy_path(report: ProbeReport, timeout: float):
         report.check(
             f"{scenario_id}.curriculum_slice_completed",
             completed
-            and state.get("current_concept_id") == "ads.algorithms.variable_storage"
+            and state.get("current_concept_id") == "ads.algorithms.integer_declaration"
             and state.get("stage") == "concluido",
             f"completed={completed}, concept={state.get('current_concept_id')}, stage={state.get('stage')}, mastery={state.get('mastery')}",
         )
@@ -769,6 +785,19 @@ def run_happy_path(report: ProbeReport, timeout: float):
             f"tarefas de variável como armazenamento nomeado vistas={variable_tasks}",
         )
         report.metrics["happy_variable_task_kinds"] = variable_tasks
+
+        declaration_tasks = [kind for kind in seen_kinds if kind.startswith("declaration_")]
+        report.check(
+            f"{scenario_id}.integer_declaration_progression_reached",
+            {
+                "declaration_var_section",
+                "declaration_integer_type",
+                "declaration_line_points",
+                "declaration_block_order",
+            }.issubset(set(declaration_tasks)),
+            f"tarefas de declaração inteira vistas={declaration_tasks}",
+        )
+        report.metrics["happy_declaration_task_kinds"] = declaration_tasks
 
         report.metrics["happy_goal_task_kinds"] = goal_tasks
         report.metrics["happy_distinct_demonstrated_goal_tasks"] = distinct_kinds
@@ -1096,6 +1125,24 @@ def structural_checks(report: ProbeReport):
         report.warn(
             "structural.next_after_portugol_read",
             "Curriculum ainda não define sucessor executável após entrada simples com leia.",
+        )
+
+    has_next_after_variable_storage = bool(
+        re.search(
+            r"VARIABLE_STORAGE\s*:\s*INTEGER_DECLARATION",
+            curriculum,
+        )
+    )
+    if has_next_after_variable_storage:
+        report.check(
+            "structural.next_after_variable_storage",
+            True,
+            "Curriculum define declaração de variável inteira como sucessor executável após armazenamento nomeado.",
+        )
+    else:
+        report.warn(
+            "structural.next_after_variable_storage",
+            "Curriculum ainda não define sucessor executável após variável como armazenamento nomeado.",
         )
 
     # MasteryPolicy anuncia diversidade de contexto, mas a versão atual conta

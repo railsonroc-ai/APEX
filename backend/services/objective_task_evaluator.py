@@ -9,6 +9,7 @@ from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.portugol_read_tasks import PortugolReadTasks
 from backend.services.variable_storage_tasks import VariableStorageTasks
+from backend.services.integer_declaration_tasks import IntegerDeclarationTasks
 
 
 class ObjectiveTaskEvaluator:
@@ -27,6 +28,7 @@ class ObjectiveTaskEvaluator:
     PORTUGOL_WRITE = "ads.algorithms.portugol_write"
     PORTUGOL_READ = "ads.algorithms.portugol_read"
     VARIABLE_STORAGE = "ads.algorithms.variable_storage"
+    INTEGER_DECLARATION = "ads.algorithms.integer_declaration"
     HAND_WASHING_MARKERS = (
         "abrir a torneira",
         "lavar as maos",
@@ -166,6 +168,16 @@ class ObjectiveTaskEvaluator:
         if evaluation.get("concept_id") != cls.VARIABLE_STORAGE:
             return None
         return VariableStorageTasks.definition_for_prompt(
+            evaluation.get("tutor_message")
+        )
+
+    @classmethod
+    def _integer_declaration_definition(cls, evaluation):
+        if not isinstance(evaluation, dict):
+            return None
+        if evaluation.get("concept_id") != cls.INTEGER_DECLARATION:
+            return None
+        return IntegerDeclarationTasks.definition_for_prompt(
             evaluation.get("tutor_message")
         )
 
@@ -733,6 +745,130 @@ class ObjectiveTaskEvaluator:
 
         return None
 
+    @staticmethod
+    def _matches_declaration_line(answer, name, type_name):
+        raw = str(answer or "").strip().casefold()
+        return bool(re.fullmatch(
+            rf"{re.escape(name)}\s*:\s*{re.escape(type_name)}\s*;?",
+            raw,
+            flags=re.IGNORECASE,
+        ))
+
+    @classmethod
+    def _evaluate_integer_declaration(cls, evaluation, definition):
+        normalized = normalize_alias(evaluation.get("student_answer")) or ""
+        kind = definition.get("kind")
+
+        if kind == "single_keyword":
+            required = normalize_alias(definition.get("required_keyword")) or ""
+            if normalized == required:
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.NOT_MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
+                },
+                "A resposta ainda não identifica a palavra estrutural pedida.",
+                missing_essential_criteria=[f"identificar {required}"],
+            )
+
+        expected_name = normalize_alias(definition.get("expected_name")) or ""
+        expected_type = normalize_alias(definition.get("expected_type")) or ""
+
+        if kind == "declaration_line":
+            if cls._matches_declaration_line(
+                evaluation.get("student_answer"), expected_name, expected_type
+            ):
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            missing = []
+            if not re.search(rf"\b{re.escape(expected_name)}\b", normalized):
+                missing.append(f"usar o nome {expected_name}")
+            if not re.search(rf"\b{re.escape(expected_type)}\b", normalized):
+                missing.append(f"usar o tipo {expected_type}")
+            raw = str(evaluation.get("student_answer") or "")
+            if ":" not in raw:
+                missing.append("usar dois-pontos entre nome e tipo")
+            if not missing:
+                missing.append("manter a forma nome: tipo")
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "A declaração ainda não está na forma nome: tipo.",
+                missing_essential_criteria=missing,
+            )
+
+        keywords = tuple(definition.get("ordered_keywords") or ())
+        positions = []
+        missing = []
+        for keyword in keywords:
+            match = re.search(rf"\b{re.escape(keyword)}\b", normalized)
+            if match is None:
+                positions.append(None)
+                missing.append(f"incluir {keyword}")
+            else:
+                positions.append(match.start())
+        declaration_ok = bool(re.search(
+            rf"\b{re.escape(expected_name)}\s*:\s*{re.escape(expected_type)}\b",
+            str(evaluation.get("student_answer") or "").casefold(),
+            flags=re.IGNORECASE,
+        ))
+        program_name = normalize_alias(definition.get("program_name")) or ""
+        has_program_name = not program_name or bool(
+            re.search(rf"\b{re.escape(program_name)}\b", normalized)
+        )
+        complete = not missing and declaration_ok and has_program_name
+        ordered = complete and positions == sorted(positions)
+
+        if complete and ordered:
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                },
+                definition["success"],
+                missing_essential_criteria=[],
+            )
+
+        if not declaration_ok:
+            missing.append(f"manter {expected_name}: {expected_type}")
+        if not has_program_name:
+            missing.append(f"manter o nome do algoritmo {program_name}")
+        if not missing and not ordered:
+            missing.append("manter algoritmo, var, declaração, inicio e fimalgoritmo nessa ordem")
+        elif missing and all(position is not None for position in positions) and positions != sorted(positions):
+            missing.append("manter algoritmo, var, declaração, inicio e fimalgoritmo nessa ordem")
+
+        return cls._evidence(
+            {
+                RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+            },
+            "A declaração ainda não está integrada corretamente à estrutura conhecida.",
+            missing_essential_criteria=missing or ["posicionar a declaração antes de inicio"],
+        )
+
     @classmethod
     def _submitted_order(cls, answer):
         normalized = normalize_alias(answer) or ""
@@ -922,6 +1058,12 @@ class ObjectiveTaskEvaluator:
                 return cls._evaluate_variable_storage(
                     evaluation,
                     variable_definition,
+                )
+            declaration_definition = cls._integer_declaration_definition(evaluation)
+            if declaration_definition is not None:
+                return cls._evaluate_integer_declaration(
+                    evaluation,
+                    declaration_definition,
                 )
             return None
 

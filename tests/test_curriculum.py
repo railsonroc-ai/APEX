@@ -116,3 +116,18 @@ def test_portugol_read_progresses_to_variable_storage_without_skip():
         Curriculum.PORTUGOL_WRITE,
         Curriculum.VARIABLE_STORAGE,
     )
+
+
+def test_variable_storage_progresses_to_integer_declaration_without_skip():
+    assert Curriculum.next_concept_id(Curriculum.VARIABLE_STORAGE) == Curriculum.INTEGER_DECLARATION
+    assert Curriculum.prerequisites_for(Curriculum.INTEGER_DECLARATION) == (
+        Curriculum.VARIABLE_STORAGE,
+    )
+    assert Curriculum.allows_progression(
+        Curriculum.VARIABLE_STORAGE,
+        Curriculum.INTEGER_DECLARATION,
+    )
+    assert not Curriculum.allows_progression(
+        Curriculum.PORTUGOL_READ,
+        Curriculum.INTEGER_DECLARATION,
+    )

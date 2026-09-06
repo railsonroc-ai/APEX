@@ -9,6 +9,7 @@ from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.portugol_read_tasks import PortugolReadTasks
 from backend.services.variable_storage_tasks import VariableStorageTasks
+from backend.services.integer_declaration_tasks import IntegerDeclarationTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -36,6 +37,7 @@ class TurnTeachingContract:
     PORTUGOL_WRITE = "ads.algorithms.portugol_write"
     PORTUGOL_READ = "ads.algorithms.portugol_read"
     VARIABLE_STORAGE = "ads.algorithms.variable_storage"
+    INTEGER_DECLARATION = "ads.algorithms.integer_declaration"
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
@@ -45,6 +47,7 @@ class TurnTeachingContract:
         PORTUGOL_WRITE,
         PORTUGOL_READ,
         VARIABLE_STORAGE,
+        INTEGER_DECLARATION,
     }
     ORDERED_STEPS_FORBIDDEN = (
         "entrada", "processamento", "saída", "saida", "variável", "variavel",
@@ -102,6 +105,13 @@ class TurnTeachingContract:
         "repetição", "repeticao", "repita", "função",
         "funcao", "procedimento", "lista", "vetor", "matriz", "python",
         "classe", "objeto", "api", "banco de dados",
+    )
+    INTEGER_DECLARATION_FUTURE_FORBIDDEN = (
+        "real", "caractere", "cadeia", "lógico", "logico", "leia", "escreva",
+        "escreval", "atribuição", "atribuicao", "operador", "condicional",
+        "decisão", "decisao", "senão", "senao", "repetição", "repeticao",
+        "enquanto", "repita", "função", "funcao", "procedimento", "lista",
+        "vetor", "matriz", "python", "classe", "objeto", "api", "banco de dados",
     )
 
     FEEDBACK_BY_OUTCOME = {
@@ -175,6 +185,16 @@ class TurnTeachingContract:
     @classmethod
     def _variable_storage_task(cls, mastery):
         return VariableStorageTasks.prompt_for_mastery(mastery)
+
+    @classmethod
+    def _integer_declaration_task(cls, mastery):
+        return IntegerDeclarationTasks.prompt_for_mastery(mastery)
+
+    @classmethod
+    def _integer_declaration_forbidden(cls, mastery):
+        if mastery < 0.20:
+            return ("inteiro", *cls.INTEGER_DECLARATION_FUTURE_FORBIDDEN)
+        return cls.INTEGER_DECLARATION_FUTURE_FORBIDDEN
 
     @classmethod
     def _ipo_forbidden(cls, mastery):
@@ -696,7 +716,8 @@ class TurnTeachingContract:
             elif teaching_action == "avancar":
                 safe = (
                     "Você concluiu variável como armazenamento nomeado com evidências em "
-                    "atividades diferentes. Esta fatia do percurso está concluída."
+                    "atividades diferentes. Envie continuar quando estiver pronto para a próxima "
+                    "microcompetência."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 if mastery < 0.20:
@@ -736,6 +757,99 @@ class TurnTeachingContract:
                 forbidden_terms=cls.VARIABLE_STORAGE_FUTURE_FORBIDDEN,
                 allow_code=False,
                 max_chars=950,
+                max_questions=1,
+                task_required=task_required,
+                assistance_ceiling=ceiling,
+                review_mode=review_mode,
+                feedback_text=feedback,
+                safe_response=safe,
+            )
+
+        if concept_id == cls.INTEGER_DECLARATION:
+            mastery = cls._normalized_mastery(state)
+            focus = IntegerDeclarationTasks.focus_for_mastery(mastery)
+            forbidden = cls._integer_declaration_forbidden(mastery)
+            if review_mode:
+                safe = IntegerDeclarationTasks.review_prompt()
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = cls._integer_declaration_task(mastery)
+            elif teaching_action == "corrigir" and difficulty < 2:
+                if mastery < 0.20:
+                    hint = "Lembre apenas da área que vem antes de inicio e reúne as variáveis."
+                elif mastery < 0.40:
+                    hint = "Pense no tipo usado para um número sem parte decimal, como 7."
+                elif mastery < 0.60:
+                    hint = "A forma é nome, dois-pontos e depois o tipo já estudado."
+                else:
+                    hint = "A área var e a declaração ficam antes de inicio."
+                safe = hint + "\n\n" + cls._integer_declaration_task(mastery)
+            elif teaching_action == "corrigir":
+                if mastery < 0.20:
+                    correction = "Correção completa: a palavra pedida é var."
+                elif mastery < 0.40:
+                    correction = "Correção completa: o tipo pedido é inteiro."
+                elif mastery < 0.60:
+                    correction = "Correção completa: a forma é nome: inteiro."
+                else:
+                    correction = "Correção completa: var e a declaração ficam antes de inicio."
+                safe = correction + "\n\n" + cls._integer_declaration_task(mastery)
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu declaração de variável inteira com evidências em atividades "
+                    "diferentes. Esta fatia do percurso está concluída."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                if mastery < 0.20:
+                    safe = cls._integer_declaration_task(mastery)
+                elif mastery < 0.40:
+                    safe = (
+                        "Agora uma novidade: inteiro é o tipo usado aqui para números sem parte decimal.\n\n"
+                        + cls._integer_declaration_task(mastery)
+                    )
+                elif mastery < 0.60:
+                    safe = (
+                        "Agora junte o nome ao tipo já conhecido: usamos nome, dois-pontos e tipo. "
+                        "Exemplo: idade: inteiro.\n\n" + cls._integer_declaration_task(mastery)
+                    )
+                else:
+                    safe = (
+                        "Agora integre o que já conhece: var vem antes de inicio e a linha de "
+                        "declaração fica nessa área.\n\n" + cls._integer_declaration_task(mastery)
+                    )
+            else:
+                if mastery < 0.20:
+                    safe = (
+                        "Você já sabe que uma variável é um lugar com nome. Agora uma novidade: "
+                        "no Portugol, var marca a área em que essas variáveis são apresentadas "
+                        "antes de inicio.\n\n" + cls._integer_declaration_task(mastery)
+                    )
+                elif mastery < 0.40:
+                    safe = (
+                        "Agora uma novidade: inteiro é o tipo usado aqui para números sem parte decimal.\n\n"
+                        + cls._integer_declaration_task(mastery)
+                    )
+                elif mastery < 0.60:
+                    safe = (
+                        "Agora junte o nome ao tipo já conhecido: usamos nome, dois-pontos e tipo. "
+                        "Exemplo: idade: inteiro.\n\n" + cls._integer_declaration_task(mastery)
+                    )
+                else:
+                    safe = (
+                        "Agora integre a declaração à estrutura já conhecida: var e a linha da "
+                        "variável ficam antes de inicio.\n\n" + cls._integer_declaration_task(mastery)
+                    )
+            safe = cls._prepend_feedback(safe, feedback)
+            return cls(
+                concept_id=concept_id,
+                focus=focus,
+                objective=(
+                    "declarar uma variável inteira no Portugol, reconhecendo var, o tipo inteiro, "
+                    "a forma nome: tipo e a posição da declaração antes de inicio"
+                ),
+                representation="sintaxe mínima de declaração em Portugol, sem uso da variável",
+                forbidden_terms=forbidden,
+                allow_code=True,
+                max_chars=1050,
                 max_questions=1,
                 task_required=task_required,
                 assistance_ceiling=ceiling,

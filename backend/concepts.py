@@ -12,7 +12,8 @@ CATALOG_V5_VERSION = 5
 CATALOG_V6_VERSION = 6
 CATALOG_V7_VERSION = 7
 CATALOG_V8_VERSION = 8
-CATALOG_VERSION = 9
+CATALOG_V9_VERSION = 9
+CATALOG_VERSION = 10
 
 
 @dataclass(frozen=True)
@@ -248,6 +249,20 @@ VARIABLE_STORAGE_SEED = ConceptSeed(
 )
 
 
+INTEGER_DECLARATION_SEED = ConceptSeed(
+    "ads.algorithms.integer_declaration",
+    "ads",
+    "declaração de variável inteira",
+    (
+        "declaracao de variavel inteira",
+        "declaração inteira no portugol",
+        "declaracao inteira no portugol",
+        "integer variable declaration",
+    ),
+    selectable=False,
+)
+
+
 CATALOG_V2_SEEDS = CORE_CONCEPT_SEEDS + (ORDERED_STEPS_SEED,)
 CATALOG_V3_SEEDS = CORE_CONCEPT_SEEDS + (
     ORDERED_STEPS_SEED,
@@ -288,6 +303,16 @@ CATALOG_V8_SEEDS = CORE_CONCEPT_SEEDS + (
     PORTUGOL_WRITE_SEED,
     PORTUGOL_READ_SEED,
 )
+CATALOG_V9_SEEDS = CORE_CONCEPT_SEEDS + (
+    ORDERED_STEPS_SEED,
+    GOAL_RESULT_SEED,
+    INPUT_PROCESS_OUTPUT_SEED,
+    STRUCTURED_SEQUENCE_SEED,
+    PORTUGOL_SKELETON_SEED,
+    PORTUGOL_WRITE_SEED,
+    PORTUGOL_READ_SEED,
+    VARIABLE_STORAGE_SEED,
+)
 
 
 MICRO_CONCEPT_SEEDS = (
@@ -299,6 +324,7 @@ MICRO_CONCEPT_SEEDS = (
     PORTUGOL_WRITE_SEED,
     PORTUGOL_READ_SEED,
     VARIABLE_STORAGE_SEED,
+    INTEGER_DECLARATION_SEED,
 )
 
 CONCEPT_SEEDS = CORE_CONCEPT_SEEDS + MICRO_CONCEPT_SEEDS

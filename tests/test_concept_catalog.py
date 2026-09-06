@@ -142,3 +142,23 @@ def test_variable_storage_alias_does_not_steal_selectable_variables_alias():
     assert ConceptCatalog.concept_id(
         "ads", "armazenamento nomeado de valor"
     ) == "ads.algorithms.variable_storage"
+
+
+def test_ninth_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve(
+        "ads", "ads.algorithms.integer_declaration"
+    )
+    assert concept["canonical_name"] == "declaração de variável inteira"
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "declaração de variável inteira", selectable_only=True
+    ) is None
+
+
+def test_integer_declaration_alias_does_not_steal_selectable_parent_aliases():
+    assert ConceptCatalog.concept_id(
+        "ads", "variável", selectable_only=True
+    ) == "ads.variables"
+    assert ConceptCatalog.concept_id(
+        "ads", "declaração inteira no portugol"
+    ) == "ads.algorithms.integer_declaration"

@@ -20,7 +20,7 @@ class NoCallGroq:
 
 
 def prepare(monkeypatch, tmp_path):
-    monkeypatch.setattr(database_module, "DATABASE_PATH", tmp_path / "variable-storage-e2e.db")
+    monkeypatch.setattr(database_module, "DATABASE_PATH", tmp_path / "integer-declaration-e2e.db")
     monkeypatch.setattr(database_module, "DATA_DIR", tmp_path)
     database_module.init_database()
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
@@ -28,17 +28,17 @@ def prepare(monkeypatch, tmp_path):
     monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
 
 
-def test_completed_read_enters_and_completes_variable_storage_deterministically(monkeypatch, tmp_path):
+def test_completed_variable_storage_enters_and_completes_integer_declaration(monkeypatch, tmp_path):
     prepare(monkeypatch, tmp_path)
     ConceptProgress.update(
         "ads",
-        "ads.algorithms.portugol_read",
+        "ads.algorithms.variable_storage",
         mastery=0.8,
         last_evidence="Portfólio confirmado.",
     )
     LearnerState.update(
         "ads",
-        current_concept_id="ads.algorithms.portugol_read",
+        current_concept_id="ads.algorithms.variable_storage",
         stage="concluido",
         mastery=0.8,
         last_evidence="Portfólio confirmado.",
@@ -47,28 +47,34 @@ def test_completed_read_enters_and_completes_variable_storage_deterministically(
 
     start = client.post(
         "/chat/stream",
-        json={"message": "continuar", "area": "ads", "turn_id": "variable-start"},
+        json={"message": "continuar", "area": "ads", "turn_id": "declaration-start"},
     ).get_data(as_text=True)
-    start_turn = LearningHistory.find("variable-start")
-    start_task = LearningTask.find_by_source_turn("variable-start")
+    start_turn = LearningHistory.find("declaration-start")
+    start_task = LearningTask.find_by_source_turn("declaration-start")
     state = LearnerState.get("ads")
 
     assert '"done": true' in start.lower()
-    assert state["current_concept_id"] == "ads.algorithms.variable_storage"
+    assert state["current_concept_id"] == "ads.algorithms.integer_declaration"
     assert state["stage"] == "compreender"
     assert state["mastery"] == 0.0
-    assert "variável" in start_turn["assistant_message"].lower()
-    assert "inteiro" not in start_turn["assistant_message"].lower()
-    assert "leia" not in start_turn["assistant_message"].lower()
+    first_text = start_turn["assistant_message"].lower()
+    assert "var" in first_text
+    assert "inteiro" not in first_text
+    assert "leia" not in first_text
+    assert "escreva" not in first_text
     assert start_task is not None
-    assert start_task["concept_id"] == "ads.algorithms.variable_storage"
-    assert EvidenceEvent.for_turn("variable-start") is None
+    assert start_task["concept_id"] == "ads.algorithms.integer_declaration"
+    assert EvidenceEvent.for_turn("declaration-start") is None
 
     journey = (
-        ("variable-answer-name", "pontos", "variável chamada idade"),
-        ("variable-answer-value", "25", "variável tentativas"),
-        ("variable-answer-stable", "tentativas", "variável saldo"),
-        ("variable-answer-current", "saldo 80", "envie continuar"),
+        ("declaration-answer-var", "var", "números sem parte decimal"),
+        ("declaration-answer-type", "inteiro", "variável pontos"),
+        ("declaration-answer-line", "pontos: inteiro", "coloque em ordem estes elementos"),
+        (
+            "declaration-answer-block",
+            'algoritmo "conta"; var; saldo: inteiro; inicio; fimalgoritmo',
+            "fatia do percurso",
+        ),
     )
 
     for turn_id, answer, expected_next in journey:
@@ -82,11 +88,11 @@ def test_completed_read_enters_and_completes_variable_storage_deterministically(
         assert '"done": true' in body.lower()
         assert turn["assistant_message"].startswith("Correto.\n\n")
         assert expected_next.lower() in turn["assistant_message"].lower()
-        assert evidence["concept_id"] == "ads.algorithms.variable_storage"
+        assert evidence["concept_id"] == "ads.algorithms.integer_declaration"
         assert evidence["outcome"] == "demonstrated"
         assert evidence["source"] == "deterministic_task"
 
     state = LearnerState.get("ads")
     assert state["stage"] == "concluido"
     assert state["mastery"] == 0.8
-    assert LearningTask.find_by_source_turn("variable-answer-current") is None
+    assert LearningTask.find_by_source_turn("declaration-answer-block") is None

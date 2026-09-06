@@ -21,6 +21,8 @@ from backend.concepts import (
     CATALOG_V7_SEEDS,
     CATALOG_V8_VERSION,
     CATALOG_V8_SEEDS,
+    CATALOG_V9_VERSION,
+    CATALOG_V9_SEEDS,
     CONCEPT_SEEDS,
     CATALOG_V1_VERSION,
     CORE_CONCEPT_SEEDS,
@@ -2083,7 +2085,17 @@ def sync_executable_curriculum_v8(connection):
 
 
 def sync_executable_curriculum_v9(connection):
-    """Adiciona variável como armazenamento nomeado como oitava microcompetência."""
+    """Migration histórica congelada na oitava microcompetência."""
+
+    _sync_catalog_seeds(
+        connection,
+        CATALOG_V9_SEEDS,
+        CATALOG_V9_VERSION,
+    )
+
+
+def sync_executable_curriculum_v10(connection):
+    """Adiciona declaração de variável inteira como nona microcompetência."""
 
     _sync_catalog_seeds(
         connection,
@@ -2202,6 +2214,11 @@ MIGRATIONS = (
         22,
         "sync_executable_curriculum_v9",
         sync_executable_curriculum_v9,
+    ),
+    Migration(
+        23,
+        "sync_executable_curriculum_v10",
+        sync_executable_curriculum_v10,
     ),
 )
 
