@@ -189,10 +189,36 @@ class ObjectiveTaskEvaluator:
                         "Escolheu uma situação que não corresponde ao resultado pedido.",
                     )
 
-        has_result_prefix = answer.startswith("resultado")
-        if all(groups_met) and (
-            definition["kind"] == "choice" or has_result_prefix
-        ):
+        # O microconceito avaliado é o estado final desejado, não a reprodução
+        # literal de um rótulo como "Resultado:". Formato só pode afetar domínio
+        # quando o próprio formato for o objeto explícito de aprendizagem.
+        procedural_actions = (
+            "abrir", "clicar", "selecionar", "pegar", "guardar",
+            "escolher", "confirmar", "digitar", "escrever",
+        )
+        sequence_words = (
+            "primeiro", "depois", "em seguida", "por ultimo",
+        )
+        action_hits = sum(marker in answer for marker in procedural_actions)
+        lists_steps = (
+            action_hits >= 2
+            or (action_hits >= 1 and any(marker in answer for marker in sequence_words))
+        )
+
+        if definition["kind"] == "result" and lists_steps:
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.NOT_MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "Listou ações em vez de descrever somente a situação final desejada.",
+                missing_essential_criteria=[
+                    "descrever somente a situação final, sem listar os passos"
+                ],
+            )
+
+        if all(groups_met):
             return cls._evidence(
                 {
                     RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
@@ -203,31 +229,9 @@ class ObjectiveTaskEvaluator:
                 missing_essential_criteria=[],
             )
 
-        sequence_markers = (
-            "primeiro", "depois", "em seguida", "por ultimo",
-            "abrir", "clicar", "selecionar", "pegar",
-        )
-        if has_result_prefix and any(marker in answer for marker in sequence_markers):
-            return cls._evidence(
-                {
-                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
-                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.NOT_MET,
-                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
-                },
-                "Listou ações em vez de descrever a situação final desejada.",
-                missing_essential_criteria=[
-                    "descrever a situação final, sem listar os passos"
-                ],
-            )
-
-        if definition["kind"] == "result" and not has_result_prefix:
-            missing = [*missing, "usar o formato solicitado Resultado:"]
-
-        if has_result_prefix or any(groups_met):
-            # Para esta família controlada, PARTIAL sempre precisa explicar
-            # qual critério essencial explicitamente pedido ainda não apareceu.
-            if not missing:
-                missing = ["completar o resultado explicitamente solicitado"]
+        if any(groups_met):
+            # PARTIAL nesta família significa falta conceitual real e, portanto,
+            # sempre precisa apontar pelo menos um critério essencial ausente.
             return cls._evidence(
                 {
                     RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,

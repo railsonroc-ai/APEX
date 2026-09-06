@@ -38,3 +38,12 @@ def test_partial_goal_result_always_names_a_missing_essential_criterion():
     )
     assert result["outcome"] == "partial"
     assert result["missing_essential_criteria"]
+
+
+def test_generated_result_prompts_do_not_require_a_literal_answer_label():
+    for mastery in (0.25, 0.45, 0.75):
+        prompt = GoalResultTasks.prompt_for_mastery(mastery)
+        assert "começando com Resultado:" not in prompt
+        assert "comecando com Resultado:" not in prompt
+
+    assert "começando com Resultado:" not in GoalResultTasks.review_prompt()

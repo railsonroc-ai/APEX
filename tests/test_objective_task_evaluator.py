@@ -220,3 +220,49 @@ def test_goal_result_does_not_require_unasked_consequences():
         result = ObjectiveTaskEvaluator.evaluate(goal_evaluation(answer, prompt))
         assert result["outcome"] == "demonstrated"
         assert result["missing_essential_criteria"] == []
+
+@pytest.mark.parametrize(
+    ("prompt", "answer"),
+    (
+        (
+            "escreva somente o resultado esperado de salvar um documento, "
+            "começando com Resultado:",
+            "documento salvo.",
+        ),
+        (
+            "escreva somente o resultado esperado de lavar a louça, "
+            "começando com Resultado:",
+            "louça limpa.",
+        ),
+        (
+            "escreva somente o resultado esperado de organizar uma mochila para "
+            "a aula, começando com Resultado:",
+            "mochila organizada para a aula.",
+        ),
+        (
+            "sem consultar, escreva somente o resultado esperado de escovar os "
+            "dentes, começando com Resultado:",
+            "dentes limpos.",
+        ),
+    ),
+)
+def test_goal_result_literal_result_label_is_not_required_for_mastery(prompt, answer):
+    result = ObjectiveTaskEvaluator.evaluate(goal_evaluation(answer, prompt))
+
+    assert result["outcome"] == "demonstrated"
+    assert result["missing_essential_criteria"] == []
+
+
+def test_goal_result_steps_are_rejected_even_without_result_label():
+    result = ObjectiveTaskEvaluator.evaluate(
+        goal_evaluation(
+            "documento salvo; primeiro abrir, depois clicar e selecionar.",
+            "escreva somente o resultado esperado de salvar um documento, "
+            "começando com Resultado:",
+        )
+    )
+
+    assert result["outcome"] == "misconception"
+    assert result["missing_essential_criteria"] == [
+        "descrever somente a situação final, sem listar os passos"
+    ]

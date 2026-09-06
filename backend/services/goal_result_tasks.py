@@ -43,12 +43,10 @@ class GoalResultTasks:
             "kind": "result",
             "mastery_lt": 0.4,
             "prompt": (
-                "Tarefa: escreva somente o resultado esperado de salvar um documento, "
-                "começando com Resultado:."
+                "Tarefa: escreva somente o resultado esperado de salvar um documento."
             ),
             "prompt_markers": (
                 "resultado esperado de salvar um documento",
-                "comecando com resultado",
             ),
             "essential_criteria": (
                 {
@@ -69,12 +67,10 @@ class GoalResultTasks:
             "kind": "result",
             "mastery_lt": 0.6,
             "prompt": (
-                "Tarefa: escreva somente o resultado esperado de lavar a louça, "
-                "começando com Resultado:."
+                "Tarefa: escreva somente o resultado esperado de lavar a louça."
             ),
             "prompt_markers": (
                 "resultado esperado de lavar a louca",
-                "comecando com resultado",
             ),
             "essential_criteria": (
                 {
@@ -96,11 +92,10 @@ class GoalResultTasks:
             "mastery_lt": None,
             "prompt": (
                 "Tarefa: escreva somente o resultado esperado de organizar uma mochila "
-                "para a aula, começando com Resultado:."
+                "para a aula."
             ),
             "prompt_markers": (
                 "resultado esperado de organizar uma mochila",
-                "comecando com resultado",
             ),
             "essential_criteria": (
                 {
@@ -123,11 +118,10 @@ class GoalResultTasks:
         "kind": "result",
         "prompt": (
             "Tarefa: sem consultar, escreva somente o resultado esperado de "
-            "escovar os dentes, começando com Resultado:."
+            "escovar os dentes."
         ),
         "prompt_markers": (
             "resultado esperado de escovar os dentes",
-            "comecando com resultado",
         ),
         "essential_criteria": (
             {
