@@ -7,6 +7,7 @@ from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.portugol_write_tasks import PortugolWriteTasks
+from backend.services.portugol_read_tasks import PortugolReadTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -32,6 +33,7 @@ class TurnTeachingContract:
     STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
     PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
     PORTUGOL_WRITE = "ads.algorithms.portugol_write"
+    PORTUGOL_READ = "ads.algorithms.portugol_read"
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
@@ -39,6 +41,7 @@ class TurnTeachingContract:
         STRUCTURED_SEQUENCE,
         PORTUGOL_SKELETON,
         PORTUGOL_WRITE,
+        PORTUGOL_READ,
     }
     ORDERED_STEPS_FORBIDDEN = (
         "entrada", "processamento", "saída", "saida", "variável", "variavel",
@@ -79,6 +82,14 @@ class TurnTeachingContract:
         "repetição", "repeticao", "enquanto", "repita", "função",
         "funcao", "procedimento", "lista", "python", "classe", "objeto", "api",
         "banco de dados",
+    )
+    PORTUGOL_READ_FUTURE_FORBIDDEN = (
+        "escreval", "variável", "variavel", "var", "inteiro", "real",
+        "caractere", "cadeia", "lógico", "logico", "operador", "condicional",
+        "decisão", "decisao", "se", "então", "entao", "senão", "senao",
+        "repetição", "repeticao", "enquanto", "repita", "função",
+        "funcao", "procedimento", "lista", "vetor", "matriz", "python",
+        "classe", "objeto", "api", "banco de dados",
     )
 
     FEEDBACK_BY_OUTCOME = {
@@ -144,6 +155,10 @@ class TurnTeachingContract:
     @classmethod
     def _portugol_write_task(cls, mastery):
         return PortugolWriteTasks.prompt_for_mastery(mastery)
+
+    @classmethod
+    def _portugol_read_task(cls, mastery):
+        return PortugolReadTasks.prompt_for_mastery(mastery)
 
     @classmethod
     def _ipo_forbidden(cls, mastery):
@@ -519,7 +534,8 @@ class TurnTeachingContract:
             elif teaching_action == "avancar":
                 safe = (
                     "Você concluiu saída simples com escreva com evidências em atividades "
-                    "diferentes. Esta fatia do percurso está concluída."
+                    "diferentes. Envie continuar quando estiver pronto para a próxima "
+                    "microcompetência."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 if mastery < 0.20:
@@ -556,6 +572,80 @@ class TurnTeachingContract:
                 forbidden_terms=cls.PORTUGOL_WRITE_FUTURE_FORBIDDEN,
                 allow_code=True,
                 max_chars=900,
+                max_questions=1,
+                task_required=task_required,
+                assistance_ceiling=ceiling,
+                review_mode=review_mode,
+                feedback_text=feedback,
+                safe_response=safe,
+            )
+
+        if concept_id == cls.PORTUGOL_READ:
+            mastery = cls._normalized_mastery(state)
+            focus = PortugolReadTasks.focus_for_mastery(mastery)
+            if review_mode:
+                safe = PortugolReadTasks.review_prompt()
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = cls._portugol_read_task(mastery)
+            elif teaching_action == "corrigir" and difficulty < 2:
+                if mastery < 0.20:
+                    hint = "A palavra pedida é o comando associado ao recebimento de uma entrada."
+                elif mastery < 0.40:
+                    hint = "Pense no sentido do fluxo: receber informação é entrada, não saída."
+                elif mastery < 0.60:
+                    hint = "A entrada acontece antes do comando de saída que você já conhece."
+                else:
+                    hint = "Mantenha a ordem conhecida e coloque leia depois de inicio e antes de escreva."
+                safe = hint + "\n\n" + cls._portugol_read_task(mastery)
+            elif teaching_action == "corrigir":
+                safe = (
+                    "Retome somente o papel e a posição de leia como entrada.\n\n"
+                    + cls._portugol_read_task(mastery)
+                )
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu entrada simples com leia com evidências em atividades "
+                    "diferentes. Esta fatia do percurso está concluída."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                if mastery < 0.20:
+                    safe = cls._portugol_read_task(mastery)
+                elif mastery < 0.40:
+                    safe = (
+                        "Agora relacione o mesmo comando ao conceito de entrada que você já domina.\n\n"
+                        + cls._portugol_read_task(mastery)
+                    )
+                elif mastery < 0.60:
+                    safe = (
+                        "Agora posicione o mesmo leia antes da saída já conhecida.\n\n"
+                        + cls._portugol_read_task(mastery)
+                    )
+                else:
+                    safe = (
+                        "Agora integre somente leia à ordem da estrutura já conhecida; o interior "
+                        "do comando ficará para a próxima etapa.\n\n" + cls._portugol_read_task(mastery)
+                    )
+            else:
+                safe = (
+                    "Você já usa escreva para produzir uma saída. Agora uma novidade: leia indica "
+                    "que o algoritmo recebe uma entrada. Nesta etapa, vamos aprender somente o "
+                    "papel e a posição de leia.\n\n" + cls._portugol_read_task(mastery)
+                )
+            safe = cls._prepend_feedback(safe, feedback)
+            return cls(
+                concept_id=concept_id,
+                focus=focus,
+                objective=(
+                    "reconhecer e posicionar leia como comando de entrada, reutilizando somente "
+                    "a estrutura e o escreva já dominados"
+                ),
+                representation=(
+                    "sintaxe de Portugol limitada ao comando leia como marcador de entrada, "
+                    "sem preencher seu conteúdo interno"
+                ),
+                forbidden_terms=cls.PORTUGOL_READ_FUTURE_FORBIDDEN,
+                allow_code=True,
+                max_chars=950,
                 max_questions=1,
                 task_required=task_required,
                 assistance_ceiling=ceiling,

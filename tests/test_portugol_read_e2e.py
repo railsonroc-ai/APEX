@@ -20,7 +20,7 @@ class NoCallGroq:
 
 
 def prepare(monkeypatch, tmp_path):
-    monkeypatch.setattr(database_module, "DATABASE_PATH", tmp_path / "portugol-write-e2e.db")
+    monkeypatch.setattr(database_module, "DATABASE_PATH", tmp_path / "portugol-read-e2e.db")
     monkeypatch.setattr(database_module, "DATA_DIR", tmp_path)
     database_module.init_database()
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
@@ -28,17 +28,17 @@ def prepare(monkeypatch, tmp_path):
     monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
 
 
-def test_completed_skeleton_enters_and_completes_write_deterministically(monkeypatch, tmp_path):
+def test_completed_write_enters_and_completes_read_deterministically(monkeypatch, tmp_path):
     prepare(monkeypatch, tmp_path)
     ConceptProgress.update(
         "ads",
-        "ads.algorithms.portugol_skeleton",
+        "ads.algorithms.portugol_write",
         mastery=0.8,
         last_evidence="Portfólio confirmado.",
     )
     LearnerState.update(
         "ads",
-        current_concept_id="ads.algorithms.portugol_skeleton",
+        current_concept_id="ads.algorithms.portugol_write",
         stage="concluido",
         mastery=0.8,
         last_evidence="Portfólio confirmado.",
@@ -47,30 +47,30 @@ def test_completed_skeleton_enters_and_completes_write_deterministically(monkeyp
 
     start = client.post(
         "/chat/stream",
-        json={"message": "continuar", "area": "ads", "turn_id": "write-start"},
+        json={"message": "continuar", "area": "ads", "turn_id": "read-start"},
     ).get_data(as_text=True)
-    start_turn = LearningHistory.find("write-start")
-    start_task = LearningTask.find_by_source_turn("write-start")
+    start_turn = LearningHistory.find("read-start")
+    start_task = LearningTask.find_by_source_turn("read-start")
     state = LearnerState.get("ads")
 
     assert '"done": true' in start.lower()
-    assert state["current_concept_id"] == "ads.algorithms.portugol_write"
+    assert state["current_concept_id"] == "ads.algorithms.portugol_read"
     assert state["stage"] == "compreender"
     assert state["mastery"] == 0.0
-    assert "escreva" in start_turn["assistant_message"].lower()
-    assert "leia" not in start_turn["assistant_message"].lower()
+    assert "leia" in start_turn["assistant_message"].lower()
+    assert "variável" not in start_turn["assistant_message"].lower()
     assert start_task is not None
-    assert start_task["concept_id"] == "ads.algorithms.portugol_write"
-    assert EvidenceEvent.for_turn("write-start") is None
+    assert start_task["concept_id"] == "ads.algorithms.portugol_read"
+    assert EvidenceEvent.for_turn("read-start") is None
 
     journey = (
-        ("write-answer-keyword", "escreva", "Pronto"),
-        ("write-answer-effect", "Pronto", "Concluído"),
-        ("write-answer-line", 'escreva("Concluído")', "algoritmo chamado"),
+        ("read-answer-keyword", "leia", "entrada ou saída"),
+        ("read-answer-role", "entrada", "complete somente a lacuna"),
+        ("read-answer-place", "leia", "represente apenas a ordem"),
         (
-            "write-answer-program",
-            'algoritmo "saida"\ninicio\nescreva("OK")\nfimalgoritmo',
-            "envie continuar",
+            "read-answer-flow",
+            'algoritmo "fluxo"; inicio; leia; escreva("OK"); fimalgoritmo',
+            "fatia do percurso",
         ),
     )
 
@@ -85,11 +85,11 @@ def test_completed_skeleton_enters_and_completes_write_deterministically(monkeyp
         assert '"done": true' in body.lower()
         assert turn["assistant_message"].startswith("Correto.\n\n")
         assert expected_next.lower() in turn["assistant_message"].lower()
-        assert evidence["concept_id"] == "ads.algorithms.portugol_write"
+        assert evidence["concept_id"] == "ads.algorithms.portugol_read"
         assert evidence["outcome"] == "demonstrated"
         assert evidence["source"] == "deterministic_task"
 
     state = LearnerState.get("ads")
     assert state["stage"] == "concluido"
     assert state["mastery"] == 0.8
-    assert LearningTask.find_by_source_turn("write-answer-program") is None
+    assert LearningTask.find_by_source_turn("read-answer-flow") is None

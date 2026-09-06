@@ -111,3 +111,14 @@ def test_sixth_internal_microconcept_is_resolvable_but_not_selectable():
     assert ConceptCatalog.resolve(
         "ads", "comando escreva", selectable_only=True
     ) is None
+
+
+def test_seventh_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve(
+        "ads", "ads.algorithms.portugol_read"
+    )
+    assert concept["canonical_name"] == "entrada simples com leia"
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "comando leia", selectable_only=True
+    ) is None

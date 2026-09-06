@@ -17,6 +17,8 @@ from backend.concepts import (
     CATALOG_V5_SEEDS,
     CATALOG_V6_VERSION,
     CATALOG_V6_SEEDS,
+    CATALOG_V7_VERSION,
+    CATALOG_V7_SEEDS,
     CONCEPT_SEEDS,
     CATALOG_V1_VERSION,
     CORE_CONCEPT_SEEDS,
@@ -2059,7 +2061,17 @@ def sync_executable_curriculum_v6(connection):
 
 
 def sync_executable_curriculum_v7(connection):
-    """Adiciona saída simples com escreva como sexta microcompetência."""
+    """Migration histórica congelada na sexta microcompetência."""
+
+    _sync_catalog_seeds(
+        connection,
+        CATALOG_V7_SEEDS,
+        CATALOG_V7_VERSION,
+    )
+
+
+def sync_executable_curriculum_v8(connection):
+    """Adiciona entrada simples com leia como sétima microcompetência."""
 
     _sync_catalog_seeds(
         connection,
@@ -2168,6 +2180,11 @@ MIGRATIONS = (
         20,
         "sync_executable_curriculum_v7",
         sync_executable_curriculum_v7,
+    ),
+    Migration(
+        21,
+        "sync_executable_curriculum_v8",
+        sync_executable_curriculum_v8,
     ),
 )
 

@@ -7,6 +7,7 @@ from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.portugol_write_tasks import PortugolWriteTasks
+from backend.services.portugol_read_tasks import PortugolReadTasks
 
 
 class ObjectiveTaskEvaluator:
@@ -23,6 +24,7 @@ class ObjectiveTaskEvaluator:
     STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
     PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
     PORTUGOL_WRITE = "ads.algorithms.portugol_write"
+    PORTUGOL_READ = "ads.algorithms.portugol_read"
     HAND_WASHING_MARKERS = (
         "abrir a torneira",
         "lavar as maos",
@@ -142,6 +144,16 @@ class ObjectiveTaskEvaluator:
         if evaluation.get("concept_id") != cls.PORTUGOL_WRITE:
             return None
         return PortugolWriteTasks.definition_for_prompt(
+            evaluation.get("tutor_message")
+        )
+
+    @classmethod
+    def _portugol_read_definition(cls, evaluation):
+        if not isinstance(evaluation, dict):
+            return None
+        if evaluation.get("concept_id") != cls.PORTUGOL_READ:
+            return None
+        return PortugolReadTasks.definition_for_prompt(
             evaluation.get("tutor_message")
         )
 
@@ -566,6 +578,91 @@ class ObjectiveTaskEvaluator:
         )
 
     @classmethod
+    def _evaluate_portugol_read(cls, evaluation, definition):
+        normalized = normalize_alias(evaluation.get("student_answer")) or ""
+        kind = definition.get("kind")
+
+        if kind == "single_keyword":
+            required = definition["required_keyword"]
+            if normalized == required:
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.NOT_MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
+                },
+                "A resposta ainda não identifica leia como o comando pedido.",
+                missing_essential_criteria=["identificar leia"],
+            )
+
+        if kind == "role_choice":
+            expected = normalize_alias(definition.get("expected_role")) or ""
+            if normalized == expected:
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.NOT_MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "O papel indicado para leia ainda não corresponde à entrada.",
+                missing_essential_criteria=["relacionar leia à entrada"],
+            )
+
+        keywords = tuple(definition.get("ordered_keywords") or ())
+        positions = []
+        missing = []
+        for keyword in keywords:
+            match = re.search(rf"\b{re.escape(keyword)}\b", normalized)
+            if match is None:
+                positions.append(None)
+                missing.append(f"incluir {keyword}")
+            else:
+                positions.append(match.start())
+        complete = not missing
+        ordered = complete and positions == sorted(positions)
+
+        if complete and ordered:
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                },
+                definition["success"],
+                missing_essential_criteria=[],
+            )
+
+        if complete and not ordered:
+            missing.append("manter algoritmo, inicio, leia, escreva e fimalgoritmo nessa ordem")
+        return cls._evidence(
+            {
+                RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+            },
+            "A sequência ainda não posiciona leia corretamente na estrutura conhecida.",
+            missing_essential_criteria=missing or ["posicionar leia antes de escreva"],
+        )
+
+    @classmethod
     def _submitted_order(cls, answer):
         normalized = normalize_alias(answer) or ""
         numbers = tuple(re.findall(r"\b[123]\b", normalized))
@@ -742,6 +839,12 @@ class ObjectiveTaskEvaluator:
                 return cls._evaluate_portugol_write(
                     evaluation,
                     write_definition,
+                )
+            read_definition = cls._portugol_read_definition(evaluation)
+            if read_definition is not None:
+                return cls._evaluate_portugol_read(
+                    evaluation,
+                    read_definition,
                 )
             return None
 

@@ -3,6 +3,7 @@ from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.portugol_write_tasks import PortugolWriteTasks
+from backend.services.portugol_read_tasks import PortugolReadTasks
 from backend.services.task_context_identity import TaskContextIdentity
 
 
@@ -61,4 +62,14 @@ def test_portugol_write_prompt_has_stable_context_identity():
     ) == "write_line_done"
     assert TaskContextIdentity.requires_explicit_context(
         TaskContextIdentity.PORTUGOL_WRITE
+    )
+
+
+def test_portugol_read_prompt_has_stable_context_identity():
+    prompt = PortugolReadTasks.prompt_for_mastery(0.65)
+    assert TaskContextIdentity.for_prompt(
+        TaskContextIdentity.PORTUGOL_READ, prompt
+    ) == "read_flow_integration"
+    assert TaskContextIdentity.requires_explicit_context(
+        TaskContextIdentity.PORTUGOL_READ
     )

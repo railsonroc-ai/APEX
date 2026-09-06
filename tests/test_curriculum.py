@@ -86,3 +86,18 @@ def test_portugol_skeleton_progresses_to_write_without_skip():
         Curriculum.STRUCTURED_SEQUENCE,
         Curriculum.PORTUGOL_WRITE,
     )
+
+
+def test_portugol_write_progresses_to_read_without_skip():
+    assert Curriculum.next_concept_id(Curriculum.PORTUGOL_WRITE) == Curriculum.PORTUGOL_READ
+    assert Curriculum.prerequisites_for(Curriculum.PORTUGOL_READ) == (
+        Curriculum.PORTUGOL_WRITE,
+    )
+    assert Curriculum.allows_progression(
+        Curriculum.PORTUGOL_WRITE,
+        Curriculum.PORTUGOL_READ,
+    )
+    assert not Curriculum.allows_progression(
+        Curriculum.PORTUGOL_SKELETON,
+        Curriculum.PORTUGOL_READ,
+    )
