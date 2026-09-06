@@ -7,7 +7,8 @@ import unicodedata
 CATALOG_V1_VERSION = 1
 CATALOG_V2_VERSION = 2
 CATALOG_V3_VERSION = 3
-CATALOG_VERSION = 4
+CATALOG_V4_VERSION = 4
+CATALOG_VERSION = 5
 
 
 @dataclass(frozen=True)
@@ -174,10 +175,29 @@ INPUT_PROCESS_OUTPUT_SEED = ConceptSeed(
 )
 
 
+STRUCTURED_SEQUENCE_SEED = ConceptSeed(
+    "ads.algorithms.structured_sequence",
+    "ads",
+    "representação estruturada de uma sequência",
+    (
+        "representacao estruturada de uma sequencia",
+        "sequencia estruturada",
+        "passos estruturados",
+        "structured sequence",
+    ),
+    selectable=False,
+)
+
+
 CATALOG_V2_SEEDS = CORE_CONCEPT_SEEDS + (ORDERED_STEPS_SEED,)
 CATALOG_V3_SEEDS = CORE_CONCEPT_SEEDS + (
     ORDERED_STEPS_SEED,
     GOAL_RESULT_SEED,
+)
+CATALOG_V4_SEEDS = CORE_CONCEPT_SEEDS + (
+    ORDERED_STEPS_SEED,
+    GOAL_RESULT_SEED,
+    INPUT_PROCESS_OUTPUT_SEED,
 )
 
 
@@ -185,8 +205,8 @@ MICRO_CONCEPT_SEEDS = (
     ORDERED_STEPS_SEED,
     GOAL_RESULT_SEED,
     INPUT_PROCESS_OUTPUT_SEED,
+    STRUCTURED_SEQUENCE_SEED,
 )
-
 
 CONCEPT_SEEDS = CORE_CONCEPT_SEEDS + MICRO_CONCEPT_SEEDS
 

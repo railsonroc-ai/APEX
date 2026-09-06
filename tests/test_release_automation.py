@@ -62,3 +62,19 @@ def test_apply_update_probe_gate_rejects_missing_counters():
         apex_apply_update.ensure_clean_pedagogical_probe(
             "APEX PEDAGOGICAL PROBE: OK\n"
         )
+
+
+def test_tracked_in_head_suppresses_expected_git_error_output(monkeypatch, tmp_path):
+    calls = []
+
+    class Result:
+        returncode = 1
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return Result()
+
+    monkeypatch.setattr(release, "run", fake_run)
+    assert release.tracked_in_head(tmp_path, "new-file.py") is False
+    assert calls[0][1]["capture"] is True
+    assert calls[0][1]["check"] is False

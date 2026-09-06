@@ -125,3 +125,23 @@ def test_completed_goal_result_allows_only_input_process_output_successor():
         "ads.algorithms.ordered_steps",
         area="ads",
     ) is None
+
+
+def test_completed_input_process_output_allows_only_structured_sequence_successor():
+    state = {
+        "area": "ads",
+        "current_concept_id": "ads.algorithms.input_process_output",
+        "current_concept": "entrada, processamento e saída",
+        "stage": "concluido",
+    }
+
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.structured_sequence",
+        area="ads",
+    ) == "ads.algorithms.structured_sequence"
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.goal_result",
+        area="ads",
+    ) is None

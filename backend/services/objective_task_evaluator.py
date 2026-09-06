@@ -4,6 +4,7 @@ from backend.concepts import normalize_alias
 from backend.services.rubric_policy import RubricPolicy
 from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
+from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 
 
 class ObjectiveTaskEvaluator:
@@ -17,6 +18,7 @@ class ObjectiveTaskEvaluator:
     ORDERED_STEPS = "ads.algorithms.ordered_steps"
     GOAL_RESULT = "ads.algorithms.goal_result"
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
+    STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
     HAND_WASHING_MARKERS = (
         "abrir a torneira",
         "lavar as maos",
@@ -29,9 +31,6 @@ class ObjectiveTaskEvaluator:
         re.compile(r"\bsec\w*(?:\s+(?:as|minhas|suas))?(?:\s+maos)?\b"),
     )
 
-    # Exercícios controlados da primeira microcompetência. Mesmo quando o
-    # enunciado pede uma descrição, a rubrica esperada é conhecida pelo
-    # servidor e não deve depender da disponibilidade ou do formato da LLM.
     ORDERED_TASKS = (
         {
             "prompt_markers": HAND_WASHING_MARKERS,
@@ -112,6 +111,16 @@ class ObjectiveTaskEvaluator:
             evaluation.get("tutor_message")
         )
 
+    @classmethod
+    def _structured_sequence_definition(cls, evaluation):
+        if not isinstance(evaluation, dict):
+            return None
+        if evaluation.get("concept_id") != cls.STRUCTURED_SEQUENCE:
+            return None
+        return StructuredSequenceTasks.definition_for_prompt(
+            evaluation.get("tutor_message")
+        )
+
     @staticmethod
     def _mapping_roles_are_correct(answer, definition):
         roles = definition.get("mapping_roles")
@@ -142,9 +151,6 @@ class ObjectiveTaskEvaluator:
                 for label, groups in roles.items()
             )
 
-        # Sem rótulos obrigatórios, aceita uma relação escrita na ordem natural:
-        # entrada -> processamento -> saída. Assim o formato não vira objetivo,
-        # mas uma mera coleção dos termos fora de relação não é suficiente.
         positions = []
         for label in labels:
             groups = roles[label]
@@ -208,6 +214,125 @@ class ObjectiveTaskEvaluator:
             },
             "A resposta ainda não identifica o componente pedido nessa situação.",
             missing_essential_criteria=missing,
+        )
+
+    @staticmethod
+    def _group_positions(answer, groups):
+        positions = []
+        missing = []
+        for index, group in enumerate(groups, start=1):
+            hits = [answer.find(marker) for marker in group]
+            hits = [hit for hit in hits if hit >= 0]
+            if not hits:
+                positions.append(None)
+                missing.append(f"passo {index}")
+            else:
+                positions.append(min(hits))
+        return positions, missing
+
+    @classmethod
+    def _evaluate_structured_sequence(cls, evaluation, definition):
+        normalized = normalize_alias(evaluation.get("student_answer")) or ""
+        kind = definition.get("kind")
+
+        if kind == "missing_step":
+            groups = definition["essential_groups"]
+            matched = [any(marker in normalized for marker in group) for group in groups]
+            if all(matched):
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.NOT_MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
+                },
+                "Ainda falta identificar o passo ausente da sequência.",
+                missing_essential_criteria=["identificar o passo ausente"],
+            )
+
+        groups = definition.get("ordered_groups") or ()
+        positions, missing = cls._group_positions(normalized, groups)
+        complete = not missing
+        ordered = complete and positions == sorted(positions)
+        structural_missing = list(missing)
+
+        if kind == "numbered_order":
+            number_positions = [
+                re.search(rf"\b{number}\b", normalized)
+                for number in (1, 2, 3)
+            ]
+            if any(match is None for match in number_positions):
+                structural_missing.append("usar 1, 2 e 3 para explicitar a estrutura")
+                numbered_ok = False
+            else:
+                nums = [match.start() for match in number_positions]
+                numbered_ok = (
+                    nums == sorted(nums)
+                    and complete
+                    and all(nums[i] < positions[i] for i in range(3))
+                )
+                if not numbered_ok:
+                    structural_missing.append("associar 1, 2 e 3 aos passos na ordem correta")
+            structure_ok = numbered_ok
+        else:
+            start = normalized.find("inicio")
+            end = normalized.rfind("fim")
+            structure_ok = (
+                start >= 0
+                and end >= 0
+                and start < end
+                and complete
+                and start < positions[0]
+                and end > positions[-1]
+            )
+            if start < 0:
+                structural_missing.append("marcar INÍCIO antes dos passos")
+            if end < 0:
+                structural_missing.append("marcar FIM depois dos passos")
+            if start >= 0 and end >= 0 and not structure_ok:
+                structural_missing.append("manter INÍCIO antes e FIM depois da sequência")
+
+        if complete and ordered and structure_ok:
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                },
+                definition["success"],
+                missing_essential_criteria=[],
+            )
+
+        if complete or any(position is not None for position in positions):
+            if complete and not ordered:
+                structural_missing.append("manter os passos na ordem lógica")
+            structural_missing = list(dict.fromkeys(structural_missing))
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "A representação contém parte da lógica, mas falta um critério estrutural essencial.",
+                missing_essential_criteria=structural_missing,
+            )
+
+        return cls._evidence(
+            {
+                RubricPolicy.TASK_RESPONSE: RubricPolicy.NOT_MET,
+                RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
+            },
+            "A resposta ainda não representa a sequência pedida.",
+            missing_essential_criteria=structural_missing or ["representar os passos pedidos"],
         )
 
     @classmethod
@@ -299,9 +424,6 @@ class ObjectiveTaskEvaluator:
                         "Escolheu uma situação que não corresponde ao resultado pedido.",
                     )
 
-        # O microconceito avaliado é o estado final desejado, não a reprodução
-        # literal de um rótulo como "Resultado:". Formato só pode afetar domínio
-        # quando o próprio formato for o objeto explícito de aprendizagem.
         procedural_actions = (
             "abrir", "clicar", "selecionar", "pegar", "guardar",
             "escolher", "confirmar", "digitar", "escrever",
@@ -340,8 +462,6 @@ class ObjectiveTaskEvaluator:
             )
 
         if any(groups_met):
-            # PARTIAL nesta família significa falta conceitual real e, portanto,
-            # sempre precisa apontar pelo menos um critério essencial ausente.
             return cls._evidence(
                 {
                     RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
@@ -374,6 +494,12 @@ class ObjectiveTaskEvaluator:
                 return cls._evaluate_input_process_output(
                     evaluation,
                     ipo_definition,
+                )
+            structured_definition = cls._structured_sequence_definition(evaluation)
+            if structured_definition is not None:
+                return cls._evaluate_structured_sequence(
+                    evaluation,
+                    structured_definition,
                 )
             return None
 
@@ -410,6 +536,7 @@ class ObjectiveTaskEvaluator:
             "A resposta não apresentou os três passos pedidos em uma ordem avaliável.",
         )
 
+
 # APEX_PEDAGOGICAL_EVAL_FIX_V2
 # Conservative evaluator-only compatibility hook.
 try:
@@ -421,4 +548,3 @@ except ImportError:
         _apex_install_eval_v2 = None
 if _apex_install_eval_v2 is not None:
     _apex_install_eval_v2(globals())
-

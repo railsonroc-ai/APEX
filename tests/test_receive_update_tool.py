@@ -48,3 +48,10 @@ def test_build_release_command_uses_received_file_and_sha(tmp_path):
     assert command[2] == str(target)
     assert command[3] == sha
     assert root.name == "APEX" or (root / "tools").exists()
+
+
+def test_auto_release_implementation_persists_latest_log():
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert "apex_release_latest.log" in source
+    assert "stderr=subprocess.STDOUT" in source
+    assert "LOG DO RELEASE:" in source

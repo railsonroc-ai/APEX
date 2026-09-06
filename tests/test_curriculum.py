@@ -32,3 +32,21 @@ def test_goal_result_progresses_to_input_process_output_without_skip():
         Curriculum.ORDERED_STEPS,
         Curriculum.INPUT_PROCESS_OUTPUT,
     )
+
+
+def test_input_process_output_progresses_to_structured_sequence_without_skip():
+    assert (
+        Curriculum.next_concept_id(Curriculum.INPUT_PROCESS_OUTPUT)
+        == Curriculum.STRUCTURED_SEQUENCE
+    )
+    assert Curriculum.prerequisites_for(Curriculum.STRUCTURED_SEQUENCE) == (
+        Curriculum.INPUT_PROCESS_OUTPUT,
+    )
+    assert Curriculum.allows_progression(
+        Curriculum.INPUT_PROCESS_OUTPUT,
+        Curriculum.STRUCTURED_SEQUENCE,
+    )
+    assert not Curriculum.allows_progression(
+        Curriculum.GOAL_RESULT,
+        Curriculum.STRUCTURED_SEQUENCE,
+    )

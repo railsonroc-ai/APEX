@@ -4,6 +4,7 @@ from backend.services.assistance_policy import AssistancePolicy
 from backend.services.task_policy import TaskPolicy
 from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
+from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -26,10 +27,12 @@ class TurnTeachingContract:
     ORDERED_STEPS = "ads.algorithms.ordered_steps"
     GOAL_RESULT = "ads.algorithms.goal_result"
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
+    STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
         INPUT_PROCESS_OUTPUT,
+        STRUCTURED_SEQUENCE,
     }
     ORDERED_STEPS_FORBIDDEN = (
         "entrada", "processamento", "saída", "saida", "variável", "variavel",
@@ -46,6 +49,14 @@ class TurnTeachingContract:
         "portugol", "python", "sintaxe", "código", "codigo", "programação",
         "programacao", "fluxograma", "pseudocódigo", "pseudocodigo", "tipo de dado",
         "classe", "objeto", "api", "banco de dados",
+    )
+    STRUCTURED_FUTURE_FORBIDDEN = (
+        "variável", "variavel", "operador", "condicional", "decisão", "decisao",
+        "repetição", "repeticao", "laço", "laco", "função", "funcao", "lista",
+        "portugol", "python", "sintaxe", "código", "codigo", "programação",
+        "programacao", "fluxograma", "pseudocódigo", "pseudocodigo", "tipo de dado",
+        "escreva", "algoritmo", "var", "classe", "objeto", "api",
+        "banco de dados",
     )
 
     FEEDBACK_BY_OUTCOME = {
@@ -101,12 +112,22 @@ class TurnTeachingContract:
         return InputProcessOutputTasks.prompt_for_mastery(mastery)
 
     @classmethod
+    def _structured_task(cls, mastery):
+        return StructuredSequenceTasks.prompt_for_mastery(mastery)
+
+    @classmethod
     def _ipo_forbidden(cls, mastery):
         if mastery < 0.20:
             return ("processamento", "saída", "saida", *cls.IPO_FUTURE_FORBIDDEN)
         if mastery < 0.40:
             return ("saída", "saida", *cls.IPO_FUTURE_FORBIDDEN)
         return cls.IPO_FUTURE_FORBIDDEN
+
+    @classmethod
+    def _structured_forbidden(cls, mastery):
+        if mastery < 0.20:
+            return ("início", "inicio", "fim", *cls.STRUCTURED_FUTURE_FORBIDDEN)
+        return cls.STRUCTURED_FUTURE_FORBIDDEN
 
     @classmethod
     def build(
@@ -262,7 +283,9 @@ class TurnTeachingContract:
             elif teaching_action == "avancar":
                 safe = (
                     "Você concluiu entrada, processamento e saída com evidências em "
-                    "atividades realmente diferentes. Esta fatia do percurso está concluída."
+                    "atividades realmente diferentes. Esta fatia do percurso está concluída. "
+                    "Envie continuar quando estiver pronto para representar essa lógica de "
+                    "forma estruturada."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 if mastery < 0.40 and focus == "processamento":
@@ -299,6 +322,59 @@ class TurnTeachingContract:
                 forbidden_terms=cls._ipo_forbidden(mastery),
                 allow_code=False,
                 max_chars=800,
+                max_questions=1,
+                task_required=task_required,
+                assistance_ceiling=ceiling,
+                review_mode=review_mode,
+                feedback_text=feedback,
+                safe_response=safe,
+            )
+
+        if concept_id == cls.STRUCTURED_SEQUENCE:
+            mastery = cls._normalized_mastery(state)
+            focus = StructuredSequenceTasks.focus_for_mastery(mastery)
+            if review_mode:
+                safe = StructuredSequenceTasks.review_prompt()
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = cls._structured_task(mastery)
+            elif teaching_action == "corrigir" and difficulty < 2:
+                if mastery < 0.20:
+                    hint = "Use os números apenas para tornar visível qual passo vem antes do outro."
+                elif mastery < 0.40:
+                    hint = "INÍCIO fica antes dos passos e FIM fica depois deles."
+                else:
+                    hint = "Leia a estrutura na mesma direção em que a atividade acontece."
+                safe = hint + "\n\n" + cls._structured_task(mastery)
+            elif teaching_action == "corrigir":
+                safe = (
+                    "Retome somente a forma de representar a sequência.\n\n"
+                    + cls._structured_task(mastery)
+                )
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu representação estruturada de uma sequência com evidências "
+                    "em atividades diferentes. Esta fatia do percurso está concluída."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                safe = cls._structured_task(mastery)
+            else:
+                safe = (
+                    "Você já sabe pensar na ordem da lógica. Agora vamos apenas tornar essa "
+                    "ordem visível: cada passo recebe uma posição explícita.\n\n"
+                    + cls._structured_task(mastery)
+                )
+            safe = cls._prepend_feedback(safe, feedback)
+            return cls(
+                concept_id=concept_id,
+                focus=focus,
+                objective=(
+                    "transformar uma lógica já compreendida em representação estruturada, "
+                    "sem introduzir sintaxe de programação"
+                ),
+                representation="passos estruturados, ainda sem código",
+                forbidden_terms=cls._structured_forbidden(mastery),
+                allow_code=False,
+                max_chars=850,
                 max_questions=1,
                 task_required=task_required,
                 assistance_ceiling=ceiling,

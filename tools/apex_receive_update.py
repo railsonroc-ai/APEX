@@ -131,14 +131,31 @@ def build_server(
                     command, root = build_release_command(target, expected_sha)
 
                     def release_then_shutdown():
+                        log_path = root / "logs" / "apex_release_latest.log"
+                        log_path.parent.mkdir(parents=True, exist_ok=True)
                         try:
                             print("RELEASE AUTOMÁTICO: INICIANDO", flush=True)
-                            result = subprocess.run(command, cwd=root, check=False)
-                            if result.returncode == 0:
+                            with log_path.open("w", encoding="utf-8") as log:
+                                process = subprocess.Popen(
+                                    command,
+                                    cwd=root,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT,
+                                    text=True,
+                                    bufsize=1,
+                                )
+                                assert process.stdout is not None
+                                for line in process.stdout:
+                                    print(line, end="", flush=True)
+                                    log.write(line)
+                                    log.flush()
+                                returncode = process.wait()
+                            print("LOG DO RELEASE:", log_path, flush=True)
+                            if returncode == 0:
                                 print("RELEASE AUTOMÁTICO: OK", flush=True)
                             else:
                                 print(
-                                    f"RELEASE AUTOMÁTICO: FALHOU ({result.returncode})",
+                                    f"RELEASE AUTOMÁTICO: FALHOU ({returncode})",
                                     flush=True,
                                 )
                         finally:

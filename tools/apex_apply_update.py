@@ -45,6 +45,36 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def validate_staging_whitespace(stage, baseline, manifest_files):
+    """Executa o equivalente preventivo de git diff --check antes do copy real."""
+    errors = []
+    for relative in manifest_files:
+        updated = stage / relative
+        if not updated.is_file():
+            continue
+        previous = baseline / relative
+        left = previous if previous.is_file() else Path(os.devnull)
+        result = subprocess.run(
+            [
+                "git", "diff", "--no-index", "--check", "--",
+                str(left), str(updated),
+            ],
+            cwd=stage,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        # --no-index usa 1 para "há diferenças"; >1 indica erro de whitespace.
+        if result.returncode not in {0, 1}:
+            errors.append(result.stdout.strip() or f"whitespace inválido: {relative}")
+    if errors:
+        print("STAGE WHITESPACE: FALHOU")
+        print("\n".join(errors))
+        raise RuntimeError("staging contém erro detectável por git diff --check")
+    print("STAGE WHITESPACE: OK")
+
+
 
 def _fold_text(value):
     normalized = unicodedata.normalize("NFKD", str(value or ""))
@@ -341,6 +371,7 @@ def main():
 
     stage_parent = Path("/public") if Path("/public").exists() else root.parent
     stage = Path(tempfile.mkdtemp(prefix="APEX_UPDATE_STAGE_", dir=stage_parent))
+    baseline = Path(tempfile.mkdtemp(prefix="APEX_UPDATE_BASE_", dir=stage_parent))
 
     try:
         base_tar = stage / "base.tar"
@@ -349,14 +380,21 @@ def main():
             cwd=root,
         )
         with tarfile.open(base_tar, "r:") as archive:
-            archive.extractall(stage)
+            archive.extractall(stage, filter="data")
         base_tar.unlink()
+
+        for relative in manifest["files"]:
+            source = stage / relative
+            if source.is_file():
+                target = baseline / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
 
         with tarfile.open(package, "r:gz") as archive:
             for member in members:
                 if member.name == MANIFEST_NAME:
                     continue
-                archive.extract(member, stage)
+                archive.extract(member, stage, filter="data")
 
         if real_db.exists():
             stage_db = stage / "data" / "apex.db"
@@ -383,6 +421,8 @@ def main():
                 cwd=stage,
                 env=env,
             )
+
+        validate_staging_whitespace(stage, baseline, manifest["files"])
 
         run(
             [sys.executable, "tools/apex_validate.py", "--root", str(stage)],
@@ -427,6 +467,7 @@ def main():
             print("Não faça commit antes da migração real.")
     finally:
         shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(baseline, ignore_errors=True)
 
 
 if __name__ == "__main__":

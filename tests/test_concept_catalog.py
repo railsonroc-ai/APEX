@@ -78,3 +78,14 @@ def test_third_internal_microconcept_is_resolvable_but_not_selectable():
     assert ConceptCatalog.resolve(
         "ads", "ads.algorithms.input_process_output", selectable_only=True
     ) is None
+
+
+def test_fourth_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve(
+        "ads", "ads.algorithms.structured_sequence"
+    )
+    assert concept["canonical_name"] == "representação estruturada de uma sequência"
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "sequência estruturada", selectable_only=True
+    ) is None

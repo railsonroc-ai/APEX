@@ -1,5 +1,6 @@
 from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
+from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.task_context_identity import TaskContextIdentity
 
 
@@ -22,6 +23,16 @@ def test_input_process_output_prompt_has_stable_context_identity():
     assert TaskContextIdentity.for_prompt(
         TaskContextIdentity.INPUT_PROCESS_OUTPUT, prompt
     ) == "ipo_calculator_output"
+
+
+def test_structured_sequence_prompt_has_stable_context_identity():
+    prompt = StructuredSequenceTasks.prompt_for_mastery(0.25)
+    assert TaskContextIdentity.for_prompt(
+        TaskContextIdentity.STRUCTURED_SEQUENCE, prompt
+    ) == "structured_water_boundaries"
+    assert TaskContextIdentity.requires_explicit_context(
+        TaskContextIdentity.STRUCTURED_SEQUENCE
+    )
 
 
 def test_unknown_controlled_prompt_does_not_invent_context():

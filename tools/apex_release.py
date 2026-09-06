@@ -133,6 +133,7 @@ def tracked_in_head(root, path):
     result = run(
         ["git", "cat-file", "-e", f"HEAD:{path}"],
         cwd=root,
+        capture=True,
         check=False,
     )
     return result.returncode == 0

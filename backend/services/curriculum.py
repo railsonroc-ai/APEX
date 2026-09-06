@@ -4,6 +4,7 @@ class Curriculum:
     ORDERED_STEPS = "ads.algorithms.ordered_steps"
     GOAL_RESULT = "ads.algorithms.goal_result"
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
+    STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
 
     ENTRY_CONCEPTS = {
         "ads.algorithms": ORDERED_STEPS,
@@ -12,12 +13,14 @@ class Curriculum:
     NEXT_CONCEPTS = {
         ORDERED_STEPS: GOAL_RESULT,
         GOAL_RESULT: INPUT_PROCESS_OUTPUT,
+        INPUT_PROCESS_OUTPUT: STRUCTURED_SEQUENCE,
     }
 
     PREREQUISITES = {
         ORDERED_STEPS: (),
         GOAL_RESULT: (ORDERED_STEPS,),
         INPUT_PROCESS_OUTPUT: (GOAL_RESULT,),
+        STRUCTURED_SEQUENCE: (INPUT_PROCESS_OUTPUT,),
     }
 
     @classmethod

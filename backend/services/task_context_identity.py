@@ -1,6 +1,7 @@
 from backend.concepts import normalize_alias
 from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
+from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 
 
 class TaskContextIdentity:
@@ -14,11 +15,13 @@ class TaskContextIdentity:
     ORDERED_STEPS = "ads.algorithms.ordered_steps"
     GOAL_RESULT = "ads.algorithms.goal_result"
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
+    STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
 
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
         INPUT_PROCESS_OUTPUT,
+        STRUCTURED_SEQUENCE,
     }
 
     ORDERED_CONTEXTS = (
@@ -56,6 +59,10 @@ class TaskContextIdentity:
 
         if concept_id == cls.INPUT_PROCESS_OUTPUT:
             definition = InputProcessOutputTasks.definition_for_prompt(prompt)
+            return definition.get("task_id") if definition else None
+
+        if concept_id == cls.STRUCTURED_SEQUENCE:
+            definition = StructuredSequenceTasks.definition_for_prompt(prompt)
             return definition.get("task_id") if definition else None
 
         if concept_id == cls.ORDERED_STEPS:

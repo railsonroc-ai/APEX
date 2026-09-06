@@ -77,6 +77,20 @@ def classify_task(prompt: str | None) -> str | None:
     folded = fold_text(prompt)
     if not folded:
         return None
+
+    # As tarefas estruturadas reutilizam situações antigas; por isso precisam
+    # ser reconhecidas antes dos classificadores mais amplos de ordered/IPO.
+    if all(marker in folded for marker in ("pegar o pao", "colocar o pao", "retirar a torrada", "1", "2", "3")):
+        return "structured_toast_numbered"
+    if all(marker in folded for marker in ("pegar o copo", "beber a agua", "guardar o copo", "inicio", "fim")):
+        return "structured_water_boundaries"
+    if all(marker in folded for marker in ("inicio", "abrir a conversa", "clicar em enviar", "qual passo", "fim")):
+        return "structured_message_missing_step"
+    if all(marker in folded for marker in ("cafeteira", "agua", "po de cafe", "inicio", "fim", "receber", "preparar", "entregar")):
+        return "structured_coffee_flow"
+    if all(marker in folded for marker in ("receber pao", "aquecer o pao", "entregar torrada", "inicio", "fim")):
+        return "structured_review_toaster"
+
     if all(marker in folded for marker in ("secar as maos", "abrir a torneira", "lavar as maos")):
         return "ordered_hand_washing"
     if "guardar um arquivo" in folded and "tres passos" in folded:
@@ -124,6 +138,11 @@ def correct_answer(kind: str) -> str:
         "ipo_calculator_output": "5.",
         "ipo_coffee_mapping": "água e pó de café; preparar a bebida; café pronto.",
         "ipo_review_mapping": "pão; aquecer; torrada.",
+        "structured_toast_numbered": "1 pegar o pão; 2 colocar o pão na torradeira; 3 retirar a torrada.",
+        "structured_water_boundaries": "INÍCIO; pegar o copo; beber a água; guardar o copo; FIM.",
+        "structured_message_missing_step": "escrever a mensagem.",
+        "structured_coffee_flow": "INÍCIO; receber água e pó de café; preparar a bebida; entregar café pronto; FIM.",
+        "structured_review_toaster": "INÍCIO; receber pão; aquecer o pão; entregar torrada; FIM.",
     }
     if kind not in answers:
         raise RuntimeError(f"tarefa não reconhecida pelo probe: {kind}")
@@ -555,7 +574,7 @@ def run_happy_path(report: ProbeReport, timeout: float):
         report.check(
             f"{scenario_id}.curriculum_slice_completed",
             completed
-            and state.get("current_concept_id") == "ads.algorithms.input_process_output"
+            and state.get("current_concept_id") == "ads.algorithms.structured_sequence"
             and state.get("stage") == "concluido",
             f"completed={completed}, concept={state.get('current_concept_id')}, stage={state.get('stage')}, mastery={state.get('mastery')}",
         )
@@ -621,6 +640,19 @@ def run_happy_path(report: ProbeReport, timeout: float):
             "o mapeamento final foi respondido sem exigir os rótulos literais entrada/processamento/saída",
         )
         report.metrics["happy_ipo_task_kinds"] = ipo_tasks
+
+        structured_tasks = [kind for kind in seen_kinds if kind.startswith("structured_")]
+        report.check(
+            f"{scenario_id}.structured_progression_reached",
+            {
+                "structured_toast_numbered",
+                "structured_water_boundaries",
+                "structured_message_missing_step",
+                "structured_coffee_flow",
+            }.issubset(set(structured_tasks)),
+            f"tarefas estruturadas vistas={structured_tasks}",
+        )
+        report.metrics["happy_structured_task_kinds"] = structured_tasks
 
         report.metrics["happy_goal_task_kinds"] = goal_tasks
         report.metrics["happy_distinct_demonstrated_goal_tasks"] = distinct_kinds
@@ -858,6 +890,24 @@ def structural_checks(report: ProbeReport):
         report.warn(
             "structural.next_microconcept",
             "Curriculum ainda não define microcompetência executável após GOAL_RESULT.",
+        )
+
+    has_next_after_ipo = bool(
+        re.search(
+            r"INPUT_PROCESS_OUTPUT\s*:\s*STRUCTURED_SEQUENCE",
+            curriculum,
+        )
+    )
+    if has_next_after_ipo:
+        report.check(
+            "structural.next_after_ipo",
+            True,
+            "Curriculum define representação estruturada como sucessor executável após IPO.",
+        )
+    else:
+        report.warn(
+            "structural.next_after_ipo",
+            "Curriculum ainda não define sucessor executável após entrada/processamento/saída.",
         )
 
     # MasteryPolicy anuncia diversidade de contexto, mas a versão atual conta
