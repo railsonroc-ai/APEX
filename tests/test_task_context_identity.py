@@ -2,6 +2,7 @@ from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
+from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.task_context_identity import TaskContextIdentity
 
 
@@ -50,4 +51,14 @@ def test_portugol_skeleton_prompt_has_stable_context_identity():
     ) == "portugol_keyword_fimalgoritmo"
     assert TaskContextIdentity.requires_explicit_context(
         TaskContextIdentity.PORTUGOL_SKELETON
+    )
+
+
+def test_portugol_write_prompt_has_stable_context_identity():
+    prompt = PortugolWriteTasks.prompt_for_mastery(0.45)
+    assert TaskContextIdentity.for_prompt(
+        TaskContextIdentity.PORTUGOL_WRITE, prompt
+    ) == "write_line_done"
+    assert TaskContextIdentity.requires_explicit_context(
+        TaskContextIdentity.PORTUGOL_WRITE
     )

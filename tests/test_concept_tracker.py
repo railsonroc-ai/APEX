@@ -165,3 +165,23 @@ def test_completed_structured_sequence_allows_only_portugol_skeleton_successor()
         "ads.algorithms.input_process_output",
         area="ads",
     ) is None
+
+
+def test_completed_portugol_skeleton_allows_only_write_successor():
+    state = {
+        "area": "ads",
+        "current_concept_id": "ads.algorithms.portugol_skeleton",
+        "current_concept": "estrutura mínima do Portugol",
+        "stage": "concluido",
+    }
+
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.portugol_write",
+        area="ads",
+    ) == "ads.algorithms.portugol_write"
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.structured_sequence",
+        area="ads",
+    ) is None

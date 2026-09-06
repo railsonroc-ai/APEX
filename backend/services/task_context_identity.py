@@ -3,6 +3,7 @@ from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
+from backend.services.portugol_write_tasks import PortugolWriteTasks
 
 
 class TaskContextIdentity:
@@ -18,6 +19,7 @@ class TaskContextIdentity:
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
     STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
     PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
+    PORTUGOL_WRITE = "ads.algorithms.portugol_write"
 
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
@@ -25,6 +27,7 @@ class TaskContextIdentity:
         INPUT_PROCESS_OUTPUT,
         STRUCTURED_SEQUENCE,
         PORTUGOL_SKELETON,
+        PORTUGOL_WRITE,
     }
 
     ORDERED_CONTEXTS = (
@@ -70,6 +73,10 @@ class TaskContextIdentity:
 
         if concept_id == cls.PORTUGOL_SKELETON:
             definition = PortugolSkeletonTasks.definition_for_prompt(prompt)
+            return definition.get("task_id") if definition else None
+
+        if concept_id == cls.PORTUGOL_WRITE:
+            definition = PortugolWriteTasks.definition_for_prompt(prompt)
             return definition.get("task_id") if definition else None
 
         if concept_id == cls.ORDERED_STEPS:

@@ -6,6 +6,7 @@ from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
+from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -30,12 +31,14 @@ class TurnTeachingContract:
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
     STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
     PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
+    PORTUGOL_WRITE = "ads.algorithms.portugol_write"
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
         INPUT_PROCESS_OUTPUT,
         STRUCTURED_SEQUENCE,
         PORTUGOL_SKELETON,
+        PORTUGOL_WRITE,
     }
     ORDERED_STEPS_FORBIDDEN = (
         "entrada", "processamento", "saída", "saida", "variável", "variavel",
@@ -66,6 +69,14 @@ class TurnTeachingContract:
         "lógico", "logico", "leia", "escreva", "operador", "condicional",
         "decisão", "decisao", "se", "então", "entao", "senão", "senao",
         "repetição", "repeticao", "enquanto", "para", "repita", "função",
+        "funcao", "procedimento", "lista", "python", "classe", "objeto", "api",
+        "banco de dados",
+    )
+    PORTUGOL_WRITE_FUTURE_FORBIDDEN = (
+        "leia", "escreval", "variável", "variavel", "var", "inteiro", "real",
+        "caractere", "cadeia", "lógico", "logico", "operador", "condicional",
+        "decisão", "decisao", "se", "então", "entao", "senão", "senao",
+        "repetição", "repeticao", "enquanto", "repita", "função",
         "funcao", "procedimento", "lista", "python", "classe", "objeto", "api",
         "banco de dados",
     )
@@ -129,6 +140,10 @@ class TurnTeachingContract:
     @classmethod
     def _portugol_task(cls, mastery):
         return PortugolSkeletonTasks.prompt_for_mastery(mastery)
+
+    @classmethod
+    def _portugol_write_task(cls, mastery):
+        return PortugolWriteTasks.prompt_for_mastery(mastery)
 
     @classmethod
     def _ipo_forbidden(cls, mastery):
@@ -432,7 +447,8 @@ class TurnTeachingContract:
             elif teaching_action == "avancar":
                 safe = (
                     "Você concluiu a estrutura mínima do Portugol com evidências em "
-                    "atividades diferentes. Esta fatia do percurso está concluída."
+                    "atividades diferentes. Envie continuar quando estiver pronto. A próxima "
+                    "microcompetência virá em seguida."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 if mastery < 0.20:
@@ -470,6 +486,76 @@ class TurnTeachingContract:
                 forbidden_terms=cls._portugol_forbidden(mastery),
                 allow_code=True,
                 max_chars=850,
+                max_questions=1,
+                task_required=task_required,
+                assistance_ceiling=ceiling,
+                review_mode=review_mode,
+                feedback_text=feedback,
+                safe_response=safe,
+            )
+
+        if concept_id == cls.PORTUGOL_WRITE:
+            mastery = cls._normalized_mastery(state)
+            focus = PortugolWriteTasks.focus_for_mastery(mastery)
+            if review_mode:
+                safe = PortugolWriteTasks.review_prompt()
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = cls._portugol_write_task(mastery)
+            elif teaching_action == "corrigir" and difficulty < 2:
+                if mastery < 0.20:
+                    hint = "A palavra que falta é o comando usado para mostrar algo na tela."
+                elif mastery < 0.40:
+                    hint = "Observe somente o texto colocado dentro do comando."
+                elif mastery < 0.60:
+                    hint = "A linha fica entre inicio e fimalgoritmo, usando o comando já estudado."
+                else:
+                    hint = "Mantenha a estrutura conhecida e coloque escreva entre inicio e fimalgoritmo."
+                safe = hint + "\n\n" + cls._portugol_write_task(mastery)
+            elif teaching_action == "corrigir":
+                safe = (
+                    "Retome somente o uso de escreva para produzir a saída pedida.\n\n"
+                    + cls._portugol_write_task(mastery)
+                )
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu saída simples com escreva com evidências em atividades "
+                    "diferentes. Esta fatia do percurso está concluída."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                if mastery < 0.20:
+                    safe = cls._portugol_write_task(mastery)
+                elif mastery < 0.40:
+                    safe = (
+                        "O mesmo comando agora em outro contexto: o texto colocado em escreva "
+                        "é o que aparece na tela.\n\n" + cls._portugol_write_task(mastery)
+                    )
+                elif mastery < 0.60:
+                    safe = (
+                        "Agora use o mesmo escreva dentro da estrutura que você já conhece.\n\n"
+                        + cls._portugol_write_task(mastery)
+                    )
+                else:
+                    safe = (
+                        "Agora integre somente o mesmo escreva à estrutura já conhecida.\n\n"
+                        + cls._portugol_write_task(mastery)
+                    )
+            else:
+                safe = (
+                    'Agora uma novidade: escreva mostra na tela o texto colocado entre aspas. '
+                    'Exemplo: escreva("Olá").\n\n' + cls._portugol_write_task(mastery)
+                )
+            safe = cls._prepend_feedback(safe, feedback)
+            return cls(
+                concept_id=concept_id,
+                focus=focus,
+                objective=(
+                    "usar escreva para produzir uma saída simples, reutilizando somente a "
+                    "estrutura mínima já dominada"
+                ),
+                representation="sintaxe de Portugol limitada ao comando escreva com texto fixo",
+                forbidden_terms=cls.PORTUGOL_WRITE_FUTURE_FORBIDDEN,
+                allow_code=True,
+                max_chars=900,
                 max_questions=1,
                 task_required=task_required,
                 assistance_ceiling=ceiling,

@@ -78,6 +78,17 @@ def classify_task(prompt: str | None) -> str | None:
     if not folded:
         return None
 
+    if all(marker in folded for marker in ("mostra ola na tela", "palavra que falta")):
+        return "write_keyword_hello"
+    if all(marker in folded for marker in ("escreva", "pronto", "aparece na tela", "texto exibido")):
+        return "write_predict_ready"
+    if all(marker in folded for marker in ("unica linha", "inicio", "fimalgoritmo", "concluido", "entre aspas")):
+        return "write_line_done"
+    if all(marker in folded for marker in ("algoritmo chamado", "mostre ok na tela", "inicio", "escreva", "fimalgoritmo")):
+        return "write_program_ok"
+    if all(marker in folded for marker in ("de memoria", "mostra", "revisao", "na tela")):
+        return "write_review_message"
+
     if all(marker in folded for marker in ("primeira linha", "rotina", "palavra que falta")):
         return "portugol_keyword_algoritmo"
     if all(marker in folded for marker in ("algoritmo", "rotina", "passos comecam")):
@@ -159,6 +170,11 @@ def correct_answer(kind: str) -> str:
         "portugol_keyword_fimalgoritmo": "fimalgoritmo",
         "portugol_skeleton_integration": "algoritmo; inicio; fimalgoritmo",
         "portugol_skeleton_review": "algoritmo; inicio; fimalgoritmo",
+        "write_keyword_hello": "escreva",
+        "write_predict_ready": "Pronto",
+        "write_line_done": 'escreva("Concluído")',
+        "write_program_ok": 'algoritmo "saida"; inicio; escreva("OK"); fimalgoritmo',
+        "write_review_message": 'escreva("Revisão")',
     }
     if kind not in answers:
         raise RuntimeError(f"tarefa não reconhecida pelo probe: {kind}")
@@ -522,7 +538,7 @@ def run_happy_path(report: ProbeReport, timeout: float):
         result_answers_without_label = []
         completed = False
 
-        for index in range(32):
+        for index in range(40):
             folded = fold_text(current)
             if "envie continuar" in folded:
                 turn_id = f"probe-{scenario_id}-continue-{index}-{uuid4().hex}"
@@ -590,7 +606,7 @@ def run_happy_path(report: ProbeReport, timeout: float):
         report.check(
             f"{scenario_id}.curriculum_slice_completed",
             completed
-            and state.get("current_concept_id") == "ads.algorithms.portugol_skeleton"
+            and state.get("current_concept_id") == "ads.algorithms.portugol_write"
             and state.get("stage") == "concluido",
             f"completed={completed}, concept={state.get('current_concept_id')}, stage={state.get('stage')}, mastery={state.get('mastery')}",
         )
@@ -682,6 +698,19 @@ def run_happy_path(report: ProbeReport, timeout: float):
             f"tarefas de estrutura mínima do Portugol vistas={portugol_tasks}",
         )
         report.metrics["happy_portugol_task_kinds"] = portugol_tasks
+
+        write_tasks = [kind for kind in seen_kinds if kind.startswith("write_")]
+        report.check(
+            f"{scenario_id}.portugol_write_progression_reached",
+            {
+                "write_keyword_hello",
+                "write_predict_ready",
+                "write_line_done",
+                "write_program_ok",
+            }.issubset(set(write_tasks)),
+            f"tarefas de saída com escreva vistas={write_tasks}",
+        )
+        report.metrics["happy_write_task_kinds"] = write_tasks
 
         report.metrics["happy_goal_task_kinds"] = goal_tasks
         report.metrics["happy_distinct_demonstrated_goal_tasks"] = distinct_kinds
@@ -955,6 +984,24 @@ def structural_checks(report: ProbeReport):
         report.warn(
             "structural.next_after_structured_sequence",
             "Curriculum ainda não define sucessor executável após representação estruturada.",
+        )
+
+    has_next_after_portugol_skeleton = bool(
+        re.search(
+            r"PORTUGOL_SKELETON\s*:\s*PORTUGOL_WRITE",
+            curriculum,
+        )
+    )
+    if has_next_after_portugol_skeleton:
+        report.check(
+            "structural.next_after_portugol_skeleton",
+            True,
+            "Curriculum define saída simples com escreva como sucessor executável após a estrutura mínima do Portugol.",
+        )
+    else:
+        report.warn(
+            "structural.next_after_portugol_skeleton",
+            "Curriculum ainda não define sucessor executável após a estrutura mínima do Portugol.",
         )
 
     # MasteryPolicy anuncia diversidade de contexto, mas a versão atual conta

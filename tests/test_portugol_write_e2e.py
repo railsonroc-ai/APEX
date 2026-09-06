@@ -20,7 +20,7 @@ class NoCallGroq:
 
 
 def prepare(monkeypatch, tmp_path):
-    monkeypatch.setattr(database_module, "DATABASE_PATH", tmp_path / "portugol-skeleton-e2e.db")
+    monkeypatch.setattr(database_module, "DATABASE_PATH", tmp_path / "portugol-write-e2e.db")
     monkeypatch.setattr(database_module, "DATA_DIR", tmp_path)
     database_module.init_database()
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
@@ -28,20 +28,17 @@ def prepare(monkeypatch, tmp_path):
     monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
 
 
-def test_completed_structured_sequence_enters_and_completes_portugol_skeleton_deterministically(
-    monkeypatch,
-    tmp_path,
-):
+def test_completed_skeleton_enters_and_completes_write_deterministically(monkeypatch, tmp_path):
     prepare(monkeypatch, tmp_path)
     ConceptProgress.update(
         "ads",
-        "ads.algorithms.structured_sequence",
+        "ads.algorithms.portugol_skeleton",
         mastery=0.8,
         last_evidence="Portfólio confirmado.",
     )
     LearnerState.update(
         "ads",
-        current_concept_id="ads.algorithms.structured_sequence",
+        current_concept_id="ads.algorithms.portugol_skeleton",
         stage="concluido",
         mastery=0.8,
         last_evidence="Portfólio confirmado.",
@@ -50,28 +47,31 @@ def test_completed_structured_sequence_enters_and_completes_portugol_skeleton_de
 
     start = client.post(
         "/chat/stream",
-        json={"message": "continuar", "area": "ads", "turn_id": "portugol-start"},
+        json={"message": "continuar", "area": "ads", "turn_id": "write-start"},
     ).get_data(as_text=True)
-    start_turn = LearningHistory.find("portugol-start")
-    start_task = LearningTask.find_by_source_turn("portugol-start")
+    start_turn = LearningHistory.find("write-start")
+    start_task = LearningTask.find_by_source_turn("write-start")
     state = LearnerState.get("ads")
 
     assert '"done": true' in start.lower()
-    assert state["current_concept_id"] == "ads.algorithms.portugol_skeleton"
+    assert state["current_concept_id"] == "ads.algorithms.portugol_write"
     assert state["stage"] == "compreender"
     assert state["mastery"] == 0.0
-    assert "primeira linha" in start_turn["assistant_message"].lower()
-    assert "inicio" not in start_turn["assistant_message"].lower()
-    assert "fimalgoritmo" not in start_turn["assistant_message"].lower()
+    assert "escreva" in start_turn["assistant_message"].lower()
+    assert "leia" not in start_turn["assistant_message"].lower()
     assert start_task is not None
-    assert start_task["concept_id"] == "ads.algorithms.portugol_skeleton"
-    assert EvidenceEvent.for_turn("portugol-start") is None
+    assert start_task["concept_id"] == "ads.algorithms.portugol_write"
+    assert EvidenceEvent.for_turn("write-start") is None
 
     journey = (
-        ("portugol-answer-algoritmo", "algoritmo", "inicio"),
-        ("portugol-answer-inicio", "inicio", "fimalgoritmo"),
-        ("portugol-answer-fim", "fimalgoritmo", "três lacunas"),
-        ("portugol-answer-skeleton", "algoritmo; inicio; fimalgoritmo", "envie continuar"),
+        ("write-answer-keyword", "escreva", "Pronto"),
+        ("write-answer-effect", "Pronto", "Concluído"),
+        ("write-answer-line", 'escreva("Concluído")', "algoritmo chamado"),
+        (
+            "write-answer-program",
+            'algoritmo "saida"\ninicio\nescreva("OK")\nfimalgoritmo',
+            "fatia do percurso",
+        ),
     )
 
     for turn_id, answer, expected_next in journey:
@@ -85,11 +85,11 @@ def test_completed_structured_sequence_enters_and_completes_portugol_skeleton_de
         assert '"done": true' in body.lower()
         assert turn["assistant_message"].startswith("Correto.\n\n")
         assert expected_next.lower() in turn["assistant_message"].lower()
-        assert evidence["concept_id"] == "ads.algorithms.portugol_skeleton"
+        assert evidence["concept_id"] == "ads.algorithms.portugol_write"
         assert evidence["outcome"] == "demonstrated"
         assert evidence["source"] == "deterministic_task"
 
     state = LearnerState.get("ads")
     assert state["stage"] == "concluido"
     assert state["mastery"] == 0.8
-    assert LearningTask.find_by_source_turn("portugol-answer-skeleton") is None
+    assert LearningTask.find_by_source_turn("write-answer-program") is None

@@ -100,3 +100,14 @@ def test_fifth_internal_microconcept_is_resolvable_but_not_selectable():
     assert ConceptCatalog.resolve(
         "ads", "estrutura mínima do Portugol", selectable_only=True
     ) is None
+
+
+def test_sixth_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve(
+        "ads", "ads.algorithms.portugol_write"
+    )
+    assert concept["canonical_name"] == "saída simples com escreva"
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "comando escreva", selectable_only=True
+    ) is None

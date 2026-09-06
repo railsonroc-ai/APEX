@@ -6,6 +6,7 @@ from backend.services.goal_result_tasks import GoalResultTasks
 from backend.services.input_process_output_tasks import InputProcessOutputTasks
 from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
+from backend.services.portugol_write_tasks import PortugolWriteTasks
 
 
 class ObjectiveTaskEvaluator:
@@ -21,6 +22,7 @@ class ObjectiveTaskEvaluator:
     INPUT_PROCESS_OUTPUT = "ads.algorithms.input_process_output"
     STRUCTURED_SEQUENCE = "ads.algorithms.structured_sequence"
     PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
+    PORTUGOL_WRITE = "ads.algorithms.portugol_write"
     HAND_WASHING_MARKERS = (
         "abrir a torneira",
         "lavar as maos",
@@ -130,6 +132,16 @@ class ObjectiveTaskEvaluator:
         if evaluation.get("concept_id") != cls.PORTUGOL_SKELETON:
             return None
         return PortugolSkeletonTasks.definition_for_prompt(
+            evaluation.get("tutor_message")
+        )
+
+    @classmethod
+    def _portugol_write_definition(cls, evaluation):
+        if not isinstance(evaluation, dict):
+            return None
+        if evaluation.get("concept_id") != cls.PORTUGOL_WRITE:
+            return None
+        return PortugolWriteTasks.definition_for_prompt(
             evaluation.get("tutor_message")
         )
 
@@ -430,6 +442,129 @@ class ObjectiveTaskEvaluator:
             missing_essential_criteria=missing,
         )
 
+    @staticmethod
+    def _has_write_call(answer, expected_text):
+        raw = str(answer or "").casefold()
+        match = re.search(
+            r"\bescreva\s*\(\s*([\"'])([^\"']+)\1\s*\)",
+            raw,
+            flags=re.IGNORECASE,
+        )
+        if match is None:
+            return False
+        expected = normalize_alias(expected_text) or ""
+        actual = normalize_alias(match.group(2)) or ""
+        return bool(expected) and actual == expected
+
+    @classmethod
+    def _evaluate_portugol_write(cls, evaluation, definition):
+        normalized = normalize_alias(evaluation.get("student_answer")) or ""
+        kind = definition.get("kind")
+
+        if kind == "single_keyword":
+            required = definition["required_keyword"]
+            if re.search(rf"\b{re.escape(required)}\b", normalized):
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.NOT_MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
+                },
+                "A resposta ainda não identifica o comando pedido.",
+                missing_essential_criteria=["identificar escreva"],
+            )
+
+        if kind == "expected_output":
+            expected = normalize_alias(definition.get("expected_output")) or ""
+            if normalized == expected:
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.NOT_MET,
+                },
+                "A saída indicada não corresponde ao texto mostrado pelo comando.",
+                missing_essential_criteria=["identificar o texto exibido"],
+            )
+
+        expected_text = definition.get("expected_text") or ""
+        write_ok = cls._has_write_call(evaluation.get("student_answer"), expected_text)
+
+        if kind == "write_line":
+            if write_ok:
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "A linha ainda não usa escreva com o texto pedido entre aspas.",
+                missing_essential_criteria=["formar escreva com o texto pedido entre aspas"],
+            )
+
+        keywords = tuple(definition.get("ordered_keywords") or ())
+        positions = []
+        for keyword in keywords:
+            match = re.search(rf"\b{re.escape(keyword)}\b", normalized)
+            positions.append(None if match is None else match.start())
+        complete = all(position is not None for position in positions)
+        ordered = complete and positions == sorted(positions)
+
+        if write_ok and ordered:
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                },
+                definition["success"],
+                missing_essential_criteria=[],
+            )
+
+        missing = []
+        if not write_ok:
+            missing.append("usar escreva com o texto pedido entre aspas")
+        if not complete:
+            missing.append("incluir algoritmo, inicio, escreva e fimalgoritmo")
+        elif not ordered:
+            missing.append("manter escreva entre inicio e fimalgoritmo")
+        return cls._evidence(
+            {
+                RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+            },
+            "A integração ainda não mantém todos os critérios essenciais da estrutura.",
+            missing_essential_criteria=missing,
+        )
+
     @classmethod
     def _submitted_order(cls, answer):
         normalized = normalize_alias(answer) or ""
@@ -601,6 +736,12 @@ class ObjectiveTaskEvaluator:
                 return cls._evaluate_portugol_skeleton(
                     evaluation,
                     portugol_definition,
+                )
+            write_definition = cls._portugol_write_definition(evaluation)
+            if write_definition is not None:
+                return cls._evaluate_portugol_write(
+                    evaluation,
+                    write_definition,
                 )
             return None
 
