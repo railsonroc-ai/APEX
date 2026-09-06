@@ -17,6 +17,8 @@ import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 from pathlib import Path
+import subprocess
+import sys
 import threading
 
 
@@ -45,7 +47,24 @@ def extract_upload(content_type: str, body: bytes) -> tuple[str, bytes]:
     raise ValueError("nenhum arquivo recebido")
 
 
-def build_server(target: Path, expected_sha: str, host: str, port: int):
+def build_release_command(target: Path, expected_sha: str):
+    root = Path(__file__).resolve().parents[1]
+    return [
+        sys.executable,
+        str(root / "tools" / "apex_release.py"),
+        str(target),
+        expected_sha,
+    ], root
+
+
+def build_server(
+    target: Path,
+    expected_sha: str,
+    host: str,
+    port: int,
+    *,
+    auto_release: bool = False,
+):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_args):
             return
@@ -98,11 +117,42 @@ def build_server(target: Path, expected_sha: str, host: str, port: int):
                 self.respond(
                     "<h2>TRANSFERÊNCIA CONCLUÍDA</h2>"
                     f"<p>{target}</p>"
+                    + (
+                        "<p>Release automático iniciado. Acompanhe o terminal.</p>"
+                        if auto_release
+                        else ""
+                    )
                 )
                 print("TRANSFERÊNCIA: OK", flush=True)
                 print("ARQUIVO:", target, flush=True)
                 print("SHA-256:", actual, flush=True)
-                threading.Thread(target=self.server.shutdown, daemon=True).start()
+
+                if auto_release:
+                    command, root = build_release_command(target, expected_sha)
+
+                    def release_then_shutdown():
+                        try:
+                            print("RELEASE AUTOMÁTICO: INICIANDO", flush=True)
+                            result = subprocess.run(command, cwd=root, check=False)
+                            if result.returncode == 0:
+                                print("RELEASE AUTOMÁTICO: OK", flush=True)
+                            else:
+                                print(
+                                    f"RELEASE AUTOMÁTICO: FALHOU ({result.returncode})",
+                                    flush=True,
+                                )
+                        finally:
+                            self.server.shutdown()
+
+                    threading.Thread(
+                        target=release_then_shutdown,
+                        daemon=False,
+                    ).start()
+                else:
+                    threading.Thread(
+                        target=self.server.shutdown,
+                        daemon=True,
+                    ).start()
             except Exception as exc:
                 self.respond(f"<h2>ERRO</h2><pre>{type(exc).__name__}: {exc}</pre>", 400)
                 print(f"TRANSFERÊNCIA: FALHA — {type(exc).__name__}: {exc}", flush=True)
@@ -118,6 +168,11 @@ def main(argv=None) -> int:
     parser.add_argument("sha256", help="SHA-256 esperado")
     parser.add_argument("--port", type=int, default=18775)
     parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument(
+        "--auto-release",
+        action="store_true",
+        help="Após validar o upload, executa tools/apex_release.py automaticamente.",
+    )
     args = parser.parse_args(argv)
 
     expected = args.sha256.strip().lower()
@@ -127,7 +182,16 @@ def main(argv=None) -> int:
         raise SystemExit("porta inválida")
 
     target = Path(args.target).expanduser().resolve()
-    server = build_server(target, expected, args.host, args.port)
+    if args.auto_release and not (Path(__file__).resolve().parent / "apex_release.py").is_file():
+        raise SystemExit("tools/apex_release.py não encontrado para --auto-release")
+
+    server = build_server(
+        target,
+        expected,
+        args.host,
+        args.port,
+        auto_release=args.auto_release,
+    )
     print(f"ABRA: http://127.0.0.1:{args.port}", flush=True)
     print(f"DESTINO: {target}", flush=True)
     server.serve_forever()

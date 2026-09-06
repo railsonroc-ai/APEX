@@ -180,6 +180,23 @@ def validate_update_manifest(archive, members):
         "requires_migration": manifest_requires_migration(text),
     }
 
+
+
+def ensure_clean_pedagogical_probe(output):
+    text = str(output or "")
+    fail = re.search(r"^FAIL:\s*(\d+)\s*$", text, flags=re.MULTILINE)
+    warn = re.search(r"^WARN:\s*(\d+)\s*$", text, flags=re.MULTILINE)
+    if fail is None or warn is None:
+        raise RuntimeError("probe pedagógico não informou contadores FAIL/WARN")
+    if int(fail.group(1)) != 0 or int(warn.group(1)) != 0:
+        raise RuntimeError(
+            "probe pedagógico bloqueou a atualização: "
+            f"FAIL={fail.group(1)} WARN={warn.group(1)}"
+        )
+    if "APEX PEDAGOGICAL PROBE: OK" not in text:
+        raise RuntimeError("probe pedagógico não confirmou sucesso")
+    return True
+
 def safe_members(archive):
     members = []
     for member in archive.getmembers():
@@ -371,6 +388,16 @@ def main():
             [sys.executable, "tools/apex_validate.py", "--root", str(stage)],
             cwd=stage,
         )
+
+        probe = run(
+            [sys.executable, "tools/apex_pedagogical_probe.py"],
+            cwd=stage,
+            env=env if real_db.exists() else os.environ.copy(),
+            capture=True,
+        )
+        probe_output = probe.stdout or ""
+        print(probe_output, end="")
+        ensure_clean_pedagogical_probe(probe_output)
 
         for member in members:
             if member.name == MANIFEST_NAME:

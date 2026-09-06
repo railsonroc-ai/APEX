@@ -37,3 +37,14 @@ def test_extract_upload_reads_multipart_file():
     )
     assert filename == "update.tar.gz"
     assert data == b"abc123"
+
+def test_build_release_command_uses_received_file_and_sha(tmp_path):
+    target = tmp_path / "update.tar.gz"
+    sha = "a" * 64
+    command, root = receiver.build_release_command(target, sha)
+
+    assert command[0]
+    assert command[1].endswith("tools/apex_release.py")
+    assert command[2] == str(target)
+    assert command[3] == sha
+    assert root.name == "APEX" or (root / "tools").exists()
