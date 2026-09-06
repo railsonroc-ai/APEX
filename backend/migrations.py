@@ -25,6 +25,8 @@ from backend.concepts import (
     CATALOG_V9_SEEDS,
     CATALOG_V10_VERSION,
     CATALOG_V10_SEEDS,
+    CATALOG_V11_VERSION,
+    CATALOG_V11_SEEDS,
     CONCEPT_SEEDS,
     CATALOG_V1_VERSION,
     CORE_CONCEPT_SEEDS,
@@ -2107,7 +2109,17 @@ def sync_executable_curriculum_v10(connection):
 
 
 def sync_executable_curriculum_v11(connection):
-    """Adiciona entrada em variável com leia como décima microcompetência."""
+    """Migration histórica congelada na décima microcompetência."""
+
+    _sync_catalog_seeds(
+        connection,
+        CATALOG_V11_SEEDS,
+        CATALOG_V11_VERSION,
+    )
+
+
+def sync_executable_curriculum_v12(connection):
+    """Adiciona saída de variável com escreva como décima primeira microcompetência."""
 
     _sync_catalog_seeds(
         connection,
@@ -2236,6 +2248,11 @@ MIGRATIONS = (
         24,
         "sync_executable_curriculum_v11",
         sync_executable_curriculum_v11,
+    ),
+    Migration(
+        25,
+        "sync_executable_curriculum_v12",
+        sync_executable_curriculum_v12,
     ),
 )
 

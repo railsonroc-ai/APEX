@@ -182,3 +182,23 @@ def test_read_variable_alias_does_not_steal_selectable_parent_aliases():
     assert ConceptCatalog.concept_id(
         "ads", "leia com variavel"
     ) == "ads.algorithms.read_variable"
+
+
+def test_eleventh_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve(
+        "ads", "ads.algorithms.write_variable"
+    )
+    assert concept["canonical_name"] == "saída de variável com escreva"
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "saída de variável com escreva", selectable_only=True
+    ) is None
+
+
+def test_write_variable_alias_does_not_steal_selectable_parent_aliases():
+    assert ConceptCatalog.concept_id(
+        "ads", "variável", selectable_only=True
+    ) == "ads.variables"
+    assert ConceptCatalog.concept_id(
+        "ads", "escreva com variavel"
+    ) == "ads.algorithms.write_variable"

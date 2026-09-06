@@ -7,6 +7,7 @@ from backend.services.portugol_read_tasks import PortugolReadTasks
 from backend.services.variable_storage_tasks import VariableStorageTasks
 from backend.services.integer_declaration_tasks import IntegerDeclarationTasks
 from backend.services.read_variable_tasks import ReadVariableTasks
+from backend.services.write_variable_tasks import WriteVariableTasks
 from backend.services.task_context_identity import TaskContextIdentity
 
 
@@ -105,4 +106,14 @@ def test_read_variable_prompt_has_stable_context_identity():
     ) == "read_variable_program_order"
     assert TaskContextIdentity.requires_explicit_context(
         TaskContextIdentity.READ_VARIABLE
+    )
+
+
+def test_write_variable_prompt_has_stable_context_identity():
+    prompt = WriteVariableTasks.prompt_for_mastery(0.65)
+    assert TaskContextIdentity.for_prompt(
+        TaskContextIdentity.WRITE_VARIABLE, prompt
+    ) == "write_variable_program_order"
+    assert TaskContextIdentity.requires_explicit_context(
+        TaskContextIdentity.WRITE_VARIABLE
     )

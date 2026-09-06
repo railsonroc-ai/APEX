@@ -8,6 +8,7 @@ from backend.services.portugol_read_tasks import PortugolReadTasks
 from backend.services.variable_storage_tasks import VariableStorageTasks
 from backend.services.integer_declaration_tasks import IntegerDeclarationTasks
 from backend.services.read_variable_tasks import ReadVariableTasks
+from backend.services.write_variable_tasks import WriteVariableTasks
 
 
 class TaskContextIdentity:
@@ -28,6 +29,7 @@ class TaskContextIdentity:
     VARIABLE_STORAGE = "ads.algorithms.variable_storage"
     INTEGER_DECLARATION = "ads.algorithms.integer_declaration"
     READ_VARIABLE = "ads.algorithms.read_variable"
+    WRITE_VARIABLE = "ads.algorithms.write_variable"
 
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
@@ -40,6 +42,7 @@ class TaskContextIdentity:
         VARIABLE_STORAGE,
         INTEGER_DECLARATION,
         READ_VARIABLE,
+        WRITE_VARIABLE,
     }
 
     ORDERED_CONTEXTS = (
@@ -105,6 +108,10 @@ class TaskContextIdentity:
 
         if concept_id == cls.READ_VARIABLE:
             definition = ReadVariableTasks.definition_for_prompt(prompt)
+            return definition.get("task_id") if definition else None
+
+        if concept_id == cls.WRITE_VARIABLE:
+            definition = WriteVariableTasks.definition_for_prompt(prompt)
             return definition.get("task_id") if definition else None
 
         if concept_id == cls.ORDERED_STEPS:

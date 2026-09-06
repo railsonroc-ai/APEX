@@ -65,3 +65,9 @@ def test_parse_sse_collects_error():
     parsed = probe.parse_sse(raw)
     assert parsed["errors"] == ["Sessão pausada"]
     assert parsed["done"] is False
+
+
+def test_happy_path_terminal_concept_tracks_latest_curriculum_slice():
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert 'state.get("current_concept_id") == "ads.algorithms.write_variable"' in source
+    assert 'state.get("current_concept_id") == "ads.algorithms.read_variable"' not in source

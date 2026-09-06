@@ -146,3 +146,18 @@ def test_integer_declaration_progresses_to_read_variable_without_skip():
         Curriculum.VARIABLE_STORAGE,
         Curriculum.READ_VARIABLE,
     )
+
+
+def test_read_variable_progresses_to_write_variable_without_skip():
+    assert Curriculum.next_concept_id(Curriculum.READ_VARIABLE) == Curriculum.WRITE_VARIABLE
+    assert Curriculum.prerequisites_for(Curriculum.WRITE_VARIABLE) == (
+        Curriculum.READ_VARIABLE,
+    )
+    assert Curriculum.allows_progression(
+        Curriculum.READ_VARIABLE,
+        Curriculum.WRITE_VARIABLE,
+    )
+    assert not Curriculum.allows_progression(
+        Curriculum.INTEGER_DECLARATION,
+        Curriculum.WRITE_VARIABLE,
+    )

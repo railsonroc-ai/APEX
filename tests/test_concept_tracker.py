@@ -265,3 +265,23 @@ def test_completed_integer_declaration_allows_only_read_variable_successor():
         "ads.algorithms.variable_storage",
         area="ads",
     ) is None
+
+
+def test_completed_read_variable_allows_only_write_variable_successor():
+    state = {
+        "area": "ads",
+        "current_concept_id": "ads.algorithms.read_variable",
+        "current_concept": "entrada em variável com leia",
+        "stage": "concluido",
+    }
+
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.write_variable",
+        area="ads",
+    ) == "ads.algorithms.write_variable"
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.integer_declaration",
+        area="ads",
+    ) is None

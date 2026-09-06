@@ -11,6 +11,7 @@ from backend.services.portugol_read_tasks import PortugolReadTasks
 from backend.services.variable_storage_tasks import VariableStorageTasks
 from backend.services.integer_declaration_tasks import IntegerDeclarationTasks
 from backend.services.read_variable_tasks import ReadVariableTasks
+from backend.services.write_variable_tasks import WriteVariableTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -40,6 +41,7 @@ class TurnTeachingContract:
     VARIABLE_STORAGE = "ads.algorithms.variable_storage"
     INTEGER_DECLARATION = "ads.algorithms.integer_declaration"
     READ_VARIABLE = "ads.algorithms.read_variable"
+    WRITE_VARIABLE = "ads.algorithms.write_variable"
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
@@ -51,6 +53,7 @@ class TurnTeachingContract:
         VARIABLE_STORAGE,
         INTEGER_DECLARATION,
         READ_VARIABLE,
+        WRITE_VARIABLE,
     }
     ORDERED_STEPS_FORBIDDEN = (
         "entrada", "processamento", "saída", "saida", "variável", "variavel",
@@ -118,6 +121,13 @@ class TurnTeachingContract:
     )
     READ_VARIABLE_FUTURE_FORBIDDEN = (
         "real", "caractere", "cadeia", "lógico", "logico", "escreva", "escreval",
+        "atribuição", "atribuicao", "operador", "condicional", "decisão", "decisao",
+        "senão", "senao", "repetição", "repeticao", "enquanto", "repita",
+        "função", "funcao", "procedimento", "lista", "vetor", "matriz",
+        "python", "classe", "objeto", "api", "banco de dados",
+    )
+    WRITE_VARIABLE_FUTURE_FORBIDDEN = (
+        "real", "caractere", "cadeia", "lógico", "logico", "escreval",
         "atribuição", "atribuicao", "operador", "condicional", "decisão", "decisao",
         "senão", "senao", "repetição", "repeticao", "enquanto", "repita",
         "função", "funcao", "procedimento", "lista", "vetor", "matriz",
@@ -203,6 +213,10 @@ class TurnTeachingContract:
     @classmethod
     def _read_variable_task(cls, mastery):
         return ReadVariableTasks.prompt_for_mastery(mastery)
+
+    @classmethod
+    def _write_variable_task(cls, mastery):
+        return WriteVariableTasks.prompt_for_mastery(mastery)
 
     @classmethod
     def _integer_declaration_forbidden(cls, mastery):
@@ -903,7 +917,8 @@ class TurnTeachingContract:
             elif teaching_action == "avancar":
                 safe = (
                     "Você concluiu entrada em variável com leia com evidências em atividades "
-                    "diferentes. Esta fatia do percurso está concluída."
+                    "diferentes. Envie continuar quando estiver pronto para a próxima "
+                    "microcompetência."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 if mastery < 0.20:
@@ -957,6 +972,83 @@ class TurnTeachingContract:
                 forbidden_terms=cls.READ_VARIABLE_FUTURE_FORBIDDEN,
                 allow_code=True,
                 max_chars=1100,
+                max_questions=1,
+                task_required=task_required,
+                assistance_ceiling=ceiling,
+                review_mode=review_mode,
+                feedback_text=feedback,
+                safe_response=safe,
+            )
+
+        if concept_id == cls.WRITE_VARIABLE:
+            mastery = cls._normalized_mastery(state)
+            focus = WriteVariableTasks.focus_for_mastery(mastery)
+            if review_mode:
+                safe = WriteVariableTasks.review_prompt()
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = cls._write_variable_task(mastery)
+            elif teaching_action == "corrigir" and difficulty < 2:
+                if mastery < 0.20:
+                    hint = "Olhe apenas para o nome escrito dentro dos parênteses de escreva."
+                elif mastery < 0.40:
+                    hint = "Use dentro de escreva exatamente o nome da variável cujo valor deve aparecer."
+                elif mastery < 0.60:
+                    hint = "A forma é escreva, abre parêntese, nome da variável e fecha parêntese."
+                else:
+                    hint = "Declare antes de inicio; depois de inicio, leia recebe e escreva mostra a mesma variável."
+                safe = hint + "\n\n" + cls._write_variable_task(mastery)
+            elif teaching_action == "corrigir":
+                if mastery < 0.20:
+                    correction = "Correção completa: a variável mostrada é a que aparece dentro de escreva(...)."
+                elif mastery < 0.40:
+                    correction = "Correção completa: dentro de escreva usamos o nome da variável cujo valor será mostrado."
+                elif mastery < 0.60:
+                    correction = "Correção completa: a forma é escreva(variavel)."
+                else:
+                    correction = "Correção completa: declare antes de inicio; depois use leia(variavel) e então escreva(variavel)."
+                safe = correction + "\n\n" + cls._write_variable_task(mastery)
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu saída de variável com escreva com evidências em atividades "
+                    "diferentes. Esta fatia do percurso está concluída."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                safe = cls._write_variable_task(mastery)
+            else:
+                if mastery < 0.20:
+                    safe = (
+                        "Você já conhece escreva para mostrar uma saída e já sabe guardar uma entrada em uma variável. "
+                        "Agora una as ideias: escreva(variavel) mostra o valor que está guardado nessa variável.\n\n"
+                        + cls._write_variable_task(mastery)
+                    )
+                elif mastery < 0.40:
+                    safe = (
+                        "Agora fixe a ligação: dentro de escreva usamos exatamente o nome da variável cujo valor deve aparecer.\n\n"
+                        + cls._write_variable_task(mastery)
+                    )
+                elif mastery < 0.60:
+                    safe = (
+                        "Agora use a forma completa escreva(variavel), sem acrescentar nenhuma outra operação.\n\n"
+                        + cls._write_variable_task(mastery)
+                    )
+                else:
+                    safe = (
+                        "Agora integre declaração, entrada e saída: a variável é declarada antes de inicio; "
+                        "depois leia(variavel) recebe e escreva(variavel) mostra o valor.\n\n"
+                        + cls._write_variable_task(mastery)
+                    )
+            safe = cls._prepend_feedback(safe, feedback)
+            return cls(
+                concept_id=concept_id,
+                focus=focus,
+                objective=(
+                    "usar em escreva o nome de uma variável inteira já declarada, reconhecendo qual "
+                    "valor será mostrado e integrando escreva(variavel) ao fluxo conhecido"
+                ),
+                representation="sintaxe mínima de escreva(variavel) com variável inteira já declarada",
+                forbidden_terms=cls.WRITE_VARIABLE_FUTURE_FORBIDDEN,
+                allow_code=True,
+                max_chars=1150,
                 max_questions=1,
                 task_required=task_required,
                 assistance_ceiling=ceiling,

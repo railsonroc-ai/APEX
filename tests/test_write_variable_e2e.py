@@ -20,7 +20,7 @@ class NoCallGroq:
 
 
 def prepare(monkeypatch, tmp_path):
-    monkeypatch.setattr(database_module, "DATABASE_PATH", tmp_path / "read-variable-e2e.db")
+    monkeypatch.setattr(database_module, "DATABASE_PATH", tmp_path / "write-variable-e2e.db")
     monkeypatch.setattr(database_module, "DATA_DIR", tmp_path)
     database_module.init_database()
     monkeypatch.setattr(app_module, "verify_auth", lambda: True)
@@ -28,53 +28,53 @@ def prepare(monkeypatch, tmp_path):
     monkeypatch.setattr(app_module.LLMGateway, "PROVIDER_FACTORY", NoCallGroq)
 
 
-def test_completed_integer_declaration_enters_and_completes_read_variable(monkeypatch, tmp_path):
+def test_completed_read_variable_enters_and_completes_write_variable(monkeypatch, tmp_path):
     prepare(monkeypatch, tmp_path)
     ConceptProgress.update(
         "ads",
-        "ads.algorithms.integer_declaration",
+        "ads.algorithms.read_variable",
         mastery=0.8,
-        last_evidence="Declaração confirmada.",
+        last_evidence="Entrada em variável confirmada.",
     )
     LearnerState.update(
         "ads",
-        current_concept_id="ads.algorithms.integer_declaration",
+        current_concept_id="ads.algorithms.read_variable",
         stage="concluido",
         mastery=0.8,
-        last_evidence="Declaração confirmada.",
+        last_evidence="Entrada em variável confirmada.",
     )
     client = app_module.app.test_client()
 
     start = client.post(
         "/chat/stream",
-        json={"message": "continuar", "area": "ads", "turn_id": "read-variable-start"},
+        json={"message": "continuar", "area": "ads", "turn_id": "write-variable-start"},
     ).get_data(as_text=True)
-    start_turn = LearningHistory.find("read-variable-start")
-    start_task = LearningTask.find_by_source_turn("read-variable-start")
+    start_turn = LearningHistory.find("write-variable-start")
+    start_task = LearningTask.find_by_source_turn("write-variable-start")
     state = LearnerState.get("ads")
 
     assert '"done": true' in start.lower()
-    assert state["current_concept_id"] == "ads.algorithms.read_variable"
+    assert state["current_concept_id"] == "ads.algorithms.write_variable"
     assert state["stage"] == "compreender"
     assert state["mastery"] == 0.0
     first_text = start_turn["assistant_message"].lower()
-    assert "leia" in first_text
-    assert "idade" in first_text
+    assert "escreva" in first_text
+    assert "pontos" in first_text
     assert "inteiro" in first_text
-    assert "escreva" not in first_text
     assert "real" not in first_text
+    assert "operador" not in first_text
     assert start_task is not None
-    assert start_task["concept_id"] == "ads.algorithms.read_variable"
-    assert EvidenceEvent.for_turn("read-variable-start") is None
+    assert start_task["concept_id"] == "ads.algorithms.write_variable"
+    assert EvidenceEvent.for_turn("write-variable-start") is None
 
     journey = (
-        ("read-variable-answer-age", "idade", "tentativas"),
-        ("read-variable-answer-attempts", "tentativas", "pontos"),
-        ("read-variable-answer-call", "leia(pontos)", "coloque em ordem estes elementos"),
+        ("write-variable-answer-points", "pontos", "tentativas"),
+        ("write-variable-answer-attempts", "tentativas", "saldo"),
+        ("write-variable-answer-call", "escreva(saldo)", "coloque em ordem estes elementos"),
         (
-            "read-variable-answer-program",
-            'algoritmo "cadastro"; var; idade: inteiro; inicio; leia(idade); fimalgoritmo',
-            "envie continuar",
+            "write-variable-answer-program",
+            'algoritmo "eco"; var; valor: inteiro; inicio; leia(valor); escreva(valor); fimalgoritmo',
+            "fatia do percurso",
         ),
     )
 
@@ -89,11 +89,11 @@ def test_completed_integer_declaration_enters_and_completes_read_variable(monkey
         assert '"done": true' in body.lower()
         assert turn["assistant_message"].startswith("Correto.\n\n")
         assert expected_next.lower() in turn["assistant_message"].lower()
-        assert evidence["concept_id"] == "ads.algorithms.read_variable"
+        assert evidence["concept_id"] == "ads.algorithms.write_variable"
         assert evidence["outcome"] == "demonstrated"
         assert evidence["source"] == "deterministic_task"
 
     state = LearnerState.get("ads")
     assert state["stage"] == "concluido"
     assert state["mastery"] == 0.8
-    assert LearningTask.find_by_source_turn("read-variable-answer-program") is None
+    assert LearningTask.find_by_source_turn("write-variable-answer-program") is None

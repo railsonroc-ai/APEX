@@ -11,6 +11,7 @@ class Curriculum:
     VARIABLE_STORAGE = "ads.algorithms.variable_storage"
     INTEGER_DECLARATION = "ads.algorithms.integer_declaration"
     READ_VARIABLE = "ads.algorithms.read_variable"
+    WRITE_VARIABLE = "ads.algorithms.write_variable"
 
     ENTRY_CONCEPTS = {
         "ads.algorithms": ORDERED_STEPS,
@@ -26,6 +27,7 @@ class Curriculum:
         PORTUGOL_READ: VARIABLE_STORAGE,
         VARIABLE_STORAGE: INTEGER_DECLARATION,
         INTEGER_DECLARATION: READ_VARIABLE,
+        READ_VARIABLE: WRITE_VARIABLE,
     }
 
     PREREQUISITES = {
@@ -39,6 +41,7 @@ class Curriculum:
         VARIABLE_STORAGE: (PORTUGOL_READ,),
         INTEGER_DECLARATION: (VARIABLE_STORAGE,),
         READ_VARIABLE: (INTEGER_DECLARATION,),
+        WRITE_VARIABLE: (READ_VARIABLE,),
     }
 
     @classmethod
