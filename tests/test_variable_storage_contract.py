@@ -6,7 +6,7 @@ def contract(mastery, action="consolidar", outcome="demonstrated", difficulty=0)
     return TurnTeachingContract.build(
         {
             "area": "ads",
-            "current_concept_id": "ads.algorithms.portugol_read",
+            "current_concept_id": "ads.algorithms.variable_storage",
             "stage": "fixar",
             "mastery": mastery,
             "difficulty_count": difficulty,
@@ -16,34 +16,39 @@ def contract(mastery, action="consolidar", outcome="demonstrated", difficulty=0)
     )
 
 
-def test_first_turn_introduces_only_leia_and_reuses_prior_concepts():
+def test_first_turn_introduces_only_variable_as_named_storage():
     item = contract(0.0, action="explicar", outcome=None)
-    assert item.focus == "comando leia"
-    assert "variável" in item.forbidden_terms
+    text = item.safe_response.lower()
+    assert item.focus == "variável como lugar nomeado"
+    assert item.allow_code is False
+    assert "variável" in text
+    assert "valor" in text
+    assert "declaração" in item.forbidden_terms
     assert "inteiro" in item.forbidden_terms
-    assert "leia" not in item.forbidden_terms
-    assert "escreva" not in item.forbidden_terms
-    assert item.allow_code is True
-    assert "leia" in item.safe_response.lower()
-    assert "variável" not in item.safe_response.lower()
+    assert "leia" in item.forbidden_terms
+    assert "escreva" in item.forbidden_terms
+    assert "inteiro" not in text
+    assert "leia" not in text
+    assert "escreva" not in text
 
 
-def test_later_turns_keep_future_storage_and_control_syntax_blocked():
+def test_later_turns_keep_declaration_types_and_other_syntax_blocked():
     for mastery in (0.2, 0.4, 0.6, 0.8):
         item = contract(mastery)
-        assert "variável" in item.forbidden_terms
+        assert "declaração" in item.forbidden_terms
         assert "inteiro" in item.forbidden_terms
         assert "condicional" in item.forbidden_terms
-        assert "leia" not in item.forbidden_terms
+        assert "leia" in item.forbidden_terms
+        assert "escreva" in item.forbidden_terms
+        assert item.allow_code is False
 
 
-def test_completion_invites_progression_to_next_microcompetence():
+def test_completion_is_terminal_for_this_release_slice():
     item = contract(0.8, action="avancar")
-    assert "Envie continuar" in item.safe_response
-    assert "Esta fatia do percurso está concluída." not in item.safe_response
+    assert "Esta fatia do percurso está concluída." in item.safe_response
 
 
-def test_all_read_fallbacks_validate_against_their_contract():
+def test_all_variable_storage_fallbacks_validate_against_their_contract():
     for mastery in (0.0, 0.2, 0.4, 0.6, 0.8):
         for action in ("explicar", "testar", "verificar", "consolidar", "corrigir", "avancar"):
             for outcome in (None, "demonstrated", "partial", "misconception", "insufficient", "unverified"):

@@ -5,6 +5,7 @@ from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.portugol_read_tasks import PortugolReadTasks
+from backend.services.variable_storage_tasks import VariableStorageTasks
 
 
 class TaskContextIdentity:
@@ -22,6 +23,7 @@ class TaskContextIdentity:
     PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
     PORTUGOL_WRITE = "ads.algorithms.portugol_write"
     PORTUGOL_READ = "ads.algorithms.portugol_read"
+    VARIABLE_STORAGE = "ads.algorithms.variable_storage"
 
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
@@ -31,6 +33,7 @@ class TaskContextIdentity:
         PORTUGOL_SKELETON,
         PORTUGOL_WRITE,
         PORTUGOL_READ,
+        VARIABLE_STORAGE,
     }
 
     ORDERED_CONTEXTS = (
@@ -84,6 +87,10 @@ class TaskContextIdentity:
 
         if concept_id == cls.PORTUGOL_READ:
             definition = PortugolReadTasks.definition_for_prompt(prompt)
+            return definition.get("task_id") if definition else None
+
+        if concept_id == cls.VARIABLE_STORAGE:
+            definition = VariableStorageTasks.definition_for_prompt(prompt)
             return definition.get("task_id") if definition else None
 
         if concept_id == cls.ORDERED_STEPS:

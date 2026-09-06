@@ -205,3 +205,23 @@ def test_completed_portugol_write_allows_only_read_successor():
         "ads.algorithms.portugol_skeleton",
         area="ads",
     ) is None
+
+
+def test_completed_portugol_read_allows_only_variable_storage_successor():
+    state = {
+        "area": "ads",
+        "current_concept_id": "ads.algorithms.portugol_read",
+        "current_concept": "entrada simples com leia",
+        "stage": "concluido",
+    }
+
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.variable_storage",
+        area="ads",
+    ) == "ads.algorithms.variable_storage"
+    assert ConceptTracker.resolve_identified_candidate(
+        state,
+        "ads.algorithms.portugol_write",
+        area="ads",
+    ) is None

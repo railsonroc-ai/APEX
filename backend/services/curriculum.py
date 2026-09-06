@@ -8,6 +8,7 @@ class Curriculum:
     PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
     PORTUGOL_WRITE = "ads.algorithms.portugol_write"
     PORTUGOL_READ = "ads.algorithms.portugol_read"
+    VARIABLE_STORAGE = "ads.algorithms.variable_storage"
 
     ENTRY_CONCEPTS = {
         "ads.algorithms": ORDERED_STEPS,
@@ -20,6 +21,7 @@ class Curriculum:
         STRUCTURED_SEQUENCE: PORTUGOL_SKELETON,
         PORTUGOL_SKELETON: PORTUGOL_WRITE,
         PORTUGOL_WRITE: PORTUGOL_READ,
+        PORTUGOL_READ: VARIABLE_STORAGE,
     }
 
     PREREQUISITES = {
@@ -30,6 +32,7 @@ class Curriculum:
         PORTUGOL_SKELETON: (STRUCTURED_SEQUENCE,),
         PORTUGOL_WRITE: (PORTUGOL_SKELETON,),
         PORTUGOL_READ: (PORTUGOL_WRITE,),
+        VARIABLE_STORAGE: (PORTUGOL_READ,),
     }
 
     @classmethod

@@ -4,6 +4,7 @@ from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.portugol_read_tasks import PortugolReadTasks
+from backend.services.variable_storage_tasks import VariableStorageTasks
 from backend.services.task_context_identity import TaskContextIdentity
 
 
@@ -72,4 +73,14 @@ def test_portugol_read_prompt_has_stable_context_identity():
     ) == "read_flow_integration"
     assert TaskContextIdentity.requires_explicit_context(
         TaskContextIdentity.PORTUGOL_READ
+    )
+
+
+def test_variable_storage_prompt_has_stable_context_identity():
+    prompt = VariableStorageTasks.prompt_for_mastery(0.65)
+    assert TaskContextIdentity.for_prompt(
+        TaskContextIdentity.VARIABLE_STORAGE, prompt
+    ) == "variable_current_value_balance"
+    assert TaskContextIdentity.requires_explicit_context(
+        TaskContextIdentity.VARIABLE_STORAGE
     )

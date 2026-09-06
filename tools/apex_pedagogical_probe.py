@@ -78,6 +78,17 @@ def classify_task(prompt: str | None) -> str | None:
     if not folded:
         return None
 
+    if all(marker in folded for marker in ("lugar chamado pontos", "guarda o valor 10", "pontos ou 10")):
+        return "variable_named_place_points"
+    if all(marker in folded for marker in ("variavel chamada idade", "guarda 25", "valor guardado")):
+        return "variable_name_value_age"
+    if all(marker in folded for marker in ("variavel tentativas", "guarda 1", "guardar 2", "continua sendo o nome")):
+        return "variable_stable_name_attempts"
+    if all(marker in folded for marker in ("variavel saldo", "guardava 50", "guardar 80", "valor atual")):
+        return "variable_current_value_balance"
+    if all(marker in folded for marker in ("de memoria", "variavel nivel", "guardava 3", "guardar 4", "valor atual")):
+        return "variable_review_level"
+
     if all(marker in folded for marker in ("comando do portugol", "recebe uma entrada", "palavra que falta")):
         return "read_keyword_input"
     if all(marker in folded for marker in ("observe leia", "sem preencher a lacuna", "entrada ou saida")):
@@ -191,6 +202,11 @@ def correct_answer(kind: str) -> str:
         "read_before_write": "leia",
         "read_flow_integration": 'algoritmo "fluxo"; inicio; leia; escreva("OK"); fimalgoritmo',
         "read_review_role": "leia",
+        "variable_named_place_points": "pontos",
+        "variable_name_value_age": "25",
+        "variable_stable_name_attempts": "tentativas",
+        "variable_current_value_balance": "saldo 80",
+        "variable_review_level": "nivel 4",
     }
     if kind not in answers:
         raise RuntimeError(f"tarefa não reconhecida pelo probe: {kind}")
@@ -622,7 +638,7 @@ def run_happy_path(report: ProbeReport, timeout: float):
         report.check(
             f"{scenario_id}.curriculum_slice_completed",
             completed
-            and state.get("current_concept_id") == "ads.algorithms.portugol_read"
+            and state.get("current_concept_id") == "ads.algorithms.variable_storage"
             and state.get("stage") == "concluido",
             f"completed={completed}, concept={state.get('current_concept_id')}, stage={state.get('stage')}, mastery={state.get('mastery')}",
         )
@@ -740,6 +756,19 @@ def run_happy_path(report: ProbeReport, timeout: float):
             f"tarefas de entrada com leia vistas={read_tasks}",
         )
         report.metrics["happy_read_task_kinds"] = read_tasks
+
+        variable_tasks = [kind for kind in seen_kinds if kind.startswith("variable_")]
+        report.check(
+            f"{scenario_id}.variable_storage_progression_reached",
+            {
+                "variable_named_place_points",
+                "variable_name_value_age",
+                "variable_stable_name_attempts",
+                "variable_current_value_balance",
+            }.issubset(set(variable_tasks)),
+            f"tarefas de variável como armazenamento nomeado vistas={variable_tasks}",
+        )
+        report.metrics["happy_variable_task_kinds"] = variable_tasks
 
         report.metrics["happy_goal_task_kinds"] = goal_tasks
         report.metrics["happy_distinct_demonstrated_goal_tasks"] = distinct_kinds
@@ -1049,6 +1078,24 @@ def structural_checks(report: ProbeReport):
         report.warn(
             "structural.next_after_portugol_write",
             "Curriculum ainda não define sucessor executável após saída simples com escreva.",
+        )
+
+    has_next_after_portugol_read = bool(
+        re.search(
+            r"PORTUGOL_READ\s*:\s*VARIABLE_STORAGE",
+            curriculum,
+        )
+    )
+    if has_next_after_portugol_read:
+        report.check(
+            "structural.next_after_portugol_read",
+            True,
+            "Curriculum define variável como armazenamento nomeado como sucessor executável após leia.",
+        )
+    else:
+        report.warn(
+            "structural.next_after_portugol_read",
+            "Curriculum ainda não define sucessor executável após entrada simples com leia.",
         )
 
     # MasteryPolicy anuncia diversidade de contexto, mas a versão atual conta

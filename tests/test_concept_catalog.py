@@ -122,3 +122,23 @@ def test_seventh_internal_microconcept_is_resolvable_but_not_selectable():
     assert ConceptCatalog.resolve(
         "ads", "comando leia", selectable_only=True
     ) is None
+
+
+def test_eighth_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve(
+        "ads", "ads.algorithms.variable_storage"
+    )
+    assert concept["canonical_name"] == "variável como armazenamento nomeado"
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "armazenamento nomeado de valor", selectable_only=True
+    ) is None
+
+
+def test_variable_storage_alias_does_not_steal_selectable_variables_alias():
+    assert ConceptCatalog.concept_id(
+        "ads", "variável", selectable_only=True
+    ) == "ads.variables"
+    assert ConceptCatalog.concept_id(
+        "ads", "armazenamento nomeado de valor"
+    ) == "ads.algorithms.variable_storage"

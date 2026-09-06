@@ -8,6 +8,7 @@ from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.portugol_read_tasks import PortugolReadTasks
+from backend.services.variable_storage_tasks import VariableStorageTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -34,6 +35,7 @@ class TurnTeachingContract:
     PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
     PORTUGOL_WRITE = "ads.algorithms.portugol_write"
     PORTUGOL_READ = "ads.algorithms.portugol_read"
+    VARIABLE_STORAGE = "ads.algorithms.variable_storage"
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
@@ -42,6 +44,7 @@ class TurnTeachingContract:
         PORTUGOL_SKELETON,
         PORTUGOL_WRITE,
         PORTUGOL_READ,
+        VARIABLE_STORAGE,
     }
     ORDERED_STEPS_FORBIDDEN = (
         "entrada", "processamento", "saída", "saida", "variável", "variavel",
@@ -88,6 +91,15 @@ class TurnTeachingContract:
         "caractere", "cadeia", "lógico", "logico", "operador", "condicional",
         "decisão", "decisao", "se", "então", "entao", "senão", "senao",
         "repetição", "repeticao", "enquanto", "repita", "função",
+        "funcao", "procedimento", "lista", "vetor", "matriz", "python",
+        "classe", "objeto", "api", "banco de dados",
+    )
+    VARIABLE_STORAGE_FUTURE_FORBIDDEN = (
+        "declaração", "declaracao", "var", "inteiro", "real", "caractere",
+        "cadeia", "lógico", "logico", "tipo de dado", "leia", "escreva",
+        "escreval", "atribuição", "atribuicao", "operador", "condicional",
+        "decisão", "decisao", "senão", "senao",
+        "repetição", "repeticao", "repita", "função",
         "funcao", "procedimento", "lista", "vetor", "matriz", "python",
         "classe", "objeto", "api", "banco de dados",
     )
@@ -159,6 +171,10 @@ class TurnTeachingContract:
     @classmethod
     def _portugol_read_task(cls, mastery):
         return PortugolReadTasks.prompt_for_mastery(mastery)
+
+    @classmethod
+    def _variable_storage_task(cls, mastery):
+        return VariableStorageTasks.prompt_for_mastery(mastery)
 
     @classmethod
     def _ipo_forbidden(cls, mastery):
@@ -605,7 +621,8 @@ class TurnTeachingContract:
             elif teaching_action == "avancar":
                 safe = (
                     "Você concluiu entrada simples com leia com evidências em atividades "
-                    "diferentes. Esta fatia do percurso está concluída."
+                    "diferentes. Envie continuar quando estiver pronto para a próxima "
+                    "microcompetência."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 if mastery < 0.20:
@@ -645,6 +662,79 @@ class TurnTeachingContract:
                 ),
                 forbidden_terms=cls.PORTUGOL_READ_FUTURE_FORBIDDEN,
                 allow_code=True,
+                max_chars=950,
+                max_questions=1,
+                task_required=task_required,
+                assistance_ceiling=ceiling,
+                review_mode=review_mode,
+                feedback_text=feedback,
+                safe_response=safe,
+            )
+
+        if concept_id == cls.VARIABLE_STORAGE:
+            mastery = cls._normalized_mastery(state)
+            focus = VariableStorageTasks.focus_for_mastery(mastery)
+            if review_mode:
+                safe = VariableStorageTasks.review_prompt()
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = cls._variable_storage_task(mastery)
+            elif teaching_action == "corrigir" and difficulty < 2:
+                if mastery < 0.20:
+                    hint = "Pense em um lugar identificado por um nome que mantém um valor."
+                elif mastery < 0.40:
+                    hint = "Separe duas coisas: o nome identifica o lugar; o valor é o conteúdo guardado."
+                elif mastery < 0.60:
+                    hint = "O conteúdo pode mudar sem trocar o nome do lugar."
+                else:
+                    hint = "Procure o nome que permanece e o último valor que ficou guardado."
+                safe = hint + "\n\n" + cls._variable_storage_task(mastery)
+            elif teaching_action == "corrigir":
+                safe = (
+                    "Retome somente esta ideia: uma variável é um lugar com nome que guarda um valor.\n\n"
+                    + cls._variable_storage_task(mastery)
+                )
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu variável como armazenamento nomeado com evidências em "
+                    "atividades diferentes. Esta fatia do percurso está concluída."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                if mastery < 0.20:
+                    safe = cls._variable_storage_task(mastery)
+                elif mastery < 0.40:
+                    safe = (
+                        "Agora separe o nome do lugar e o valor que está dentro dele.\n\n"
+                        + cls._variable_storage_task(mastery)
+                    )
+                elif mastery < 0.60:
+                    safe = (
+                        "Agora observe que o valor pode mudar enquanto o nome permanece.\n\n"
+                        + cls._variable_storage_task(mastery)
+                    )
+                else:
+                    safe = (
+                        "Agora identifique juntos o nome que permanece e o valor atual.\n\n"
+                        + cls._variable_storage_task(mastery)
+                    )
+            else:
+                safe = (
+                    "Agora uma novidade: pense em uma caixa com etiqueta. A etiqueta dá um nome "
+                    "ao lugar e o conteúdo é o valor guardado. Em programação, uma variável "
+                    "cumpre essa ideia: um lugar identificado por nome que mantém um valor. "
+                    "Ainda não vamos escrever a forma completa disso.\n\n"
+                    + cls._variable_storage_task(mastery)
+                )
+            safe = cls._prepend_feedback(safe, feedback)
+            return cls(
+                concept_id=concept_id,
+                focus=focus,
+                objective=(
+                    "compreender variável como um lugar identificado por nome que guarda um valor, "
+                    "distinguindo nome, conteúdo e valor atual"
+                ),
+                representation="analogia concreta e linguagem natural, sem sintaxe de declaração",
+                forbidden_terms=cls.VARIABLE_STORAGE_FUTURE_FORBIDDEN,
+                allow_code=False,
                 max_chars=950,
                 max_questions=1,
                 task_required=task_required,

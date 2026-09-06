@@ -8,6 +8,7 @@ from backend.services.structured_sequence_tasks import StructuredSequenceTasks
 from backend.services.portugol_skeleton_tasks import PortugolSkeletonTasks
 from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.portugol_read_tasks import PortugolReadTasks
+from backend.services.variable_storage_tasks import VariableStorageTasks
 
 
 class ObjectiveTaskEvaluator:
@@ -25,6 +26,7 @@ class ObjectiveTaskEvaluator:
     PORTUGOL_SKELETON = "ads.algorithms.portugol_skeleton"
     PORTUGOL_WRITE = "ads.algorithms.portugol_write"
     PORTUGOL_READ = "ads.algorithms.portugol_read"
+    VARIABLE_STORAGE = "ads.algorithms.variable_storage"
     HAND_WASHING_MARKERS = (
         "abrir a torneira",
         "lavar as maos",
@@ -154,6 +156,16 @@ class ObjectiveTaskEvaluator:
         if evaluation.get("concept_id") != cls.PORTUGOL_READ:
             return None
         return PortugolReadTasks.definition_for_prompt(
+            evaluation.get("tutor_message")
+        )
+
+    @classmethod
+    def _variable_storage_definition(cls, evaluation):
+        if not isinstance(evaluation, dict):
+            return None
+        if evaluation.get("concept_id") != cls.VARIABLE_STORAGE:
+            return None
+        return VariableStorageTasks.definition_for_prompt(
             evaluation.get("tutor_message")
         )
 
@@ -663,6 +675,65 @@ class ObjectiveTaskEvaluator:
         )
 
     @classmethod
+    def _evaluate_variable_storage(cls, evaluation, definition):
+        normalized = normalize_alias(evaluation.get("student_answer")) or ""
+        kind = definition.get("kind")
+
+        if kind == "exact_answer":
+            expected = normalize_alias(definition.get("expected_answer")) or ""
+            if normalized == expected:
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.NOT_MET,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "A resposta ainda confunde o nome do lugar com o valor guardado.",
+                missing_essential_criteria=["distinguir nome e valor guardado"],
+            )
+
+        if kind == "name_value_pair":
+            expected_name = normalize_alias(definition.get("expected_name")) or ""
+            expected_value = normalize_alias(definition.get("expected_value")) or ""
+            has_name = bool(expected_name and re.search(rf"\b{re.escape(expected_name)}\b", normalized))
+            has_value = bool(expected_value and re.search(rf"\b{re.escape(expected_value)}\b", normalized))
+            if has_name and has_value:
+                return cls._evidence(
+                    {
+                        RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                        RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.MET,
+                        RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.MET,
+                    },
+                    definition["success"],
+                    missing_essential_criteria=[],
+                )
+            missing = []
+            if not has_name:
+                missing.append("identificar o nome da variável")
+            if not has_value:
+                missing.append("identificar o valor atual")
+            return cls._evidence(
+                {
+                    RubricPolicy.TASK_RESPONSE: RubricPolicy.MET,
+                    RubricPolicy.CONCEPTUAL_CORRECTNESS: RubricPolicy.PARTIAL,
+                    RubricPolicy.UNDERSTANDING_APPLICATION: RubricPolicy.PARTIAL,
+                },
+                "A resposta identificou apenas parte da relação entre nome e valor atual.",
+                missing_essential_criteria=missing,
+            )
+
+        return None
+
+    @classmethod
     def _submitted_order(cls, answer):
         normalized = normalize_alias(answer) or ""
         numbers = tuple(re.findall(r"\b[123]\b", normalized))
@@ -845,6 +916,12 @@ class ObjectiveTaskEvaluator:
                 return cls._evaluate_portugol_read(
                     evaluation,
                     read_definition,
+                )
+            variable_definition = cls._variable_storage_definition(evaluation)
+            if variable_definition is not None:
+                return cls._evaluate_variable_storage(
+                    evaluation,
+                    variable_definition,
                 )
             return None
 

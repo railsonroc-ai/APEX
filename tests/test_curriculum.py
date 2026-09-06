@@ -101,3 +101,18 @@ def test_portugol_write_progresses_to_read_without_skip():
         Curriculum.PORTUGOL_SKELETON,
         Curriculum.PORTUGOL_READ,
     )
+
+
+def test_portugol_read_progresses_to_variable_storage_without_skip():
+    assert Curriculum.next_concept_id(Curriculum.PORTUGOL_READ) == Curriculum.VARIABLE_STORAGE
+    assert Curriculum.prerequisites_for(Curriculum.VARIABLE_STORAGE) == (
+        Curriculum.PORTUGOL_READ,
+    )
+    assert Curriculum.allows_progression(
+        Curriculum.PORTUGOL_READ,
+        Curriculum.VARIABLE_STORAGE,
+    )
+    assert not Curriculum.allows_progression(
+        Curriculum.PORTUGOL_WRITE,
+        Curriculum.VARIABLE_STORAGE,
+    )
