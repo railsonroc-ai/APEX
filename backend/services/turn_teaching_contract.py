@@ -10,6 +10,7 @@ from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.portugol_read_tasks import PortugolReadTasks
 from backend.services.variable_storage_tasks import VariableStorageTasks
 from backend.services.integer_declaration_tasks import IntegerDeclarationTasks
+from backend.services.read_variable_tasks import ReadVariableTasks
 from backend.services.concept_catalog import ConceptCatalog
 
 
@@ -38,6 +39,7 @@ class TurnTeachingContract:
     PORTUGOL_READ = "ads.algorithms.portugol_read"
     VARIABLE_STORAGE = "ads.algorithms.variable_storage"
     INTEGER_DECLARATION = "ads.algorithms.integer_declaration"
+    READ_VARIABLE = "ads.algorithms.read_variable"
     CONTROLLED_CONCEPTS = {
         ORDERED_STEPS,
         GOAL_RESULT,
@@ -48,6 +50,7 @@ class TurnTeachingContract:
         PORTUGOL_READ,
         VARIABLE_STORAGE,
         INTEGER_DECLARATION,
+        READ_VARIABLE,
     }
     ORDERED_STEPS_FORBIDDEN = (
         "entrada", "processamento", "saída", "saida", "variável", "variavel",
@@ -112,6 +115,13 @@ class TurnTeachingContract:
         "decisão", "decisao", "senão", "senao", "repetição", "repeticao",
         "enquanto", "repita", "função", "funcao", "procedimento", "lista",
         "vetor", "matriz", "python", "classe", "objeto", "api", "banco de dados",
+    )
+    READ_VARIABLE_FUTURE_FORBIDDEN = (
+        "real", "caractere", "cadeia", "lógico", "logico", "escreva", "escreval",
+        "atribuição", "atribuicao", "operador", "condicional", "decisão", "decisao",
+        "senão", "senao", "repetição", "repeticao", "enquanto", "repita",
+        "função", "funcao", "procedimento", "lista", "vetor", "matriz",
+        "python", "classe", "objeto", "api", "banco de dados",
     )
 
     FEEDBACK_BY_OUTCOME = {
@@ -189,6 +199,10 @@ class TurnTeachingContract:
     @classmethod
     def _integer_declaration_task(cls, mastery):
         return IntegerDeclarationTasks.prompt_for_mastery(mastery)
+
+    @classmethod
+    def _read_variable_task(cls, mastery):
+        return ReadVariableTasks.prompt_for_mastery(mastery)
 
     @classmethod
     def _integer_declaration_forbidden(cls, mastery):
@@ -796,7 +810,8 @@ class TurnTeachingContract:
             elif teaching_action == "avancar":
                 safe = (
                     "Você concluiu declaração de variável inteira com evidências em atividades "
-                    "diferentes. Esta fatia do percurso está concluída."
+                    "diferentes. Envie continuar quando estiver pronto para a próxima "
+                    "microcompetência."
                 )
             elif teaching_action in {"testar", "verificar", "consolidar"}:
                 if mastery < 0.20:
@@ -850,6 +865,98 @@ class TurnTeachingContract:
                 forbidden_terms=forbidden,
                 allow_code=True,
                 max_chars=1050,
+                max_questions=1,
+                task_required=task_required,
+                assistance_ceiling=ceiling,
+                review_mode=review_mode,
+                feedback_text=feedback,
+                safe_response=safe,
+            )
+
+        if concept_id == cls.READ_VARIABLE:
+            mastery = cls._normalized_mastery(state)
+            focus = ReadVariableTasks.focus_for_mastery(mastery)
+            if review_mode:
+                safe = ReadVariableTasks.review_prompt()
+            elif evidence_outcome in {"insufficient", "unverified"}:
+                safe = cls._read_variable_task(mastery)
+            elif teaching_action == "corrigir" and difficulty < 2:
+                if mastery < 0.20:
+                    hint = "Olhe apenas para o nome escrito dentro dos parênteses de leia."
+                elif mastery < 0.40:
+                    hint = "Use dentro de leia exatamente o nome da variável que já foi declarada."
+                elif mastery < 0.60:
+                    hint = "A forma é leia, abre parêntese, nome da variável e fecha parêntese."
+                else:
+                    hint = "A declaração fica antes de inicio; leia(variavel) fica depois de inicio."
+                safe = hint + "\n\n" + cls._read_variable_task(mastery)
+            elif teaching_action == "corrigir":
+                if mastery < 0.20:
+                    correction = "Correção completa: a variável que recebe a entrada é a que aparece dentro de leia(...)."
+                elif mastery < 0.40:
+                    correction = "Correção completa: dentro de leia usamos o nome da variável já declarada."
+                elif mastery < 0.60:
+                    correction = "Correção completa: a forma é leia(variavel)."
+                else:
+                    correction = "Correção completa: declare antes de inicio e use leia(variavel) depois de inicio."
+                safe = correction + "\n\n" + cls._read_variable_task(mastery)
+            elif teaching_action == "avancar":
+                safe = (
+                    "Você concluiu entrada em variável com leia com evidências em atividades "
+                    "diferentes. Esta fatia do percurso está concluída."
+                )
+            elif teaching_action in {"testar", "verificar", "consolidar"}:
+                if mastery < 0.20:
+                    safe = cls._read_variable_task(mastery)
+                elif mastery < 0.40:
+                    safe = (
+                        "Agora fixe a ligação: o nome dentro de leia mostra qual variável recebe a entrada.\n\n"
+                        + cls._read_variable_task(mastery)
+                    )
+                elif mastery < 0.60:
+                    safe = (
+                        "Agora forme o comando completo usando somente a variável já declarada.\n\n"
+                        + cls._read_variable_task(mastery)
+                    )
+                else:
+                    safe = (
+                        "Agora integre o que já conhece: declaração antes de inicio e leia(variavel) depois.\n\n"
+                        + cls._read_variable_task(mastery)
+                    )
+            else:
+                if mastery < 0.20:
+                    safe = (
+                        "Você já conhece leia e já sabe declarar uma variável. Agora una as duas ideias: "
+                        "o nome colocado dentro de leia(...) indica qual variável receberá a entrada.\n\n"
+                        + cls._read_variable_task(mastery)
+                    )
+                elif mastery < 0.40:
+                    safe = (
+                        "Agora fixe a ligação: dentro de leia usamos exatamente o nome da variável já declarada.\n\n"
+                        + cls._read_variable_task(mastery)
+                    )
+                elif mastery < 0.60:
+                    safe = (
+                        "Agora use a forma completa leia(variavel), sem acrescentar nenhuma outra operação.\n\n"
+                        + cls._read_variable_task(mastery)
+                    )
+                else:
+                    safe = (
+                        "Agora integre declaração e entrada: a variável é declarada antes de inicio e "
+                        "leia(variavel) é usado depois de inicio.\n\n" + cls._read_variable_task(mastery)
+                    )
+            safe = cls._prepend_feedback(safe, feedback)
+            return cls(
+                concept_id=concept_id,
+                focus=focus,
+                objective=(
+                    "usar em leia o nome de uma variável inteira já declarada, reconhecendo qual "
+                    "variável recebe a entrada e integrando leia(variavel) à estrutura conhecida"
+                ),
+                representation="sintaxe mínima de leia(variavel) com variável inteira já declarada",
+                forbidden_terms=cls.READ_VARIABLE_FUTURE_FORBIDDEN,
+                allow_code=True,
+                max_chars=1100,
                 max_questions=1,
                 task_required=task_required,
                 assistance_ceiling=ceiling,

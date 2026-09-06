@@ -6,6 +6,7 @@ from backend.services.portugol_write_tasks import PortugolWriteTasks
 from backend.services.portugol_read_tasks import PortugolReadTasks
 from backend.services.variable_storage_tasks import VariableStorageTasks
 from backend.services.integer_declaration_tasks import IntegerDeclarationTasks
+from backend.services.read_variable_tasks import ReadVariableTasks
 from backend.services.task_context_identity import TaskContextIdentity
 
 
@@ -94,4 +95,14 @@ def test_integer_declaration_prompt_has_stable_context_identity():
     ) == "declaration_block_order"
     assert TaskContextIdentity.requires_explicit_context(
         TaskContextIdentity.INTEGER_DECLARATION
+    )
+
+
+def test_read_variable_prompt_has_stable_context_identity():
+    prompt = ReadVariableTasks.prompt_for_mastery(0.65)
+    assert TaskContextIdentity.for_prompt(
+        TaskContextIdentity.READ_VARIABLE, prompt
+    ) == "read_variable_program_order"
+    assert TaskContextIdentity.requires_explicit_context(
+        TaskContextIdentity.READ_VARIABLE
     )

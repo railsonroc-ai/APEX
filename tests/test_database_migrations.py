@@ -36,6 +36,7 @@ EXPECTED_MIGRATIONS = [
     (21, "sync_executable_curriculum_v8"),
     (22, "sync_executable_curriculum_v9"),
     (23, "sync_executable_curriculum_v10"),
+    (24, "sync_executable_curriculum_v11"),
 ]
 
 
@@ -666,7 +667,7 @@ def test_v5_database_receives_empty_evidence_ledger(
 
         assert total == 0
         assert turns == 1
-        assert [row["version"] for row in versions] == list(range(1, 24))
+        assert [row["version"] for row in versions] == list(range(1, 25))
         assert connection.execute(
             "PRAGMA foreign_key_check"
         ).fetchall() == []
@@ -1048,7 +1049,7 @@ def test_v7_database_receives_empty_mastery_assessment_ledger(monkeypatch, tmp_p
         ).fetchone()[0]
         assert total == 0
         assert preserved_evidence == 1
-        assert versions == list(range(1, 24))
+        assert versions == list(range(1, 25))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1165,7 +1166,7 @@ def test_v8_database_receives_empty_assistance_ledger(monkeypatch, tmp_path):
         ).fetchone()[0]
         assert total == 0
         assert preserved_turn == 1
-        assert versions == list(range(1, 24))
+        assert versions == list(range(1, 25))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1287,7 +1288,7 @@ def test_v9_database_receives_empty_attempt_and_rubric_ledgers(monkeypatch, tmp_
         assert attempts == 0
         assert rubrics == 0
         assert preserved_turn == 1
-        assert versions == list(range(1, 24))
+        assert versions == list(range(1, 25))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1418,7 +1419,7 @@ def test_v10_database_receives_empty_task_ledger_without_inventing_links(monkeyp
 
         assert tasks == 0
         assert attempt_task is None
-        assert versions == list(range(1, 24))
+        assert versions == list(range(1, 25))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1552,7 +1553,7 @@ def test_v11_database_receives_session_runtime_without_inventing_events(
         assert states == session_count
         assert events == 0
         assert status == "studying"
-        assert versions == list(range(1, 24))
+        assert versions == list(range(1, 25))
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -1849,8 +1850,8 @@ def test_privacy_lifecycle_migration_authorizes_only_explicit_student_deletion(
             "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='evidence_events_no_delete'"
         ).fetchone()["sql"]
 
-        assert latest["version"] == 23
-        assert latest["name"] == "sync_executable_curriculum_v10"
+        assert latest["version"] == 24
+        assert latest["name"] == "sync_executable_curriculum_v11"
         assert "privacy_deletion_authorizations" in tables
         assert "privacy_deletion_authorizations" in trigger_sql
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -2107,8 +2108,8 @@ def test_v18_database_receives_fifth_curriculum_microconcept(monkeypatch, tmp_pa
         latest = connection.execute(
             "SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1"
         ).fetchone()
-        assert dict(row) == {"selectable": 0, "catalog_version": 10}
-        assert tuple(latest) == (23, "sync_executable_curriculum_v10")
+        assert dict(row) == {"selectable": 0, "catalog_version": 11}
+        assert tuple(latest) == (24, "sync_executable_curriculum_v11")
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -2148,8 +2149,8 @@ def test_v19_database_receives_sixth_curriculum_microconcept(monkeypatch, tmp_pa
         latest = connection.execute(
             "SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1"
         ).fetchone()
-        assert dict(row) == {"selectable": 0, "catalog_version": 10}
-        assert tuple(latest) == (23, "sync_executable_curriculum_v10")
+        assert dict(row) == {"selectable": 0, "catalog_version": 11}
+        assert tuple(latest) == (24, "sync_executable_curriculum_v11")
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -2189,8 +2190,8 @@ def test_v20_database_receives_seventh_curriculum_microconcept(monkeypatch, tmp_
         latest = connection.execute(
             "SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1"
         ).fetchone()
-        assert dict(row) == {"selectable": 0, "catalog_version": 10}
-        assert tuple(latest) == (23, "sync_executable_curriculum_v10")
+        assert dict(row) == {"selectable": 0, "catalog_version": 11}
+        assert tuple(latest) == (24, "sync_executable_curriculum_v11")
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -2230,8 +2231,8 @@ def test_v21_database_receives_eighth_curriculum_microconcept(monkeypatch, tmp_p
         latest = connection.execute(
             "SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1"
         ).fetchone()
-        assert dict(row) == {"selectable": 0, "catalog_version": 10}
-        assert tuple(latest) == (23, "sync_executable_curriculum_v10")
+        assert dict(row) == {"selectable": 0, "catalog_version": 11}
+        assert tuple(latest) == (24, "sync_executable_curriculum_v11")
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
@@ -2271,8 +2272,49 @@ def test_v22_database_receives_ninth_curriculum_microconcept(monkeypatch, tmp_pa
         latest = connection.execute(
             "SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1"
         ).fetchone()
-        assert dict(row) == {"selectable": 0, "catalog_version": 10}
-        assert tuple(latest) == (23, "sync_executable_curriculum_v10")
+        assert dict(row) == {"selectable": 0, "catalog_version": 11}
+        assert tuple(latest) == (24, "sync_executable_curriculum_v11")
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_v23_database_receives_tenth_curriculum_microconcept(monkeypatch, tmp_path):
+    path = configure_database(monkeypatch, tmp_path, name="v23-to-v24.db")
+    current_migrations = migrations_module.MIGRATIONS
+    monkeypatch.setattr(migrations_module, "MIGRATIONS", current_migrations[:23])
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        before = connection.execute(
+            "SELECT 1 FROM concept_definitions WHERE concept_id = ?",
+            ("ads.algorithms.read_variable",),
+        ).fetchone()
+        declaration_concept = connection.execute(
+            "SELECT catalog_version FROM concept_definitions WHERE concept_id = ?",
+            ("ads.algorithms.integer_declaration",),
+        ).fetchone()
+        assert before is None
+        assert declaration_concept["catalog_version"] == 10
+    finally:
+        connection.close()
+
+    monkeypatch.setattr(migrations_module, "MIGRATIONS", current_migrations)
+    database_module.init_database()
+
+    connection = connect(path)
+    try:
+        row = connection.execute(
+            "SELECT selectable, catalog_version FROM concept_definitions WHERE concept_id = ?",
+            ("ads.algorithms.read_variable",),
+        ).fetchone()
+        latest = connection.execute(
+            "SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1"
+        ).fetchone()
+        assert dict(row) == {"selectable": 0, "catalog_version": 11}
+        assert tuple(latest) == (24, "sync_executable_curriculum_v11")
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:

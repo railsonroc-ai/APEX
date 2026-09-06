@@ -162,3 +162,23 @@ def test_integer_declaration_alias_does_not_steal_selectable_parent_aliases():
     assert ConceptCatalog.concept_id(
         "ads", "declaração inteira no portugol"
     ) == "ads.algorithms.integer_declaration"
+
+
+def test_tenth_internal_microconcept_is_resolvable_but_not_selectable():
+    concept = ConceptCatalog.resolve(
+        "ads", "ads.algorithms.read_variable"
+    )
+    assert concept["canonical_name"] == "entrada em variável com leia"
+    assert concept["selectable"] == 0
+    assert ConceptCatalog.resolve(
+        "ads", "entrada em variável com leia", selectable_only=True
+    ) is None
+
+
+def test_read_variable_alias_does_not_steal_selectable_parent_aliases():
+    assert ConceptCatalog.concept_id(
+        "ads", "variável", selectable_only=True
+    ) == "ads.variables"
+    assert ConceptCatalog.concept_id(
+        "ads", "leia com variavel"
+    ) == "ads.algorithms.read_variable"

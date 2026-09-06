@@ -13,7 +13,8 @@ CATALOG_V6_VERSION = 6
 CATALOG_V7_VERSION = 7
 CATALOG_V8_VERSION = 8
 CATALOG_V9_VERSION = 9
-CATALOG_VERSION = 10
+CATALOG_V10_VERSION = 10
+CATALOG_VERSION = 11
 
 
 @dataclass(frozen=True)
@@ -263,6 +264,21 @@ INTEGER_DECLARATION_SEED = ConceptSeed(
 )
 
 
+READ_VARIABLE_SEED = ConceptSeed(
+    "ads.algorithms.read_variable",
+    "ads",
+    "entrada em variável com leia",
+    (
+        "entrada em variavel com leia",
+        "leia com variavel",
+        "leia variavel",
+        "receber entrada em variavel",
+        "read into variable",
+    ),
+    selectable=False,
+)
+
+
 CATALOG_V2_SEEDS = CORE_CONCEPT_SEEDS + (ORDERED_STEPS_SEED,)
 CATALOG_V3_SEEDS = CORE_CONCEPT_SEEDS + (
     ORDERED_STEPS_SEED,
@@ -313,6 +329,17 @@ CATALOG_V9_SEEDS = CORE_CONCEPT_SEEDS + (
     PORTUGOL_READ_SEED,
     VARIABLE_STORAGE_SEED,
 )
+CATALOG_V10_SEEDS = CORE_CONCEPT_SEEDS + (
+    ORDERED_STEPS_SEED,
+    GOAL_RESULT_SEED,
+    INPUT_PROCESS_OUTPUT_SEED,
+    STRUCTURED_SEQUENCE_SEED,
+    PORTUGOL_SKELETON_SEED,
+    PORTUGOL_WRITE_SEED,
+    PORTUGOL_READ_SEED,
+    VARIABLE_STORAGE_SEED,
+    INTEGER_DECLARATION_SEED,
+)
 
 
 MICRO_CONCEPT_SEEDS = (
@@ -325,6 +352,7 @@ MICRO_CONCEPT_SEEDS = (
     PORTUGOL_READ_SEED,
     VARIABLE_STORAGE_SEED,
     INTEGER_DECLARATION_SEED,
+    READ_VARIABLE_SEED,
 )
 
 CONCEPT_SEEDS = CORE_CONCEPT_SEEDS + MICRO_CONCEPT_SEEDS
